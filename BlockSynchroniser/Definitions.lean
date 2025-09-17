@@ -33,7 +33,7 @@ structure Block where
   d : BlockDigest -- the digest of B
   parents : List BlockDigest -- the connected parent blocks (in digests)
   payload : List Transaction -- a list of transactions
-  deriving Repr, BEq
+  deriving Repr, DecidableEq
 
 -- Validator state
 structure Validator where
@@ -41,21 +41,15 @@ structure Validator where
   isHonest : Bool -- Immutable
   acceptedBlocks : List BlockDigest -- accepted block digests
   storedBlocks : List BlockDigest -- stored block digests
-  deriving Repr, BEq
+  deriving Repr, DecidableEq
 
 -- System state
 structure SystemState where
   validators : List Validator
+  -- Save all blocks every seen in the system
   blocks : List Block
   currentRound : Round
   k : Nat -- parameter for parent requirements
-  deriving Repr
-
--- Operations that validators can perform
-inductive ValidatorOperation where
-  | block_propose (validatorId : ValidatorId) (block : Block) : ValidatorOperation
-  | block_accept (validatorId : ValidatorId) (blockDigest : BlockDigest) : ValidatorOperation
-  | block_store (validatorId : ValidatorId) (block : Block) : ValidatorOperation
   deriving Repr
 
 -- Block synchroniser system
@@ -107,13 +101,77 @@ def allValidatorsPresent (system : BlockSynchroniserSystem) (state : SystemState
 def systemInvariant (system : BlockSynchroniserSystem) (state : SystemState) : Bool :=
   atMostFByzantine system state &&
   allValidatorsPresent system state &&
-  state.blocks.all (fun b => isBlockValid b state)
+  -- all blocks are valid
+  state.blocks.all (fun b => isBlockValid b state) &&
+  -- all digests are unique
+  state.blocks.all (fun b => state.blocks.all (fun b' => b.d = b'.d -> b = b'))
 
 end BlockSynchroniser
 
+---------------------------------------------------------------------
+-- This namespace defines valid executions of the system.
+---------------------------------------------------------------------
+namespace BlockSynchroniser.Executions
+
+-- Operations that validators can perform
+inductive ValidatorOperation where
+  | block_propose (id : ValidatorId) (block : Block) (round : Round) : ValidatorOperation
+  | block_accept (id : ValidatorId) (d : BlockDigest) : ValidatorOperation
+  | block_store (id : ValidatorId) (block : Block) : ValidatorOperation
+  deriving Repr
 
 
+-- System state with pending operations
+structure SystemSnapshot where
+  state : SystemState
+  -- Operations always remain available
+  pendingOperations : List ValidatorOperation
+  deriving Repr
+
+-- A trace is defined as a function from ℕ to system snapshots
+def Trace := Nat → SystemSnapshot
+
+-- A trace is valid if it satisfies the system invariant
+def isValidTrace system (trace : Trace) :=
+  forall i, systemInvariant system (trace i).state
+
+-- Trace induction principle
+theorem traceInduction
+  (P : BlockSynchroniserSystem → SystemSnapshot → Prop)
+  system (trace : Trace)
+  (base : P system (trace 0))
+  (step : forall i, P system (trace i) → P system (trace (i + 1))) :
+  forall i, P system (trace i) :=
+  fun i => Nat.rec base (fun i ih => step i ih) i
+
+---------------------------------------------------------------------
+-- Properties of block synchroniser system
+---------------------------------------------------------------------
+
+-- Trace validity property: If an honest validator V_i invokes block_propose_i(B,r),
+-- then every honest validator eventually outputs block_accept(B.d)
+
+-- TODO: refactor so the identifiers go into the system description
+def traceValidity (system : BlockSynchroniserSystem) (trace : Trace) :=
+  ∀ k o i block r X Y X' Y',
+    let ⟨state, operations⟩ := trace k
+    -- some operation o is the propose operation from validator i
+    operations.get? o = some (ValidatorOperation.block_propose i block r) ->
+    -- i is an honest validator
+    state.validators[i]? = some ⟨i, true, X, Y⟩ ->
+    ∀ i',
+      -- for any honest validator i'
+      state.validators.get? i' = some ⟨i', true, X', Y'⟩ ->
+      ∃ k', ∃ o',
+      let ⟨state', operations'⟩ := trace k'
+      operations'.get? o' = some (ValidatorOperation.block_accept i' block.d)
+
+end BlockSynchroniser.Executions
+
+
+---------------------------------------------------------------------
 -- This namespace contains the operations that validators can perform.
+---------------------------------------------------------------------
 namespace BlockSynchroniser.Operations
 
 -- Validator operation semantics
@@ -138,55 +196,3 @@ def canStore (validatorId : ValidatorId) (block : Block) (state : SystemState) :
   | none => false
 
 end BlockSynchroniser.Operations
-
-
-namespace BlockSynchroniser.Execution
-
--- System state with pending operations
-structure SystemSnapshot where
-  state : SystemState
-  pendingOperations : List ValidatorOperation
-  deriving Repr
-
--- TODO: A system step relation determining the next valid snapshots
-
-
-
-end BlockSynchroniser.Execution
-
-
--- Examples
-namespace BlockSynchroniser.Examples
-
--- Example usage
-def exampleSystem : BlockSynchroniserSystem := {
-  n := 4,
-  f := 1,
-  k := 2,
-  validators := [0, 1, 2, 3]
-}
-
-def exampleValidators : List Validator := [
-  { id := 0, isHonest := true, acceptedBlocks := [], storedBlocks := [] },
-  { id := 1, isHonest := true, acceptedBlocks := [], storedBlocks := [] },
-  { id := 2, isHonest := false, acceptedBlocks := [], storedBlocks := [] },
-  { id := 3, isHonest := true, acceptedBlocks := [], storedBlocks := [] }
-]
-
-def exampleState : SystemState := {
-  validators := exampleValidators,
-  blocks := [],
-  currentRound := 1,
-  k := 2
-}
-
--- Example block creation
-def createBlock (author : ValidatorId) (round : Round) (digest : BlockDigest) (parents : List BlockDigest) (payload : List Transaction) : Block := {
-  r := round,
-  author := author,
-  d := digest,
-  parents := parents,
-  payload := payload
-}
-
-end BlockSynchroniser.Examples
