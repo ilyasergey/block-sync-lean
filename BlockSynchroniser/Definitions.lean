@@ -46,7 +46,6 @@ structure SystemState where
   validators : List (ValidatorId × Validator) -- mapping from ID to validator state
   blocks : List Block -- all blocks seen in the system
   currentRound : Round
-  k : Nat -- parameter for parent requirements
   deriving Repr
 
 -- Block synchroniser system
@@ -75,17 +74,17 @@ def getBlockByDigest (state : SystemState) (digest : BlockDigest) : Option Block
   state.blocks.find? (fun b => b.d = digest)
 
 -- Block validity conditions
-def hasValidParents (block : Block) (state : SystemState) : Bool :=
-  block.parents.length >= state.k &&
+def hasValidParents (system : BlockSynchroniserSystem) (block : Block) (state : SystemState) : Bool :=
+  block.parents.length >= system.k &&
   block.parents.all (fun parentDigest =>
     match getBlockByDigest state parentDigest with
     | some parent => parent.r = block.r - 1
     | none => false)
 
 -- Block validity conditions: non-empty, has valid parents
-def isBlockValid (block : Block) (state : SystemState) : Bool :=
+def isBlockValid (system : BlockSynchroniserSystem) (block : Block) (state : SystemState) : Bool :=
   block.r > 0 && -- non-empty, ever-growing
-  hasValidParents block state
+  hasValidParents system block state
 
 -- This invariant ensures that the number of Byzantine validators is at most f.
 def atMostFByzantine (system : BlockSynchroniserSystem) (_state : SystemState) : Bool :=
@@ -105,7 +104,7 @@ def systemInvariant (system : BlockSynchroniserSystem) (state : SystemState) : B
   atMostFByzantine system state &&
   allValidatorsPresent system state &&
   -- all blocks are valid
-  state.blocks.all (fun b => isBlockValid b state) &&
+  state.blocks.all (fun b => isBlockValid system b state) &&
   -- all digests are unique
   state.blocks.all (fun b => state.blocks.all (fun b' => b.d = b'.d -> b = b'))
 
@@ -134,9 +133,10 @@ structure SystemSnapshot where
 -- A trace is defined as a function from ℕ to system snapshots
 def Trace := Nat → SystemSnapshot
 
--- A trace is valid if it satisfies the system invariant
+-- A trace is valid if it satisfies the system invariant and currentRound does not decrease
 def isValidTrace system (trace : Trace) :=
-  forall i, systemInvariant system (trace i).state
+  forall i, systemInvariant system (trace i).state ∧
+  (i > 0 → (trace i).state.currentRound ≥ (trace (i - 1)).state.currentRound)
 
 -- Trace induction principle
 theorem traceInduction
@@ -180,12 +180,12 @@ end BlockSynchroniser.Executions
 namespace BlockSynchroniser.Operations
 
 -- Validator operation semantics
-def canPropose (_system : BlockSynchroniserSystem) (validatorId : ValidatorId) (block : Block) (state : SystemState) : Bool :=
+def canPropose (system : BlockSynchroniserSystem) (validatorId : ValidatorId) (block : Block) (state : SystemState) : Bool :=
   match getValidatorById state validatorId with
   | some _ =>
     block.author = validatorId &&
     block.r = state.currentRound &&
-    isBlockValid block state
+    isBlockValid system block state
   | none => false
 
 def canAccept (_system : BlockSynchroniserSystem) (validatorId : ValidatorId) (_blockDigest : BlockDigest) (state : SystemState) : Bool :=
@@ -193,11 +193,11 @@ def canAccept (_system : BlockSynchroniserSystem) (validatorId : ValidatorId) (_
   | some _ => true -- simplified for now
   | none => false
 
-def canStore (_system : BlockSynchroniserSystem) (validatorId : ValidatorId) (block : Block) (state : SystemState) : Bool :=
+def canStore (system : BlockSynchroniserSystem) (validatorId : ValidatorId) (block : Block) (state : SystemState) : Bool :=
   match getValidatorById state validatorId with
   | some validator =>
     block.d ∈ validator.acceptedBlocks &&
-    isBlockValid block state
+    isBlockValid system block state
   | none => false
 
 end BlockSynchroniser.Operations
