@@ -35,19 +35,16 @@ structure Block where
   payload : List Transaction -- a list of transactions
   deriving Repr, DecidableEq
 
--- Validator state
+-- Validator state (without ID and honesty - those are in the system)
 structure Validator where
-  id : ValidatorId -- Immutable
-  isHonest : Bool -- Immutable
   acceptedBlocks : List BlockDigest -- accepted block digests
   storedBlocks : List BlockDigest -- stored block digests
   deriving Repr, DecidableEq
 
 -- System state
 structure SystemState where
-  validators : List Validator
-  -- Save all blocks every seen in the system
-  blocks : List Block
+  validators : List (ValidatorId × Validator) -- mapping from ID to validator state
+  blocks : List Block -- all blocks seen in the system
   currentRound : Round
   k : Nat -- parameter for parent requirements
   deriving Repr
@@ -57,16 +54,22 @@ structure BlockSynchroniserSystem where
   n : Nat -- total number of validators
   f : Nat -- maximum number of Byzantine validators
   k : Nat -- minimum number of parent blocks required
-  validators : List ValidatorId
+  validators : List (ValidatorId × Bool) -- mapping from ID to honesty status
   deriving Repr
 
 -- Properties and invariants
-def isByzantineValidator (v : Validator) : Bool := !v.isHonest
+def isByzantineValidator (system : BlockSynchroniserSystem) (id : ValidatorId) : Bool :=
+  match system.validators.find? (fun (vid, _) => vid = id) with
+  | some (_, isHonest) => !isHonest
+  | none => false
 
-def isHonestValidator (v : Validator) : Bool := v.isHonest
+def isHonestValidator (system : BlockSynchroniserSystem) (id : ValidatorId) : Bool :=
+  match system.validators.find? (fun (vid, _) => vid = id) with
+  | some (_, isHonest) => isHonest
+  | none => false
 
 def getValidatorById (state : SystemState) (id : ValidatorId) : Option Validator :=
-  state.validators.find? (fun v => v.id = id)
+  state.validators.find? (fun (vid, _) => vid = id) |>.map (fun (_, validator) => validator)
 
 def getBlockByDigest (state : SystemState) (digest : BlockDigest) : Option Block :=
   state.blocks.find? (fun b => b.d = digest)
@@ -85,8 +88,8 @@ def isBlockValid (block : Block) (state : SystemState) : Bool :=
   hasValidParents block state
 
 -- This invariant ensures that the number of Byzantine validators is at most f.
-def atMostFByzantine (system : BlockSynchroniserSystem) (state : SystemState) : Bool :=
-  let byzantineCount := state.validators.filter isByzantineValidator |>.length
+def atMostFByzantine (system : BlockSynchroniserSystem) (_state : SystemState) : Bool :=
+  let byzantineCount := system.validators.filter (fun (_, isHonest) => !isHonest) |>.length
   byzantineCount ≤ system.f
 
 -- This invariant ensures that the number of Byzantine validators is at most f.
@@ -94,7 +97,7 @@ def atMostFByzantine (system : BlockSynchroniserSystem) (state : SystemState) : 
 -- Byzantine validators.
 def allValidatorsPresent (system : BlockSynchroniserSystem) (state : SystemState) : Bool :=
   state.validators.length = system.n &&
-  state.validators.all (fun v => v.id ∈ system.validators)
+  state.validators.all (fun (vid, _) => system.validators.any (fun (sid, _) => sid = vid))
 
 -- Main system invariant: at most f Byzantine validators, all validators
 -- present, and all blocks valid.
@@ -148,23 +151,24 @@ theorem traceInduction
 -- Properties of block synchroniser system
 ---------------------------------------------------------------------
 
--- Trace validity property: If an honest validator V_i invokes block_propose_i(B,r),
--- then every honest validator eventually outputs block_accept(B.d)
-
--- TODO: refactor so the identifiers go into the system description
-def traceValidity (system : BlockSynchroniserSystem) (trace : Trace) :=
-  ∀ k (o : Nat) i block r X Y X' Y',
-    let ⟨state, operations⟩ := trace k
+-- Validity: If an honest validator V_i invokes block_propose_i(B,r), then every
+-- honest validator eventually outputs block_accept(B.d)
+def blockSynchroniserValidity system (trace: Trace) :=
+  ∀ k (o : Nat) vid block round,
+    let ⟨_, operations⟩ := trace k
     -- some operation o is the propose operation from validator i
-    operations[o]? = some (ValidatorOperation.block_propose i block r) ->
+    operations[o]? = some (.block_propose vid block round) ->
     -- i is an honest validator
-    state.validators[i]? = some ⟨i, true, X, Y⟩ ->
-    ∀ i',
-      -- for any honest validator i'
-      state.validators[i']? = some ⟨i', true, X', Y'⟩ ->
-      ∃ k', ∃ o' : Nat,
-      let ⟨state', operations'⟩ := trace k'
-      operations'[o']? = some (ValidatorOperation.block_accept i' block.d)
+    isHonestValidator system vid ->
+    -- for any honest validator vid'
+      ∀ vid', isHonestValidator system vid' ->
+        -- there exists a round k' and an operation o'
+        ∃ k', ∃ o' : Nat,
+        -- such that the operation o' is the accept operation from validator vid'
+        let ⟨_, operations'⟩ := trace k'
+        operations'[o']? = some (.block_accept vid' block.d)
+
+
 
 end BlockSynchroniser.Executions
 
@@ -175,7 +179,7 @@ end BlockSynchroniser.Executions
 namespace BlockSynchroniser.Operations
 
 -- Validator operation semantics
-def canPropose (validatorId : ValidatorId) (block : Block) (state : SystemState) : Bool :=
+def canPropose (_system : BlockSynchroniserSystem) (validatorId : ValidatorId) (block : Block) (state : SystemState) : Bool :=
   match getValidatorById state validatorId with
   | some _ =>
     block.author = validatorId &&
@@ -183,12 +187,12 @@ def canPropose (validatorId : ValidatorId) (block : Block) (state : SystemState)
     isBlockValid block state
   | none => false
 
-def canAccept (validatorId : ValidatorId) (_blockDigest : BlockDigest) (state : SystemState) : Bool :=
+def canAccept (_system : BlockSynchroniserSystem) (validatorId : ValidatorId) (_blockDigest : BlockDigest) (state : SystemState) : Bool :=
   match getValidatorById state validatorId with
   | some _ => true -- simplified for now
   | none => false
 
-def canStore (validatorId : ValidatorId) (block : Block) (state : SystemState) : Bool :=
+def canStore (_system : BlockSynchroniserSystem) (validatorId : ValidatorId) (block : Block) (state : SystemState) : Bool :=
   match getValidatorById state validatorId with
   | some validator =>
     block.d ∈ validator.acceptedBlocks &&
