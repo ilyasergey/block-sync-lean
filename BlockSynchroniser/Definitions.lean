@@ -173,7 +173,6 @@ def blockSynchroniserValidity system (trace: Trace) :=
 
 end BlockSynchroniser.Executions
 
-
 ---------------------------------------------------------------------
 -- This namespace contains the operations that validators can perform.
 ---------------------------------------------------------------------
