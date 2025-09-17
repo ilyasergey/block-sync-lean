@@ -153,18 +153,18 @@ theorem traceInduction
 
 -- TODO: refactor so the identifiers go into the system description
 def traceValidity (system : BlockSynchroniserSystem) (trace : Trace) :=
-  ∀ k o i block r X Y X' Y',
+  ∀ k (o : Nat) i block r X Y X' Y',
     let ⟨state, operations⟩ := trace k
     -- some operation o is the propose operation from validator i
-    operations.get? o = some (ValidatorOperation.block_propose i block r) ->
+    operations[o]? = some (ValidatorOperation.block_propose i block r) ->
     -- i is an honest validator
     state.validators[i]? = some ⟨i, true, X, Y⟩ ->
     ∀ i',
       -- for any honest validator i'
-      state.validators.get? i' = some ⟨i', true, X', Y'⟩ ->
-      ∃ k', ∃ o',
+      state.validators[i']? = some ⟨i', true, X', Y'⟩ ->
+      ∃ k', ∃ o' : Nat,
       let ⟨state', operations'⟩ := trace k'
-      operations'.get? o' = some (ValidatorOperation.block_accept i' block.d)
+      operations'[o']? = some (ValidatorOperation.block_accept i' block.d)
 
 end BlockSynchroniser.Executions
 
