@@ -155,6 +155,7 @@ theorem traceInduction
 -- honest validator eventually outputs block_accept(B.d)
 def blockSynchroniserValidity system (trace: Trace) :=
   ∀ k (o : Nat) vid block round,
+    -- take a snapshot and emitted operations at the moment k
     let ⟨_, operations⟩ := trace k
     -- some operation o is the propose operation from validator i
     operations[o]? = some (.block_propose vid block round) ->
@@ -162,7 +163,7 @@ def blockSynchroniserValidity system (trace: Trace) :=
     isHonestValidator system vid ->
     -- for any honest validator vid'
       ∀ vid', isHonestValidator system vid' ->
-        -- there exists a round k' and an operation o'
+        -- there exists a moment k' and an operation o'
         ∃ k', ∃ o' : Nat,
         -- such that the operation o' is the accept operation from validator vid'
         let ⟨_, operations'⟩ := trace k'
