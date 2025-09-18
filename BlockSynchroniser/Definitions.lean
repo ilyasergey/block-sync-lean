@@ -142,18 +142,36 @@ def isValidTrace system (trace : Trace) :=
 theorem traceInduction
   (P : BlockSynchroniserSystem → SystemSnapshot → Prop)
   system (trace : Trace)
-  (base : P system (trace 0))
+  (round : P system (trace 0))
   (step : forall i, P system (trace i) → P system (trace (i + 1))) :
   forall i, P system (trace i) :=
-  fun i => Nat.rec base (fun i ih => step i ih) i
+  fun i => Nat.rec round (fun i ih => step i ih) i
+
+---------------------------------------------------------------------
+-- Auxiliary definitions
+---------------------------------------------------------------------
+
+-- Helper function to extract author from a block_accept operation in a given
+-- round
+def getAuthorFromAccept (operations : List ValidatorOperation) (round : Round) (op : ValidatorOperation) : Option ValidatorId :=
+  match op with
+  | .block_accept _ blockDigest =>
+    -- Find the block_propose operation that created this block digest in round r
+    operations.find? (fun op' =>
+      match op' with | .block_propose _author block _ => block.d = blockDigest && block.r = round
+                     | _ => false)
+    -- Extract the author ID from the found block_propose operation
+    |>.bind (fun op' => match op' with | .block_propose author _ _ => some author | _ => none)
+  | _ => none
 
 ---------------------------------------------------------------------
 -- Properties of block synchroniser system
 ---------------------------------------------------------------------
 
--- Validity: If an honest validator V_i invokes block_propose_i(B,r), then every
--- honest validator eventually outputs block_accept(B.d)
-def blockSynchroniserValidity system (trace: Trace) :=
+-- Property 1: Validity: If an honest validator V_i invokes
+-- block_propose_i(B,r), then every honest validator eventually outputs
+-- block_accept(B.d)
+def blockSynchroniserValidity (system : BlockSynchroniserSystem) (trace: Trace) : Prop :=
   ∀ k (o : Nat) vid block round,
     -- take a snapshot and emitted operations at the moment k
     let ⟨_, operations⟩ := trace k
@@ -169,6 +187,39 @@ def blockSynchroniserValidity system (trace: Trace) :=
         let ⟨_, operations'⟩ := trace k'
         operations'[o']? = some (.block_accept vid' block.d)
 
+
+-- Property 2: Progress: In each round r, every honest validator eventually
+-- outputs block_accept for blocks from at least 2f+1 validators
+/-
+Notes: this property assumes that any snapshot has operations for rounds that do
+not exceed the current round number.
+ -/
+
+--  TODO: rewrite this by referring to the round in the system state
+def blockSynchroniserProgress (system : BlockSynchroniserSystem) (trace: Trace) : Prop :=
+  ∀ r vid,
+    -- for any round r and any honest validator vid
+    isHonestValidator system vid ->
+    -- there exists a moment k such that
+    ∃ k,
+      let ⟨ ⟨_, _, currentRound⟩ , operations⟩ := trace k
+
+      -- the validator vid has accepted blocks from at least 2f+1 validators in round r
+      let blocksAcceptedByVid := operations.filter (fun op =>
+          match op with | .block_accept vid' _ => vid' = vid | _ => false)
+
+      -- For each accepted block, find the author by looking up the
+      -- corresponding block_propose operation
+      let authors := blocksAcceptedByVid.map (getAuthorFromAccept operations currentRound)
+                     |>.filterMap id
+
+      -- Filter out None values and extract the Some values
+      let uniqueAuthors := authors.foldl (fun acc author =>
+        if authors.any (fun a => a = author) then acc else acc + 1) 0
+
+      -- the current round is r
+      currentRound = r ->
+      uniqueAuthors ≥ 2 * system.f + 1
 
 
 end BlockSynchroniser.Executions
