@@ -73,6 +73,28 @@ def getValidatorById (state : SystemState) (id : ValidatorId) : Option Validator
 def getBlockByDigest (state : SystemState) (digest : BlockDigest) : Option Block :=
   state.blocks.find? (fun b => b.d = digest)
 
+-- Path definition: a path is a list of block digests representing a chain of parent relationships
+def Path := List BlockDigest
+
+-- Path validity: a path is valid if each consecutive pair represents a parent-child relationship
+def isValidPath (state : SystemState) (path : Path) : Bool :=
+  match path with
+  | [] | [_] => true
+  | child :: parent :: rest =>
+    match state.blocks.find? (fun b => b.d = child) with
+    | none => false
+    | some childBlock => parent ∈ childBlock.parents && isValidPath state (parent :: rest)
+
+-- Causal relation: holds if all blocks in the list are transitive ancestors of the given block
+-- A block B' is a transitive ancestor of B if there exists a finite path from B to B' through parent relationships
+def causal (state : SystemState) (block : Block) (ancestors : List Block) : Prop :=
+  ∀ ancestor, ancestor ∈ ancestors ->
+    ancestor.d = block.d ∨
+    ∃ path : Path,
+      path.head? = some block.d ∧
+      path.getLast? = some ancestor.d ∧
+      isValidPath state path
+
 -- Block validity conditions
 def hasValidParents (system : BlockSynchroniserSystem) (block : Block) (state : SystemState) : Bool :=
   block.parents.length >= system.k &&
@@ -164,6 +186,7 @@ def getAuthorFromAccept (operations : List ValidatorOperation) (round : Round) (
     |>.bind (fun op' => match op' with | .block_propose author _ _ => some author | _ => none)
   | _ => none
 
+
 ---------------------------------------------------------------------
 -- Properties of block synchroniser system
 ---------------------------------------------------------------------
@@ -185,6 +208,7 @@ def blockSynchroniserValidity (system : BlockSynchroniserSystem) (trace: Trace) 
         ∃ k', ∃ o' : Nat,
         -- such that the operation o' is the accept operation from validator vid'
         let ⟨_, operations'⟩ := trace k'
+        k ≤ k' ∧ -- not sure if this is required
         operations'[o']? = some (.block_accept vid' block.d)
 
 
@@ -194,8 +218,6 @@ def blockSynchroniserValidity (system : BlockSynchroniserSystem) (trace: Trace) 
 Notes: this property assumes that any snapshot has operations for rounds that do
 not exceed the current round number.
  -/
-
---  TODO: rewrite this by referring to the round in the system state
 def blockSynchroniserProgress (system : BlockSynchroniserSystem) (trace: Trace) : Prop :=
   ∀ r vid,
     -- for any round r and any honest validator vid
@@ -220,6 +242,48 @@ def blockSynchroniserProgress (system : BlockSynchroniserSystem) (trace: Trace) 
       -- the current round is r
       currentRound = r ->
       uniqueAuthors ≥ 2 * system.f + 1
+
+-- Property 3: Block availability: If an honest validator 𝑉_i outputs
+-- block_accept_i(B.d), then 𝑉_𝑖 eventually outputs block_store_𝑖(B).
+def blockSynchroniserAvailability (system : BlockSynchroniserSystem) (trace: Trace) : Prop :=
+  ∀ k (o : Nat) vid blockDigest,
+    -- take a snapshot and emitted operations at the moment k
+    let ⟨_, operations⟩ := trace k
+    -- some operation o is the accept operation from validator i
+    operations[o]? = some (.block_accept vid blockDigest) ->
+    -- i is an honest validator
+    isHonestValidator system vid ->
+    -- there exists a moment k' and an operation o'
+    ∃ k', ∃ o' : Nat, ∃ block : Block,
+    -- such that the operation o' is the store operation from validator vid
+    let ⟨_, operations'⟩ := trace k'
+    k ≤ k' ∧
+    operations'[o']? = some (.block_store vid block) ∧
+    -- where block has the same digest as the accepted one
+    block.d = blockDigest
+
+-- Property 4: Casual availability: If an honest validator V_i outputs
+-- block_accept_i (B.d), then for every block B' ∈ causal(𝐵), 𝑉_𝑖 eventually
+-- outputs block_accept_i (B'.d), where causal (B) represents B's causal history
+-- (i.e., all blocks for which there is a connection or path from B to them).
+def blockSynchroniserCausalAvailability (system : BlockSynchroniserSystem) (trace: Trace) : Prop :=
+  ∀ k (o : Nat) vid blockDigest,
+    -- take a snapshot and emitted operations at the moment k
+    let ⟨state, operations⟩ := trace k
+    -- some operation o is the accept operation from validator i
+    operations[o]? = some (.block_accept vid blockDigest) ->
+    -- i is an honest validator
+    isHonestValidator system vid ->
+    -- get the block that was accepted and for every block B' in its causal history
+    ∀ block : Block, getBlockByDigest state blockDigest = some block ->
+      ∀ block' : Block, BlockSynchroniser.causal state block [block'] ->
+        -- there exists a moment k' and an operation o'
+        ∃ k', ∃ o' : Nat,
+        -- such that the operation o' is the accept operation from validator vid
+        let ⟨_, operations'⟩ := trace k'
+        k ≤ k' ∧
+        operations'[o']? = some (.block_accept vid block'.d)
+
 
 
 end BlockSynchroniser.Executions
