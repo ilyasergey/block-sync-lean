@@ -212,8 +212,8 @@ def blockSynchroniserValidity (system : BlockSynchroniserSystem) (trace: Trace) 
         operations'[o']? = some (.block_accept vid' block.d)
 
 
--- Property 2: Progress: In each round r, every honest validator eventually
--- outputs block_accept for blocks from at least 2f+1 validators
+-- Property 2a: Progress A: In each round r, every honest validator eventually
+-- outputs block_accept for blocks from at least 2f+1 validators.
 /-
 Notes: this property assumes that any snapshot has operations for rounds that do
 not exceed the current round number.
@@ -242,6 +242,22 @@ def blockSynchroniserProgress (system : BlockSynchroniserSystem) (trace: Trace) 
       -- the current round is r
       currentRound = r ->
       uniqueAuthors ≥ 2 * system.f + 1
+
+-- Property 2b: Progress B: For each round r, at least 2f+1 validators invoke
+-- block_propose to disseminate their blocks.
+def blockSynchroniserProgressB (system : BlockSynchroniserSystem) (trace: Trace) : Prop :=
+  ∀ r, -- for any round r, there exists a moment k such that
+    ∃ k,
+      let ⟨ ⟨_, _, currentRound⟩ , operations⟩ := trace k
+      -- the current round is r
+      currentRound = r ->
+      -- at least 2f+1 validators invoke block_propose in round r
+      let proposeOperations := operations.filter (fun op =>
+        match op with | .block_propose _ _ round => round = r | _ => false)
+      let uniqueProposers := proposeOperations.map (fun op =>
+        match op with | .block_propose vid _ _ => vid | _ => 0)
+                    |>.eraseDups.length
+      uniqueProposers ≥ 2 * system.f + 1
 
 -- Property 3: Block availability: If an honest validator 𝑉_i outputs
 -- block_accept_i(B.d), then 𝑉_𝑖 eventually outputs block_store_𝑖(B).
