@@ -225,6 +225,7 @@ def blockSynchroniserProgress (system : BlockSynchroniserSystem) (trace: Trace) 
     -- there exists a moment k such that
     ∃ k,
       let ⟨ ⟨_, _, currentRound⟩ , operations⟩ := trace k
+      currentRound = r -> -- the current round is r
 
       -- the validator vid has accepted blocks from at least 2f+1 validators in round r
       let blocksAcceptedByVid := operations.filter (fun op =>
@@ -239,8 +240,6 @@ def blockSynchroniserProgress (system : BlockSynchroniserSystem) (trace: Trace) 
       let uniqueAuthors := authors.foldl (fun acc author =>
         if authors.any (fun a => a = author) then acc else acc + 1) 0
 
-      -- the current round is r
-      currentRound = r ->
       uniqueAuthors ≥ 2 * system.f + 1
 
 -- Property 2b: Progress B: For each round r, at least 2f+1 validators invoke
@@ -260,7 +259,7 @@ def blockSynchroniserProgressB (system : BlockSynchroniserSystem) (trace: Trace)
       uniqueProposers ≥ 2 * system.f + 1
 
 -- Property 3: Block availability: If an honest validator 𝑉_i outputs
--- block_accept_i(B.d), then 𝑉_𝑖 eventually outputs block_store_𝑖(B).
+-- block_accept_i(B.d), then 𝑉_i eventually outputs block_store_i(B).
 def blockSynchroniserAvailability (system : BlockSynchroniserSystem) (trace: Trace) : Prop :=
   ∀ k (o : Nat) vid blockDigest,
     -- take a snapshot and emitted operations at the moment k
@@ -300,6 +299,38 @@ def blockSynchroniserCausalAvailability (system : BlockSynchroniserSystem) (trac
         k ≤ k' ∧
         operations'[o']? = some (.block_accept vid block'.d)
 
+-- Helper: all honest validators eventually store all blocks in the given set
+def allHonestValidatorsEventuallyStore (system : BlockSynchroniserSystem) (trace: Trace) (commonSet : List Block) (k : Nat) : Prop :=
+  ∀ vid, isHonestValidator system vid ->
+    ∀ block, block ∈ commonSet ->
+      ∃ k', ∃ o' : Nat,
+        let ⟨_, operations'⟩ := trace k'
+        k ≤ k' ∧
+        operations'[o']? = some (.block_store vid block)
+
+-- Helper: compute unique authors of blocks in the common set for a given round
+def authorsInCommonSet (operations : List ValidatorOperation) (commonSet : List Block) (r : Round) : List ValidatorId :=
+  -- for each block in the common set
+  commonSet.map (fun block =>
+    -- find the block_propose operation that created this block in round r
+    operations.find? (fun op =>
+      match op with | .block_propose _ block' _ => block'.d = block.d ∧ block'.r = r | _ => false)
+    -- extract the author ID from the found block_propose operation
+    |>.bind (fun op => match op with | .block_propose author _ _ => some author | _ => none))
+  |>.filterMap id  -- filter out None values to get only valid author IDs
+  |>.eraseDups -- remove duplicate authors to get unique validators
+
+-- Property 5: 2/3-Available common set: For each round r, all honest validators
+-- eventually store (via block_store) a common subset containing blocks from at
+-- least 2f + 1 validators.
+def blockSynchroniserCommonSet (system : BlockSynchroniserSystem) (trace: Trace) : Prop :=
+  ∀ r, -- for any round r
+    -- there exists a common set of blocks and a moment k
+    ∃ commonSet k,
+      allHonestValidatorsEventuallyStore system trace commonSet k ∧
+      let ⟨_, operations⟩ := trace k
+      -- the common subset contains blocks from at least 2f + 1 validators in round r
+      (authorsInCommonSet operations commonSet r).length ≥ 2 * system.f + 1
 
 
 end BlockSynchroniser.Executions
