@@ -310,7 +310,7 @@ def authorsInCommonSet (commonSet : List Block) : List ValidatorId :=
 
 -- Property 5: 2/3-Available common set: For each round r, all honest validators
 -- eventually store (via block_store) a common subset containing blocks from at
--- least 2f + 1 validators.
+-- least 2f + 1 different validators.
 def blockSynchroniserCommonSet {S} [SystemState S] (system : BlockSynchroniserSystem) (trace: Trace S) : Prop :=
   ∀ round, -- for any round
     ∃ commonSet, -- there exists a common set of blocks
