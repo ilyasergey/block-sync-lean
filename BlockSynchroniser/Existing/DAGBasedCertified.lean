@@ -38,7 +38,6 @@ inductive DAGCertifiedOperation where
 structure DAGCertifiedState where
   validators : List (ValidatorId × Validator) -- mapping from ID to validator state
   blocks : List Block -- all blocks seen in the system
-  currentRound : Round
   emittedOperations : List ValidatorOperation -- operations always remain available
   -- Additional state for DAG-based certified protocol
   certificates : List (BlockDigest × List ValidatorId) -- block digest to list of signers
@@ -56,7 +55,6 @@ structure DAGCertifiedState where
 instance : SystemState DAGCertifiedState where
   validators s := s.validators
   blocks s := s.blocks
-  currentRound s := s.currentRound
   emittedOperations s := s.emittedOperations
 
 -- Helper functions for DAG-based certified protocol
@@ -93,6 +91,7 @@ variable (system: BlockSynchroniserSystem)
 inductive DAGCertifiedTransition :
   DAGCertifiedState → DAGCertifiedTransitionOp → DAGCertifiedState → Prop
 
--- TODO: when should we advance the
+-- TODO: implement the protocol
+
 
 end DAGCertified

@@ -78,20 +78,17 @@ namespace SystemState
 class SystemState (S : Type) where
   validators : S → List (ValidatorId × Validator)
   blocks : S → List Block
-  currentRound : S → Round
   emittedOperations : S → List ValidatorOperation
 
 -- Default SystemState implementation
 structure DefaultSystemState where
   validators : List (ValidatorId × Validator) -- mapping from ID to validator state
   blocks : List Block -- all blocks seen in the system
-  currentRound : Round
   emittedOperations : List ValidatorOperation -- operations always remain available
 
 instance : SystemState DefaultSystemState where
   validators s := s.validators
   blocks s := s.blocks
-  currentRound s := s.currentRound
   emittedOperations s := s.emittedOperations
 
 
@@ -161,10 +158,9 @@ def systemInvariant {S} [SystemState S] (system : BlockSynchroniserSystem) (stat
 -- A trace is defined as a function from ℕ to system states
 def Trace (S : Type) [SystemState S] := Nat → S
 
--- A trace is valid if it satisfies the system invariant and currentRound does not decrease
+-- A trace is valid if it satisfies the system invariant
 def isValidTrace {S} [SystemState S] system (trace : Trace S) :=
-  forall i, systemInvariant system (trace i) ∧
-  (i > 0 → (SystemState.currentRound (trace i)) ≥ (SystemState.currentRound (trace (i - 1))))
+  forall i, systemInvariant system (trace i)
 
 -- Trace induction principle
 theorem traceInduction {S} [SystemState S]
@@ -221,9 +217,7 @@ def blockSynchroniserValidity {S} [SystemState S] (system : BlockSynchroniserSys
         ∃ k' ≥ k, ∃ o' : Nat,
         -- such that the operation o' is the accept operation from validator vid' in the same round
         let state_k' := trace k'
-        let currentRound' := SystemState.currentRound state_k'
         let operations' := SystemState.emittedOperations state_k'
-        currentRound' ≥ round ∧ -- this might happen in a later round
         operations'[o']? = some (.block_accept vid' block.d)
 
 -- Property 2a: Progress I: In each round, at least 2f + 1 validators (not
@@ -232,9 +226,7 @@ def blockSynchroniserProgressI {S} [SystemState S] (system : BlockSynchroniserSy
   ∀ round, -- for any round
     ∃ k, -- there exists a moment k such that
       let state_k := trace k
-      let currentRound := SystemState.currentRound state_k
       let operations := SystemState.emittedOperations state_k
-      currentRound = round ∧
       -- at least 2f+1 unique validators invoke block_propose in round
       let uniqueProposers := operations.filter (fun op =>
         match op with | .block_propose _ _ r => r = round | _ => false)
@@ -249,9 +241,7 @@ def blockSynchroniserProgressII {S} [SystemState S] (system : BlockSynchroniserS
   ∀ round, -- for any round
     ∃ k, -- there exists a moment k such that
       let state_k := trace k
-      let currentRound := SystemState.currentRound state_k
       let operations := SystemState.emittedOperations state_k
-      currentRound = round ∧
       -- each honest validator accepts at least 2f+1 disseminated blocks
       ∀ vid, isHonestValidator system vid ->
         let acceptOperationsByVid := operations.filter (fun op =>
@@ -261,13 +251,11 @@ def blockSynchroniserProgressII {S} [SystemState S] (system : BlockSynchroniserS
         authorsOfAcceptedBlocks.length ≥ 2 * system.f + 1
 
 -- Property 3: Block availability: If an honest validator V_i outputs
--- block_accept_i(B.d), in some round, then V_i eventually outputs
--- block_store_i(B) in the same or later round.
+-- block_accept_i(B.d) then V_i eventually outputs block_store_i(B) .
 def blockSynchroniserAvailability {S} [SystemState S] (system : BlockSynchroniserSystem) (trace: Trace S) : Prop :=
   ∀ k (o : Nat) vid blockDigest,
     -- take a snapshot and emitted operations at the moment k
     let state_k := trace k
-    let currentRound := SystemState.currentRound state_k
     let operations := SystemState.emittedOperations state_k
     -- some operation o is the accept operation from validator i
     operations[o]? = some (.block_accept vid blockDigest) ->
@@ -275,25 +263,21 @@ def blockSynchroniserAvailability {S} [SystemState S] (system : BlockSynchronise
     isHonestValidator system vid ->
     -- there exists a moment k' and an operation o'
     ∃ k' ≥ k, ∃ o' : Nat, ∃ block : Block,
-    -- such that the operation o' is the store operation from validator vid in the same round
+    -- such that the operation o' is the store operation from validator vid
     let state_k' := trace k'
-    let currentRound' := SystemState.currentRound state_k'
     let operations' := SystemState.emittedOperations state_k'
-    currentRound ≤  currentRound' ∧ -- ensure storage happens in the same round as acceptance
     operations'[o']? = some (.block_store vid block) ∧
     -- where block has the same digest as the accepted one
     block.d = blockDigest
 
 -- Property 4: Casual availability: If an honest validator V_i outputs
--- block_accept_i (B.d) in some round, then for every block B' ∈ causal(𝐁), V_i
--- eventually outputs block_accept_i (B'.d) in the same round. Here, causal (B)
--- represents B's causal history (i.e., all blocks for which there is a
--- connection or path from B to them).
+-- block_accept_i (B.d), then for every block B' ∈ causal(B), V_i eventually
+-- outputs block_accept_i (B'.d). Here, causal (B) represents B's causal history
+-- (i.e., all blocks for which there is a connection or path from B to them).
 def blockSynchroniserCausalAvailability {S} [SystemState S] (system : BlockSynchroniserSystem) (trace: Trace S) : Prop :=
   ∀ k (o : Nat) vid blockDigest,
     -- take a snapshot and emitted operations at the moment k
     let state_k := trace k
-    let currentRound := SystemState.currentRound state_k
     let operations := SystemState.emittedOperations state_k
     -- some operation o is the accept operation from validator i
     operations[o]? = some (.block_accept vid blockDigest) ->
@@ -306,51 +290,37 @@ def blockSynchroniserCausalAvailability {S} [SystemState S] (system : BlockSynch
         ∃ k' ≥ k, ∃ o' : Nat,
         -- such that the operation o' is the accept operation from validator vid in the same round
         let state_k' := trace k'
-        let currentRound' := SystemState.currentRound state_k'
         let operations' := SystemState.emittedOperations state_k'
-        currentRound' = currentRound ∧ -- ensure acceptance happens in the same round
         operations'[o']? = some (.block_accept vid block'.d)
 
--- Helper: all honest validators eventually store all blocks in the given set in the same round
+-- Helper: all honest validators eventually store all blocks in the given set
+-- at some point of time after k
 def allHonestValidatorsEventuallyStore {S} [SystemState S] (system : BlockSynchroniserSystem)
-    (trace: Trace S) (commonSet : List Block) (k : Nat) (round : Round) : Prop :=
-  ∀ vid, isHonestValidator system vid -> -- any hones validator
+    (trace: Trace S) (commonSet : List Block) (k : Nat) : Prop :=
+  ∀ vid, isHonestValidator system vid -> -- any honest validator
     ∀ block, block ∈ commonSet -> -- for any block in the commonSet
       ∃ k' ≥ k, ∃ o' : Nat,
         let state_k' := trace k'
-        let currentRound := SystemState.currentRound state_k'
         let operations' := SystemState.emittedOperations state_k'
-        currentRound = round ∧ -- ensure storage happens in the same round
         operations'[o']? = some (.block_store vid block)
 
--- Helper: compute unique authors of blocks in the common set for a given round
--- By itself this function does not guarantee intersection, only with the
--- assumption  that n ≥ 3f + 1
-def authorsInCommonSet (operations : List ValidatorOperation)
-    (commonSet : List Block) (r : Round) : List ValidatorId :=
-  -- for each block in the common set
-  commonSet.map (fun block =>
-    -- find the block_propose operation that created this block in round r
-    operations.find? (fun op =>
-      match op with | .block_propose _ block' _ => block'.d = block.d ∧ block'.r = r | _ => false)
-    -- extract the author ID from the found block_propose operation
-    |>.bind (fun op => match op with | .block_propose author _ _ => some author | _ => none))
-  |>.filterMap id  -- filter out None values to get only valid author IDs
-  |>.eraseDups -- remove duplicate authors to get unique validators
+-- Helper: compute unique authors of blocks in the common set
+def authorsInCommonSet (commonSet : List Block) : List ValidatorId :=
+  commonSet.map (fun block => block.author) |>.eraseDups
 
 -- Property 5: 2/3-Available common set: For each round r, all honest validators
 -- eventually store (via block_store) a common subset containing blocks from at
 -- least 2f + 1 validators.
 def blockSynchroniserCommonSet {S} [SystemState S] (system : BlockSynchroniserSystem) (trace: Trace S) : Prop :=
   ∀ round, -- for any round
-    ∃ commonSet k, -- there exists a common set of blocks and a moment k
-      let state_k := trace k
-      let operations := SystemState.emittedOperations state_k
+    ∃ commonSet, -- there exists a common set of blocks
+      -- All blocks in commonSet have the same round
+      commonSet.all (fun block => block.r = round) ∧
       -- the common subset contains blocks from at least 2f + 1 validators in round r
-      (authorsInCommonSet operations commonSet round).length ≥ 2 * system.f + 1
+      (authorsInCommonSet commonSet).length ≥ 2 * system.f + 1
       ∧
       -- All validators eventually store it at the same round
-      allHonestValidatorsEventuallyStore system trace commonSet k round
+      ∃ k, allHonestValidatorsEventuallyStore system trace commonSet k
 
 end Properties
 end BlockSynchroniser
