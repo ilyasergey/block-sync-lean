@@ -17,3 +17,9 @@
 import Batteries.Data.HashMap
 import Ssreflect.Lang
 import Aesop
+
+import BlockSynchroniser.Definitions
+
+open BlockSynchroniser
+open SystemState
+open Properties
