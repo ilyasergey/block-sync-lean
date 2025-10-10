@@ -199,9 +199,8 @@ namespace Properties
 
 open SystemState
 
--- Property 1: Validity: If an honest validator V_i invokes
--- block_propose_i(B,r), then every honest validator eventually outputs
--- block_accept(B.d)
+-- Validity: If an honest validator V_i invokes block_propose_i(B,r), then every
+-- honest validator eventually outputs block_accept(B.d)
 def blockSynchroniserValidity {S} [SystemState S] (system : BlockSynchroniserSystem) (trace: Trace S) : Prop :=
   ∀ round k (o : Nat) vid block,
     -- take a snapshot and emitted operations at the moment k
@@ -220,7 +219,7 @@ def blockSynchroniserValidity {S} [SystemState S] (system : BlockSynchroniserSys
         let operations' := SystemState.emittedOperations state_k'
         operations'[o']? = some (.block_accept vid' block.d)
 
--- Property 2a: Progress I: In each round, at least 2f + 1 validators (not
+-- Round-Progression: In each round, at least 2f + 1 validators (not
 -- necessarily honest ones) invoke block_propose to disseminate some blocks.
 def blockSynchroniserProgressI {S} [SystemState S] (system : BlockSynchroniserSystem) (trace: Trace S) : Prop :=
   ∀ round, -- for any round
@@ -235,7 +234,7 @@ def blockSynchroniserProgressI {S} [SystemState S] (system : BlockSynchroniserSy
         |>.eraseDups.length
       uniqueProposers ≥ 2 * system.f + 1
 
--- Property 2b: Progress II: In each round, each honest validator outputs
+-- Round-Termination: In each round, each honest validator outputs
 -- block_accept for accepting at least 2f + 1 disseminated blocks.
 def blockSynchroniserProgressII {S} [SystemState S] (system : BlockSynchroniserSystem) (trace: Trace S) : Prop :=
   ∀ round, -- for any round
@@ -250,7 +249,7 @@ def blockSynchroniserProgressII {S} [SystemState S] (system : BlockSynchroniserS
                          |>.filterMap id |>.eraseDups
         authorsOfAcceptedBlocks.length ≥ 2 * system.f + 1
 
--- Property 3: Block availability: If an honest validator V_i outputs
+-- Block-availability: If an honest validator V_i outputs
 -- block_accept_i(B.d) then V_i eventually outputs block_store_i(B) .
 def blockSynchroniserAvailability {S} [SystemState S] (system : BlockSynchroniserSystem) (trace: Trace S) : Prop :=
   ∀ k (o : Nat) vid blockDigest,
@@ -270,7 +269,7 @@ def blockSynchroniserAvailability {S} [SystemState S] (system : BlockSynchronise
     -- where block has the same digest as the accepted one
     block.d = blockDigest
 
--- Property 4: Casual availability: If an honest validator V_i outputs
+-- Casual-availability: If an honest validator V_i outputs
 -- block_accept_i (B.d), then for every block B' ∈ causal(B), V_i eventually
 -- outputs block_accept_i (B'.d). Here, causal (B) represents B's causal history
 -- (i.e., all blocks for which there is a connection or path from B to them).
