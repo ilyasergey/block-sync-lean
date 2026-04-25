@@ -14,6 +14,9 @@ Status legend: 🟡 IN_PROGRESS · ✅ COMPLETE (integrated) · ⚠️ COMPLETE_
 | `d724efd2-324b-48c2-bd1d-08e690d02eb1` | 3a | 2026-04-25 ~23:13 SGT | 🟡 QUEUED | [`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) | `lemma1_honest_round_entry`, `lemma2_round_latency` (timing) | pending |
 | `91c97602-54da-4277-8bda-3864bfa6674a` | 3e | 2026-04-25 ~23:18 SGT | 🟡 QUEUED | [`Beluga/PerformanceLemmas.lean`](../BlockSynchroniser/Beluga/PerformanceLemmas.lean) | `lemma3_honest_not_blamed`, `lemma4_round_latency_delta`, `lemma5_round_latency_or_blamed` | pending |
 | `af54716b-b1b4-41d5-bbb7-d02d0e0dab2a` | 3b | 2026-04-25 ~23:21 SGT | 🟡 QUEUED | [`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) | `theorem3_round_progression`, `theorem4_round_termination` | pending |
+| `a8889396-b34e-40f2-b10b-388f960c088e` | 4 | 2026-04-26 ~00:46 SGT | 🟡 IN_PROGRESS | [`Beluga/Protocol.lean`](../BlockSynchroniser/Beluga/Protocol.lean) | `step_refines_HonestStep` (with paper-consistent HonestAccept/HonestStore + WellFormed) | pending |
+| `d32908b4-d387-4d77-ac37-87e03a6f6699` | 5 | 2026-04-26 ~00:46 SGT | 🟡 IN_PROGRESS | [`Mysticeti/Liveness.lean`](../BlockSynchroniser/Mysticeti/Liveness.lean) | 11 helper lemmas added by round 3d | pending |
+| `9d7e8e08-0f3f-4101-9b69-2a46a7f6a69a` | 6 | 2026-04-26 ~00:46 SGT | 🟡 IN_PROGRESS | [`Mysticeti/Safety.lean`](../BlockSynchroniser/Mysticeti/Safety.lean) | 3 bridge sorries inside L13, L16, T7 | pending |
 
 **7 projects in flight in parallel.** Aristotle accepts concurrent
 submissions; they will process as capacity allows.
@@ -21,11 +24,11 @@ submissions; they will process as capacity allows.
 Frozen files (do not edit until corresponding rounds complete):
 - `Quorum.lean` (round 2)
 - `Beluga/Patterns.lean` (round 2)
-- `Mysticeti/Safety.lean` (round 2 + 3c)
+- `Mysticeti/Safety.lean` (round 2 + 6)
 - `Beluga/Theorems.lean` (rounds 3a + 3b)
 - `Beluga/PerformanceLemmas.lean` (round 3e)
-- `Beluga/Protocol.lean` (round 3f)
-- `Mysticeti/Liveness.lean` (round 3d)
+- `Beluga/Protocol.lean` (round 4)
+- `Mysticeti/Liveness.lean` (round 5)
 
 Freely-editable files: `Lib/`, all base modules
 (`Block`/`Validator`/`Operations`/`System`/`State`/`Causal`/`Trace`/`Properties`),
