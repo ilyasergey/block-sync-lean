@@ -18,6 +18,6 @@ inductive ValidatorOperation where
   | block_propose (author : ValidatorId) (block : Block) (round : Round) : ValidatorOperation
   | block_accept  (id : ValidatorId) (d : BlockDigest)                   : ValidatorOperation
   | block_store   (id : ValidatorId) (block : Block)                     : ValidatorOperation
-  deriving Repr
+  deriving Repr, DecidableEq
 
 end BlockSynchroniser

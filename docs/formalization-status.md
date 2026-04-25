@@ -4,7 +4,7 @@ Precise mapping from [Beluga paper](Block_Sync_Project.pdf) to Lean targets, wit
 
 **Status legend:** ☐ planned · ◐ in progress · ✅ done · ⊘ out of scope · ⏸ deferred
 
-Last updated: 2026-04-25 (after Phase 1).
+Last updated: 2026-04-25 (after Phase 2).
 
 ## §2 — Problem definition (the abstraction)
 
@@ -132,11 +132,17 @@ Pseudocode (E), implementation (F), and experimental setup (G) are not theorem-b
 
 | Target | Lean target | Status |
 |---|---|---|
-| `goldenTrace` — concrete honest run with `n=4, f=1` | `BlockSynchroniser/Validation.lean :: goldenTrace` | ☐ |
-| `goldenTrace ⊨ RoundProgression ∧ … ∧ CausalAvailability` | `Validation.lean :: goldenTrace_satisfies_all` | ☐ |
-| `realizable_propose`, `realizable_accept`, `realizable_store` | `Validation.lean` | ☐ |
-| `emptyTrace ⊭ RoundProgression` | `Validation.lean :: empty_fails_progression` | ☐ |
-| `byzantineOnlyTrace ⊭ RoundTermination` | `Validation.lean :: byz_fails_termination` | ☐ |
+| `goldenTrace` — concrete honest run with `n=4, f=1` | `BlockSynchroniser/Validation.lean :: goldenTrace` | ✅ Constructed (periodic 36-ops/round) |
+| `goldenTrace ⊨ RoundProgression` | `Validation.lean :: golden_roundProgression` | ◐ Stated; `sorry` (PROVIDED SOLUTION sketch in docstring; for Aristotle) |
+| `goldenTrace ⊨ RoundTermination` | `Validation.lean :: golden_roundTermination` | ◐ Stated; `sorry` (sketch + Aristotle) |
+| `goldenTrace ⊨ BlockAvailability` | `Validation.lean :: golden_blockAvailability` | ◐ Stated; `sorry` (sketch + Aristotle) |
+| `goldenTrace ⊨ CausalAvailability` | `Validation.lean :: golden_causalAvailability` | ◐ Stated; `sorry` (sketch + Aristotle) |
+| `goldenTrace ⊨ BlockSynchronizer` (conjunction) | `Validation.lean :: goldenTrace_isBlockSynchronizer` | ✅ Reduces to the four `golden_*` theorems |
+| `realizable_propose` | `Validation.lean :: realizable_propose` | ✅ Hand-proved |
+| `realizable_accept` | `Validation.lean :: realizable_accept` | ✅ Hand-proved |
+| `realizable_store` | `Validation.lean :: realizable_store` | ✅ Hand-proved |
+| `emptyTrace ⊭ RoundProgression` | `Validation.lean :: not_roundProgression_emptyTrace` | ✅ Hand-proved |
+| `emptyTrace ⊭ RoundTermination` | `Validation.lean :: not_roundTermination_emptyTrace` | ✅ Hand-proved |
 
 ## Summary counts
 
@@ -148,5 +154,5 @@ Pseudocode (E), implementation (F), and experimental setup (G) are not theorem-b
 | Appendix C performance | 6 | 0 | 0 | 0 | 6 |
 | Appendix D safety bundle | 5 | 0 | 0 | 5 | 0 |
 | Appendix D liveness | 5 | 0 | 0 | 0 | 5 |
-| Validation | 5 | 0 | 0 | 5 | 0 |
-| **Totals** | **51** | **7** | **3** | **28** | **13** |
+| Validation | 11 | 7 | 4 | 0 | 0 |
+| **Totals** | **57** | **14** | **7** | **23** | **13** |

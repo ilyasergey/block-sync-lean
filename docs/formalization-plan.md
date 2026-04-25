@@ -99,7 +99,9 @@ These will be reused across most theorems. Get them right in Phase 1.
 - `ReputationTable := ValidatorId → ℕ` with increment/decrement rules from §4.2 (matching pseudocode in Figure 8, Appendix E).
 - `AdmissionControl`: `AC_parent_selection`, threshold `R_t := R_{2f+1} - R_L`, round-advancement conditions (i)/(ii).
 - `ImPoA`: `implicitlyAvailable B` (referenced by ≥ f+1 blocks from subsequent rounds); live vs bulk classification.
-- `HonestStep system trace k`: a single-predicate small-step relation specifying when step `k` of the trace is consistent with honest semantics.
+- `HonestStep system trace k`: a single-predicate small-step *relation* specifying when step `k` of the trace is consistent with honest semantics. **Used by theorems.**
+- `step : BlockSynchroniserSystem → BelugaState → BelugaState`: an *executable* implementation of one valid honest schedule. **Used to run the protocol** (`#eval`, `Main.lean` driver) and to construct concrete traces.
+- **Refinement lemma**: every transition produced by `step` satisfies `HonestStep`. Connects the executable model to the relational model and serves as a constructive witness that `HonestStep` is non-vacuous.
 
 ### Phase 5 — Main theorems (§5) ☐
 

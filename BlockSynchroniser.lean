@@ -9,3 +9,4 @@ import BlockSynchroniser.Causal
 import BlockSynchroniser.Quorum
 import BlockSynchroniser.Trace
 import BlockSynchroniser.Properties
+import BlockSynchroniser.Validation
