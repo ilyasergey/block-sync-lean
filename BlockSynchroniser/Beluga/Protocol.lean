@@ -24,6 +24,7 @@ executable `step` is a minimal honest-schedule placeholder; the
 refinement lemma carries a `PROVIDED SOLUTION` sketch and is `sorry`'d
 for a future sub-phase (or Aristotle round).
 -/
+import Mathlib.Tactic
 import BlockSynchroniser.Block
 import BlockSynchroniser.System
 import BlockSynchroniser.State
@@ -34,6 +35,7 @@ import BlockSynchroniser.Beluga.State
 import BlockSynchroniser.Beluga.Reputation
 import BlockSynchroniser.Beluga.AdmissionControl
 import BlockSynchroniser.Beluga.Pull
+import BlockSynchroniser.Lib.Basic
 
 namespace BlockSynchroniser
 namespace Beluga
@@ -303,24 +305,13 @@ which only the honest cases apply.
 theorem step_refines_HonestStep
     (system : BlockSynchroniserSystem) (s : BelugaState) :
     HonestStep system s (step system s) := by
-  unfold step
-  generalize hf :
-    s.validators.findSome? (fun p => tryActFor system s p.1 p.2) = result
-  cases result with
-  | none =>
-    -- step s = s. Use ByzantineStep with newOps = [].
-    show HonestStep system s s
-    right; right; right; right
-    refine ⟨[], ?_, ?_⟩
-    · simp
-    · intro op hop
-      cases hop
-  | some s' =>
-    -- step s = s'. The full case analysis (extracting (vid, bv) from
-    -- findSome?, splitting on tryActFor's four branches, and on validator
-    -- honesty) is non-trivial Lean tactic plumbing. Sketched in the
-    -- docstring; queued for Aristotle round 3.
-    sorry
+  -- Hand-attempt got bogged down in match-result reduction (the goal
+  -- carries an unresolved `match s.validators.findSome? ... with | some s' =>
+  -- s' | none => s` after `cases` / `match` tactics, and `show` can't
+  -- reduce it definitionally). Witness extraction via Lib.findSome_witness
+  -- is in place. Queued for Aristotle round 3 with the partial structure
+  -- as PROVIDED SOLUTION.
+  sorry
 
 /--
 The Beluga-induced trace at step `n` (paper §4 protocol unrolled).
