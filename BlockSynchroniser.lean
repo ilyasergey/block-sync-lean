@@ -16,3 +16,4 @@ import BlockSynchroniser.Beluga.State
 import BlockSynchroniser.Beluga.Reputation
 import BlockSynchroniser.Beluga.AdmissionControl
 import BlockSynchroniser.Beluga.Pull
+import BlockSynchroniser.Beluga.Protocol
