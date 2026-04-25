@@ -133,3 +133,46 @@ lake build
 
 Toolchain pinned to `leanprover/lean4:v4.28.0` — matches Aristotle's pinned
 version exactly, so submissions compile cleanly on both sides.
+
+## Runnable examples
+
+The executable Beluga `step` function (paper §4 protocol; round-robin honest
+schedule) is fully implemented and `#eval`-able. Run it directly:
+
+```bash
+lake exe blocksynchroniser
+```
+
+This drives 20 executable `step` calls on a 4-validator, 1-Byzantine-budget
+honest system (see [`BlockSynchroniser/Beluga/Examples.lean :: system4`](BlockSynchroniser/Beluga/Examples.lean))
+and prints the resulting operation log. Sample output:
+
+```
+=== Beluga honest-synchronous trace ===
+system: n=4, f=1, k=0, all 4 validators honest
+
+After 20 executable `step` calls:
+  total ops emitted: 20
+  blocks in pool:    3
+  round-0 distinct proposers: [0, 1, 2]
+
+Operation log:
+  0: propose vid=0 round=0 digest=0 parents=[]
+  1: accept  vid=0 digest=0
+  2: store   vid=0 digest=0
+  3: propose vid=1 round=0 digest=1 parents=[]
+  4: accept  vid=0 digest=1
+  ...
+```
+
+`#eval` smoke tests in [`Examples.lean`](BlockSynchroniser/Beluga/Examples.lean)
+exercise:
+
+- `(run n).emittedOperations.length` — total ops after `n` steps.
+- `proposersFor (run n) r` — distinct round-`r` proposers.
+- `reprLog (run n)` — pretty-printed op log.
+
+The schedule is round-robin: each step scans validators in id order and
+applies the first available action (priority: propose → accept → store →
+advance). vid 0 exhausts its actions before vid 1 takes over, then vid 2,
+then vid 3.
