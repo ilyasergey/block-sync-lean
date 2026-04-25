@@ -12,3 +12,5 @@ import BlockSynchroniser.Properties
 import BlockSynchroniser.Validation
 import BlockSynchroniser.Beluga.BlockExt
 import BlockSynchroniser.Beluga.Patterns
+import BlockSynchroniser.Beluga.State
+import BlockSynchroniser.Beluga.Reputation
