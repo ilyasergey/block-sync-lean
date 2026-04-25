@@ -10,3 +10,5 @@ import BlockSynchroniser.Quorum
 import BlockSynchroniser.Trace
 import BlockSynchroniser.Properties
 import BlockSynchroniser.Validation
+import BlockSynchroniser.Beluga.BlockExt
+import BlockSynchroniser.Beluga.Patterns

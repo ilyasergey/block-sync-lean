@@ -4,7 +4,7 @@ Precise mapping from [Beluga paper](Block_Sync_Project.pdf) to Lean targets, wit
 
 **Status legend:** ☐ planned · ◐ in progress · ✅ done · ⊘ out of scope · ⏸ deferred
 
-Last updated: 2026-04-25 (after Phase 2).
+Last updated: 2026-04-25 (after Phase 3, before Aristotle integration of golden_*).
 
 ## §2 — Problem definition (the abstraction)
 
@@ -42,7 +42,7 @@ Last updated: 2026-04-25 (after Phase 2).
 
 | Paper | Lean target | Status |
 |---|---|---|
-| §4.1 — `weaklinks`, `watermark[]`, `ancestors[]` | `BlockSynchroniser/Beluga/BlockExt.lean :: BelugaBlock` | ☐ |
+| §4.1 — `weaklinks`, `watermark[]`, `ancestors[]` | `BlockSynchroniser/Beluga/BlockExt.lean :: BelugaBlock` | ✅ Structure + `WellSized` predicate |
 
 ### §4.2 — AC-based Optimistic Push
 
@@ -65,10 +65,10 @@ Last updated: 2026-04-25 (after Phase 2).
 
 | Paper | Lean target | Status |
 |---|---|---|
-| §4.4 — Availability pattern (referenced by > f distinct validators) | `BlockSynchroniser/Beluga/Patterns.lean :: availabilityPattern` | ☐ |
-| §4.4 — Certificate pattern (referenced as parents by > 2f distinct validators) | `BlockSynchroniser/Beluga/Patterns.lean :: certificatePattern` | ☐ |
-| §4.4 — `available B` / `certified B` predicates | `BlockSynchroniser/Beluga/Patterns.lean` | ☐ |
-| §4.4 — Uniqueness of certified per (author, round) (mentioned, used by safety) | `BlockSynchroniser/Beluga/Patterns.lean :: certified_unique` | ☐ |
+| §4.4 — Availability pattern (referenced by > f distinct validators) | `BlockSynchroniser/Beluga/Patterns.lean :: availabilityPattern` | ✅ (strong-link only; weaklinks-inclusive version deferred to Phase 4) |
+| §4.4 — Certificate pattern (referenced as parents by > 2f distinct validators) | `BlockSynchroniser/Beluga/Patterns.lean :: certificatePattern` | ✅ |
+| §4.4 — `available B` / `certified B` predicates | `BlockSynchroniser/Beluga/Patterns.lean` | ✅ Abbrevs |
+| §4.4 — Uniqueness of certified per (author, round) (mentioned, used by safety) | `BlockSynchroniser/Beluga/Patterns.lean :: certified_unique` | ◐ Stated with `NoEquivocationInParents` hypothesis; `sorry` (PROVIDED SOLUTION sketch; queue for Aristotle round 2) |
 
 ## §5 — Protocol Analysis (the main theorems)
 
@@ -149,10 +149,10 @@ Pseudocode (E), implementation (F), and experimental setup (G) are not theorem-b
 | Category | Total | Done | In progress | Planned | Out of scope/deferred |
 |---|---|---|---|---|---|
 | §2 abstraction | 12 | 7 | 2 | 1 | 2 |
-| §4 Beluga protocol | 12 | 0 | 1 | 11 | 0 |
+| §4 Beluga protocol | 12 | 4 | 2 | 6 | 0 |
 | §5 main theorems | 6 | 0 | 0 | 6 | 0 |
 | Appendix C performance | 6 | 0 | 0 | 0 | 6 |
 | Appendix D safety bundle | 5 | 0 | 0 | 5 | 0 |
 | Appendix D liveness | 5 | 0 | 0 | 0 | 5 |
 | Validation | 11 | 7 | 4 | 0 | 0 |
-| **Totals** | **57** | **14** | **7** | **23** | **13** |
+| **Totals** | **57** | **18** | **8** | **18** | **13** |
