@@ -68,7 +68,7 @@ Last updated: 2026-04-25 (after Phase 3, before Aristotle integration of golden_
 | §4.4 — Availability pattern (referenced by > f distinct validators) | `BlockSynchroniser/Beluga/Patterns.lean :: availabilityPattern` | ✅ (strong-link only; weaklinks-inclusive version deferred to Phase 4) |
 | §4.4 — Certificate pattern (referenced as parents by > 2f distinct validators) | `BlockSynchroniser/Beluga/Patterns.lean :: certificatePattern` | ✅ |
 | §4.4 — `available B` / `certified B` predicates | `BlockSynchroniser/Beluga/Patterns.lean` | ✅ Abbrevs |
-| §4.4 — Uniqueness of certified per (author, round) (mentioned, used by safety) | `BlockSynchroniser/Beluga/Patterns.lean :: certified_unique` | ◐ Stated with `NoEquivocationInParents` hypothesis; `sorry` (PROVIDED SOLUTION sketch; queue for Aristotle round 2) |
+| §4.4 — Uniqueness of certified per `(validator, round)` (informal in §4.4; specialization gives Appendix D Lemma 15) | `BlockSynchroniser/Beluga/Patterns.lean :: certified_unique` | ◐ Stated with `NoEquivocationInParents` hypothesis; `sorry` (PROVIDED SOLUTION sketch; queue for Aristotle round 2) |
 
 ## §5 — Protocol Analysis (the main theorems)
 

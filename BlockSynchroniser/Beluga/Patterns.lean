@@ -75,11 +75,16 @@ def NoEquivocationInParents (system : BlockSynchroniserSystem) {S} [SystemState 
     parent₁ = parent₂
 
 /--
-**Uniqueness of certified blocks per `(author, round)` (paper §4.4, Lemma 15).**
+**Uniqueness of certified blocks per `(author, round)` (paper §4.4).**
 
-If two blocks `B₁` and `B₂` are both certified, they share the same author
-and the same round, then they are equal. The load-bearing safety lemma for
-everything that follows in Appendix D.
+> *"the certificate pattern implies uniqueness: for any validator and round,
+> at most one block can become certified"* — paper §4.4 (page 9).
+
+Stated as an informal consequence in §4.4 (no lemma number); we formalize it
+here. Specializing `B₁.author = B₂.author = leader(r)` gives Appendix D
+**Lemma 15** ("at most one leader block can be certified for any round r"),
+which is the load-bearing form for the Mysticeti-Beluga safety theorem
+(Phase 6).
 
 PROVIDED SOLUTION
 Let `S₁ = strongReferencerAuthors state B₁` and `S₂ = strongReferencerAuthors state B₂`.
