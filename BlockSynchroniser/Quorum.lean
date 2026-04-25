@@ -8,14 +8,22 @@ import BlockSynchroniser.System
 namespace BlockSynchroniser
 namespace Quorum
 
-/-- A quorum is a duplicate-free list of `≥ 2f+1` registered validator ids. -/
+/--
+A quorum is a duplicate-free list of `≥ 2f+1` registered validator ids.
+
+*Not paper-specific.* Standard BFT quorum: any quorum-sized set of voters is
+guaranteed to overlap any other quorum in at least `f+1` participants, of
+whom at least one is honest (since at most `f` are Byzantine). The paper
+uses this implicitly throughout §5 and Appendix D.
+-/
 def IsQuorum (system : BlockSynchroniserSystem) (Q : List ValidatorId) : Prop :=
   Q.Nodup ∧
   Q.length ≥ 2 * system.f + 1 ∧
   ∀ vid ∈ Q, ∃ pair ∈ system.validators, pair.1 = vid
 
 /--
-**Quorum intersection.**
+**Quorum intersection.** *Not in the paper as a numbered lemma — it is the
+standard BFT lemma the paper relies on throughout §5 and Appendix D.*
 
 Any two quorums in a system with `n ≥ 3f+1` validators share at least `f+1`
 validators. Since the system tolerates at most `f` Byzantine validators, this

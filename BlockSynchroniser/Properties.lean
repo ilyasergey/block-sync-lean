@@ -83,8 +83,13 @@ def CausalAvailability (system : BlockSynchroniserSystem) (trace : Trace S) : Pr
     ∀ B', Reaches (trace k) B B' →
       Eventually trace k (fun _ state => HasAccepted state vid B'.d)
 
-/-- A trace is a *block synchronizer* iff it satisfies all four properties of
-Definition 1. -/
+/--
+**Definition 1 — Block synchronizer (paper §2.1, conjunction of 1.1–1.4).**
+
+A trace is a *block synchronizer* iff it satisfies all four properties.
+This is the abstract specification; paper Theorems 1–4 (§5) prove that the
+Beluga protocol's induced trace is a `BlockSynchronizer`.
+-/
 def BlockSynchronizer (system : BlockSynchroniserSystem) (trace : Trace S) : Prop :=
   RoundProgression   system trace ∧
   RoundTermination   system trace ∧

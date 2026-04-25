@@ -3,139 +3,125 @@
 Lean 4 formalization of [*Beluga: Block Synchronization for BFT Consensus
 Protocols*](docs/Block_Sync_Project.pdf).
 
-This file is the entry point. For deeper material, follow the pointers below.
+## Paper → code map
 
-## What we're building
+The single source of truth for which paper item lives where in this repo.
+Status: ✅ done · ◐ in progress · ☐ planned · ⊘ out of scope · ⏸ deferred.
 
-Two deliverables, in priority order:
+### §2 — Network model and synchronizer abstraction
 
-1. **The block synchronizer abstraction (paper §2.1, Definition 1).**
-   The four properties any block synchronizer must satisfy:
-   *Round-Progression*, *Round-Termination*, *Block availability*,
-   *Causal availability*. These are the load-bearing definitions; the rest of
-   the formalization either supports them, validates them, or proves the
-   Beluga protocol satisfies them.
+| Paper | Code | Status |
+|---|---|---|
+| §2 — Network model (`n`, `f`, `k`, `GST`, `Δ`) | [`System.lean :: BlockSynchroniserSystem`](BlockSynchroniser/System.lean) | ✅ |
+| §2 — Honest / Byzantine partition | [`System.lean :: isHonest` / `isByzantine`](BlockSynchroniser/System.lean) | ◐ binary; crashed-validator refinement deferred |
+| §2.1 — Block structure (`r, d, author, parents, payload, signature`) | [`Block.lean :: Block`](BlockSynchroniser/Block.lean) | ◐ signature omitted (irrelevant to abstract synchronizer) |
+| §2.1 — Synchronizer interface (`block_propose_i`/`block_accept_i`/`block_store_i`) | [`Operations.lean :: ValidatorOperation`](BlockSynchroniser/Operations.lean) | ✅ |
+| §2.1 — Causal history `causal(B)` | [`Causal.lean :: Reaches` / `causal`](BlockSynchroniser/Causal.lean) | ✅ |
+| §2.1 — **Definition 1.1 — Round-Progression** | [`Properties.lean :: RoundProgression`](BlockSynchroniser/Properties.lean) | ✅ |
+| §2.1 — **Definition 1.2 — Round-Termination** | [`Properties.lean :: RoundTermination`](BlockSynchroniser/Properties.lean) | ✅ |
+| §2.1 — **Definition 1.3 — Block availability** | [`Properties.lean :: BlockAvailability`](BlockSynchroniser/Properties.lean) | ✅ |
+| §2.1 — **Definition 1.4 — Causal availability** | [`Properties.lean :: CausalAvailability`](BlockSynchroniser/Properties.lean) | ✅ |
+| §2.1 — **Definition 1** (block synchronizer = conjunction) | [`Properties.lean :: BlockSynchronizer`](BlockSynchroniser/Properties.lean) | ✅ |
 
-2. **Beluga the protocol (paper §4) and its main theorems (paper §5).**
-   AC-based optimistic push (reputation, admission control) + ImPoA-based
-   hybrid pull. Theorems 1–4 prove that an honest run of Beluga satisfies
-   each property of Definition 1.
+### §4 — The Beluga protocol
 
-Stretch deliverable: the safety side of Mysticeti-Beluga (paper Appendix D —
-Lemmas 10, 13, 14, 15, 16, Theorem 7). Out of scope: probabilistic content
-(random pull complexity, Appendix C performance theorems), Mysticeti-Beluga
-liveness (Theorem 6).
+| Paper | Code | Status |
+|---|---|---|
+| §4.1 — Block extensions (`weaklinks`, `watermark`, `ancestors`) | [`Beluga/BlockExt.lean :: BelugaBlock`](BlockSynchroniser/Beluga/BlockExt.lean) | ✅ |
+| §4.2 — Reputation mechanism | `Beluga/Reputation.lean` | ☐ Phase 4 |
+| §4.2 — Admission Control + parent selection | `Beluga/AdmissionControl.lean` | ☐ Phase 4 |
+| §4.3 — ImPoA (implicit proof-of-availability) + live/bulk classification | `Beluga/Pull.lean` | ☐ Phase 4 |
+| §4.3 — Random pull complexity bound (`O(1)`) | — | ⊘ probabilistic |
+| §4.4 — Availability pattern | [`Beluga/Patterns.lean :: availabilityPattern`](BlockSynchroniser/Beluga/Patterns.lean) | ✅ strong-link only |
+| §4.4 — Certificate pattern | [`Beluga/Patterns.lean :: certificatePattern`](BlockSynchroniser/Beluga/Patterns.lean) | ✅ |
+| §4.4 — `available` / `certified` | [`Beluga/Patterns.lean`](BlockSynchroniser/Beluga/Patterns.lean) | ✅ |
+| §4.4 — Uniqueness consequence ("for any validator and round, at most one block can become certified") | [`Beluga/Patterns.lean :: certified_unique`](BlockSynchroniser/Beluga/Patterns.lean) | ◐ stated; `sorry` (queued for Aristotle round 2) |
+
+### §5 — Beluga's main theorems (Phase 5)
+
+| Paper | Code | Status |
+|---|---|---|
+| §5 — **Lemma 1** — after GST, all honest validators reach the same round within 3Δ | `Beluga/Theorems.lean :: lemma1_honest_round_entry` | ☐ |
+| §5 — **Lemma 2** — round-to-round latency ≤ 3Δ in the happy case | `Beluga/Theorems.lean :: lemma2_round_latency` | ☐ |
+| §5 — **Theorem 1** — Beluga ⊨ Block availability | `Beluga/Theorems.lean :: theorem1_block_availability` | ☐ |
+| §5 — **Theorem 2** — Beluga ⊨ Causal availability | `Beluga/Theorems.lean :: theorem2_causal_availability` | ☐ |
+| §5 — **Theorem 3** — Beluga ⊨ Round-Progression | `Beluga/Theorems.lean :: theorem3_round_progression` | ☐ |
+| §5 — **Theorem 4** — Beluga ⊨ Round-Termination | `Beluga/Theorems.lean :: theorem4_round_termination` | ☐ |
+
+### Appendix C — Performance bounds
+
+| Paper | Status |
+|---|---|
+| **Lemmas 3, 4, 5** — deterministic worst-case latency bounds | ⊘ Out of scope (performance, not safety/liveness) |
+| **Lemmas 6, 7** + **Theorem 5** — expected-latency bounds | ⊘ Probabilistic; out of scope |
+
+### Appendix D — Mysticeti-Beluga (Phase 6)
+
+| Paper | Code | Status |
+|---|---|---|
+| D.1.1 — Direct / indirect decision rules | `Mysticeti/Consensus.lean :: decisionRule` | ☐ |
+| D.1.2 — Round-robin leader schedule | `Mysticeti/Consensus.lean :: leaderSchedule` | ☐ |
+| **Lemma 8** — leader block referenced next round (after GST) | `Mysticeti/Liveness.lean :: lemma8_leader_referenced` | ⏸ liveness side; deferred |
+| **Lemma 9** — honest validators create certificate for honest leader | `Mysticeti/Liveness.lean :: lemma9_honest_certificate` | ⏸ liveness side |
+| **Lemma 10** — round-robin pigeonhole (3 consecutive honest leaders in any 3f+3 window) | `Mysticeti/Safety.lean :: lemma10_round_robin_pigeonhole` | ☐ pure combinatorics |
+| **Lemma 11** — undecided leader block eventually decided | `Mysticeti/Liveness.lean :: lemma11_eventual_decision` | ⏸ liveness side |
+| **Lemma 12** — block referenced by 2f+1 ⇒ honest validators output `block_accept` | `Mysticeti/Liveness.lean :: lemma12_referenced_accepted` | ⏸ liveness side |
+| **Lemma 13** — certificate persistence across rounds | `Mysticeti/Safety.lean :: lemma13_cert_persistence` | ☐ |
+| **Lemma 14** — no honest validator skips a directly-committed leader | `Mysticeti/Safety.lean :: lemma14_no_skip` | ☐ |
+| **Lemma 15** — at most one certified leader per round | `Mysticeti/Safety.lean :: lemma15_unique_cert` | ☐ specialization of `Beluga/Patterns.lean :: certified_unique` |
+| **Lemma 16** — consistent leader-status decision across honest validators | `Mysticeti/Safety.lean :: lemma16_consistent_status` | ☐ |
+| **Theorem 6** — Mysticeti-Beluga consensus liveness | `Mysticeti/Liveness.lean :: theorem6_consensus_liveness` | ⏸ deferred |
+| **Theorem 7** — Mysticeti-Beluga consensus safety | `Mysticeti/Safety.lean :: theorem7_consensus_safety` | ☐ |
+
+## Not in the paper — internal validation
+
+The `golden_*`, `realizable_*`, and `not_*_emptyTrace` lemmas in
+[`Validation.lean`](BlockSynchroniser/Validation.lean) **are not paper
+results.** They are sanity checks demonstrating that our Lean version of
+each Definition-1 property is satisfiable / falsifiable by concrete traces
+(non-vacuity validation). The opening comment of `Validation.lean` spells
+out the distinction.
+
+## Where to look
+
+| | |
+|---|---|
+| Detailed item-by-item status | [docs/formalization-status.md](docs/formalization-status.md) |
+| Phased plan & scope decisions | [docs/formalization-plan.md](docs/formalization-plan.md) |
+| Aristotle delegation workflow | [docs/aristotle-workflow.md](docs/aristotle-workflow.md) |
+| Per-stage changelog | [changelogs/](changelogs/) |
+| The paper | [docs/Block_Sync_Project.pdf](docs/Block_Sync_Project.pdf) |
 
 ## Repository layout
 
 ```
 block-sync-lean/
-├── formalization.md             ← you are here
-├── README.md                    ← build / run instructions
-├── docs/
-│   ├── Block_Sync_Project.pdf   ← the paper
-│   ├── formalization-plan.md    ← phased plan with file layout
-│   ├── formalization-status.md  ← per-item status, paper-to-Lean mapping
-│   └── aristotle-workflow.md    ← when and how we delegate proofs
-├── changelogs/                  ← timestamped entries per stage
+├── formalization.md            ← you are here
+├── README.md                   ← build / run instructions
+├── docs/                       ← plan, status, workflow, paper
+├── changelogs/                 ← timestamped per-stage entries
 ├── BlockSynchroniser/
-│   ├── Block.lean               ← Block, BlockDigest, ValidatorId, Round
-│   ├── Validator.lean           ← per-node Validator state
-│   ├── Operations.lean          ← block_propose / block_accept / block_store
-│   ├── System.lean              ← BlockSynchroniserSystem (n, f, k, GST, Δ)
-│   ├── State.lean               ← SystemState typeclass + DefaultSystemState
-│   ├── Causal.lean              ← inductive Reaches; causal(B)
-│   ├── Quorum.lean              ← IsQuorum; quorumIntersection (sorry)
-│   ├── Trace.lean               ← Trace, traceInduction, Eventually, Has*
-│   ├── Properties.lean          ← the four Definition-1 properties
-│   ├── Validation.lean          ← non-vacuity sanity checks (golden_*, …)
-│   └── Beluga/                  ← Phases 3–5: protocol + main theorems (TBD)
-│       └── Mysticeti/           ← Phase 6 (stretch): safety bundle
-├── Main.lean                    ← driver (Phase 4: runs the protocol)
+│   ├── Block, Validator, Operations.lean
+│   ├── System, State, Trace.lean
+│   ├── Causal.lean             ← inductive Reaches / causal
+│   ├── Quorum.lean             ← BFT quorum-intersection
+│   ├── Properties.lean         ← Definition 1.1–1.4
+│   ├── Validation.lean         ← non-vacuity sanity checks
+│   └── Beluga/
+│       ├── BlockExt.lean       ← BelugaBlock (§4.1)
+│       ├── Patterns.lean       ← available/certified (§4.4)
+│       ├── Reputation.lean     ← Phase 4
+│       ├── AdmissionControl.lean ← Phase 4
+│       ├── Pull.lean           ← Phase 4 (ImPoA)
+│       ├── Protocol.lean       ← Phase 4 (HonestStep + executable step)
+│       └── Theorems.lean       ← Phase 5 (Lemmas 1–2, Theorems 1–4)
+├── Main.lean
 ├── lakefile.lean
-└── lean-toolchain               ← v4.28.0
+└── lean-toolchain              ← v4.28.0
 ```
 
-## Two kinds of theorems — do not confuse them
-
-This is the most common source of confusion when reading the source. The
-formalization deliberately separates them.
-
-### Paper theorems
-
-Statements that appear in the paper. They are *about Beluga the protocol*.
-
-| Paper | Lean name (Phase 5) | What it claims |
-|---|---|---|
-| Theorem 3 (§5) | `theorem3_round_progression` | Beluga ⊨ Round-Progression |
-| Theorem 4 (§5) | `theorem4_round_termination` | Beluga ⊨ Round-Termination |
-| Theorem 1 (§5) | `theorem1_block_availability` | Beluga ⊨ Block availability |
-| Theorem 2 (§5) | `theorem2_causal_availability` | Beluga ⊨ Causal availability |
-| Lemma 1 (§5) | `lemma1_honest_round_entry` | After GST, all honest validators reach the same round within 3Δ |
-| Lemma 2 (§5) | `lemma2_round_latency` | After GST, round-to-round latency ≤ 3Δ in the happy case |
-
-These will live in [BlockSynchroniser/Beluga/Theorems.lean](BlockSynchroniser/) and
-are stated against the Beluga-induced trace, not against any concrete
-hand-built example. Status: planned (Phase 5).
-
-### Validation lemmas (the `golden_*`, `realizable_*`, `not_*_emptyTrace`)
-
-Statements in [BlockSynchroniser/Validation.lean](BlockSynchroniser/Validation.lean)
-that **do not appear in the paper**. They are sanity checks on our *formalization*:
-
-* `golden_roundProgression`, `golden_roundTermination`,
-  `golden_blockAvailability`, `golden_causalAvailability` — claim that a
-  concrete hand-built trace `goldenTrace` satisfies each property of
-  Definition 1. If a `golden_*` proof won't go through, our formal version
-  of the property is probably wrong — *and we want to find that out before
-  attempting the corresponding paper theorem.*
-
-* `realizable_propose`, `realizable_accept`, `realizable_store` — for each
-  Definition-1 property of the form `P → ∃ Q`, the antecedent `P` is reachable
-  in *some* trace. Rules out the failure mode where `P` is unsatisfiable and
-  the property is therefore vacuously true.
-
-* `not_roundProgression_emptyTrace`, `not_roundTermination_emptyTrace` — the
-  empty trace fails at least one property. Rules out the failure mode where
-  the property is so weak that even a no-op trace satisfies it.
-
-> **Rule of thumb when reading the source.** Any theorem name starting with
-> `golden_`, `realizable_`, or `not_*_emptyTrace` is *validation, not a paper
-> result*. Theorem names starting with `theorem<N>_` or `lemma<N>_` correspond
-> to paper Theorems N or Lemmas N respectively.
-
-## Validation strategy (non-vacuity)
-
-Every property in Definition 1 has the shape `P → ∃ Q` and is satisfied
-vacuously by the empty trace. Three layers of defense:
-
-| Layer | What it does | Example |
-|---|---|---|
-| **(A)** | Witness trace satisfying *all four* properties non-trivially | `goldenTrace ⊨ BlockSynchronizer system` |
-| **(B)** | Antecedents are reachable somewhere | `realizable_propose : ∃ trace k vid B r, HasProposed (trace k) vid B r` |
-| **(C)** | Empty trace fails at least one property | `¬ RoundProgression goldenSystem emptyTrace` |
-
-(B) + (C) are mandatory and currently proved without `sorry`. (A) is stated
-with `sorry` + `PROVIDED SOLUTION` sketches; we'll close them in sub-stage 2.5
-(see [docs/formalization-plan.md](docs/formalization-plan.md)).
-
-## How proofs get done
-
-Hand-first, delegate-when-stuck. Aristotle (Harmonic's Lean prover) handles
-proofs that are tedious or beyond easy hand-proving; we hand-prove definitions,
-the four-property phrasings, validation scaffolding, and short tactical work.
-Operational details — submission, diffing, attribution — are in
-[docs/aristotle-workflow.md](docs/aristotle-workflow.md).
-
-## Where to look
-
-| Question | Doc |
-|---|---|
-| Per-item status, paper-to-Lean mapping | [docs/formalization-status.md](docs/formalization-status.md) |
-| Phased plan, file layout, scope decisions | [docs/formalization-plan.md](docs/formalization-plan.md) |
-| Aristotle delegation workflow | [docs/aristotle-workflow.md](docs/aristotle-workflow.md) |
-| Per-stage changelog | [changelogs/](changelogs/) |
-| The paper | [docs/Block_Sync_Project.pdf](docs/Block_Sync_Project.pdf) |
+Mysticeti-Beluga modules (Phase 6, optional) live under
+`BlockSynchroniser/Mysticeti/`.
 
 ## Build
 
@@ -144,5 +130,5 @@ lake update
 lake build
 ```
 
-Lean toolchain pinned to `leanprover/lean4:v4.28.0` (matches Aristotle's
-required version).
+Toolchain pinned to `leanprover/lean4:v4.28.0` — matches Aristotle's pinned
+version exactly, so submissions compile cleanly on both sides.
