@@ -16,8 +16,9 @@ Status legend: 🟡 IN_PROGRESS · ✅ COMPLETE (integrated) · ⚠️ COMPLETE_
 | `a8889396-b34e-40f2-b10b-388f960c088e` | 4 | 2026-04-26 ~00:46 SGT | 🟡 IN_PROGRESS | [`Beluga/Protocol.lean`](../BlockSynchroniser/Beluga/Protocol.lean) | `step_refines_HonestStep` (with paper-consistent HonestAccept/HonestStore + WellFormed) | pending |
 | `d32908b4-d387-4d77-ac37-87e03a6f6699` | 5 | 2026-04-26 ~00:46 SGT | 🟡 IN_PROGRESS | [`Mysticeti/Liveness.lean`](../BlockSynchroniser/Mysticeti/Liveness.lean) | 11 helper lemmas added by round 3d | pending |
 | `9d7e8e08-0f3f-4101-9b69-2a46a7f6a69a` | 6 | 2026-04-26 ~00:46 SGT | 🟡 IN_PROGRESS | [`Mysticeti/Safety.lean`](../BlockSynchroniser/Mysticeti/Safety.lean) | 3 bridge sorries inside L13, L16, T7 | pending |
+| `bb79d236-f91d-42e0-9315-f46d9a22f5b8` | 3e-followup | 2026-04-26 ~01:11 SGT | 🟡 IN_PROGRESS | [`Beluga/StepPreservation.lean`](../BlockSynchroniser/Beluga/StepPreservation.lean) | `tryActFor_preserves_reputation` (last sorry from round 3e) | pending |
 
-**6 projects in flight in parallel.** Aristotle accepts concurrent
+**7 projects in flight in parallel.** Aristotle accepts concurrent
 submissions; they will process as capacity allows.
 
 Frozen files (do not edit until corresponding rounds complete):
@@ -27,6 +28,7 @@ Frozen files (do not edit until corresponding rounds complete):
 - `Beluga/Theorems.lean` (rounds 3a + 3b)
 - `Beluga/Protocol.lean` (round 4)
 - `Mysticeti/Liveness.lean` (round 5)
+- `Beluga/StepPreservation.lean` (round 3e-followup)
 
 Freely-editable files: `Lib/`, all base modules
 (`Block`/`Validator`/`Operations`/`System`/`State`/`Causal`/`Trace`/`Properties`),
