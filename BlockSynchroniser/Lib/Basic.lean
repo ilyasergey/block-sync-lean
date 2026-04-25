@@ -19,7 +19,24 @@ Currently empty — facts are added as proof attempts surface them.
 namespace BlockSynchroniser
 namespace Lib
 
--- (Reserved for generic lemmas. Add here as needed.)
+/-- If `List.findSome? f l = some b`, then there exists an element `a` of
+`l` for which `f a = some b`. Used by `step_refines_HonestStep` to extract
+the active validator from `step`'s `findSome?` call. -/
+theorem findSome_witness {α β : Type} (l : List α) (f : α → Option β) (b : β)
+    (h : l.findSome? f = some b) : ∃ a, a ∈ l ∧ f a = some b := by
+  induction l with
+  | nil => simp [List.findSome?] at h
+  | cons head tail ih =>
+    rw [List.findSome?] at h
+    match hH : f head with
+    | none =>
+      rw [hH] at h
+      obtain ⟨a, ha_mem, ha_eq⟩ := ih h
+      exact ⟨a, List.mem_cons_of_mem _ ha_mem, ha_eq⟩
+    | some b' =>
+      rw [hH] at h
+      have hb : b' = b := Option.some.inj h
+      exact ⟨head, List.mem_cons_self, hH.trans (by rw [hb])⟩
 
 end Lib
 end BlockSynchroniser
