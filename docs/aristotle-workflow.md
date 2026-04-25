@@ -243,6 +243,80 @@ single submission.
 - **Acknowledge in chat.** When a proof returns from Aristotle, surface it: which theorem, project ID, hand vs. delegated, anything I'd flag in the diff.
 - **Cost awareness.** Each submission costs API budget. Write a good prompt, wait, review — don't churn submissions on the same theorem.
 
+## Iteration loop: when results return with remaining sorries
+
+Aristotle often returns `COMPLETE_WITH_ERRORS` with the *structure* of
+a proof in place but specific gaps left as `sorry`. These remaining
+gaps usually fall into one of three categories — diagnose and address
+each accordingly, then resubmit if needed.
+
+### Diagnose
+
+For each remaining `sorry`, ask:
+
+1. **Tactical wall continuation**: Aristotle ran out of budget mid-proof
+   on a Mathlib unification or rewriting step. *Fix: refine the
+   `PROVIDED SOLUTION` with the specific Mathlib lemma names (often
+   listed in Aristotle's `ARISTOTLE_SUMMARY.md`), resubmit the same
+   theorem.*
+
+2. **Semantic gap** (the executable definition doesn't satisfy the
+   relational spec it's being refined against): the proof can't be
+   completed because the spec demands a condition the executable
+   doesn't enforce. *Fix: change the executable to enforce the
+   condition, OR weaken the spec, OR parameterize over a
+   well-formedness invariant. **This requires human judgment** — pick
+   the option that best preserves paper fidelity.*
+
+3. **Missing well-formedness invariant**: the proof needs a fact about
+   the state that's true by construction but not stated in the
+   theorem signature (e.g., "all validators in this state are
+   system-registered"). *Fix: add the invariant as a hypothesis to
+   the theorem (or to a wrapping definition like
+   `BelugaState.WellFormed`), strengthen the construction to
+   establish it, resubmit.*
+
+### Standard iteration pattern
+
+```
+1. Read ARISTOTLE_SUMMARY.md — Aristotle usually flags the gaps.
+2. Categorize each remaining sorry (tactical / semantic / wf).
+3. Apply fixes:
+   - tactical: edit PROVIDED SOLUTION, resubmit.
+   - semantic: edit definition (step, HonestStep, etc.), resubmit
+     (may also need to update PROVIDED SOLUTION).
+   - wf: add hypothesis or strengthen state invariant, resubmit.
+4. Verify build still clean before resubmission.
+5. Submit a new round with a *focused* prompt naming only the
+   theorem(s) still containing sorries; mention the prior project
+   ID so Aristotle has context.
+```
+
+### Example: round 3f's `step_refines_HonestStep` (project `116385ce`)
+
+Aristotle filled the structural case analysis but left 5 inline
+sorries:
+
+- 3 `isByzantineValidator` sorries → **wf gap**: the proof needs
+  "every `(vid, _)` in `s.validators` is registered in
+  `system.validators`". Fix: add `BelugaState.WellFormed system s`
+  predicate as a hypothesis to `step_refines_HonestStep`.
+- 1 `isAcceptableImPoA` sorry → **semantic gap**: `step`'s accept
+  branch doesn't check ImPoA. Fix: either tighten `step` to check it,
+  or weaken `HonestAccept` to not require it.
+- 1 causal-history sorry → **semantic gap**: `step`'s store branch
+  doesn't check causal history completeness. Same trade-off as above.
+
+The semantic gaps are where human judgment matters: the paper's
+honest validator *does* check ImPoA before accepting and causal
+history before storing, so tightening `step` preserves paper
+fidelity. Weakening `HonestAccept`/`HonestStore` would diverge from
+Definition 1.4's intent.
+
+Iteration plan: tighten `step`'s accept/store branches with the
+missing checks (preserves paper fidelity), add `BelugaState.WellFormed`
+hypothesis, resubmit with the prior `116385ce` ID in the prompt.
+
 ## Project tracking + attribution
 
 Two files:
