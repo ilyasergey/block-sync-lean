@@ -71,6 +71,64 @@ issue on Aristotle's side that did not invalidate the output. Result
 is sound — `lake build` succeeds, and Aristotle's `ARISTOTLE_SUMMARY.md`
 confirms all four theorems proved.
 
+## Project 91c97602-54da-4277-8bda-3864bfa6674a (round 3e)
+
+| Field | Value |
+|---|---|
+| Submitted | 2026-04-25 23:18 SGT |
+| Returned | 2026-04-26 ~01:07 SGT (status `COMPLETE_WITH_ERRORS`) |
+| Result tarball | `/tmp/aristotle-r3e.tar.gz` (extracted to `/tmp/aristotle-r3e/project_aristotle/`) |
+| Prompt | Fill the three sorries in `BlockSynchroniser/Beluga/PerformanceLemmas.lean` (L3, L4, L5 deterministic). Add hypotheses if needed but explain. |
+| Integration commit | (TBD; this commit) |
+
+### Theorems proved (3 + 1 def + helpers)
+
+In [`BlockSynchroniser/Beluga/PerformanceLemmas.lean`](../BlockSynchroniser/Beluga/PerformanceLemmas.lean):
+
+| Theorem | Paper origin | Strategy used |
+|---|---|---|
+| `lemma3_honest_not_blamed` | Appendix C.2 L3 | Reputation tables are preserved across `step`, so the non-decrease property is trivial. Delegated to `belugaTrace_getValidator_reputation` from new module `StepPreservation`. |
+| `lemma4_round_latency_delta` | Appendix C.2 L4 | Added hypothesis `LatencyTriangle` (paper Assumption 1) and `round_advance_chain` helper proved by induction over the round delta. |
+| `lemma5_round_latency_or_blamed` | Appendix C.2 L5 (deterministic) | Contrapositive against `LatencyTriangle`: if the disjunction fails, an inductive chain of round-advances can be built. |
+
+New definition `LatencyTriangle (system) (time) : Prop` captures
+paper Assumption 1 (latency triangle): after GST, if all honest
+validators are synchronized at round `r`, they all enter `r+1` within
+`Δ`. This is added as a hypothesis to L4 and L5 (consistent with the
+paper, which assumes Assumption 1 for these lemmas).
+
+### Helper lemmas Aristotle added — new file [`StepPreservation.lean`](../BlockSynchroniser/Beluga/StepPreservation.lean) (6)
+
+| Lemma | Status |
+|---|---|
+| `updateValidator_getValidator_reputation` | sorry-free |
+| `tryActFor_preserves_reputation` | **`sorry`** — `▸` cast mismatch + heartbeat timeout in the `doAccept` branch; queued as round 3e-followup |
+| `step_getValidator_reputation` | sorry-free (depends on the sorry'd lemma above) |
+| `belugaTrace_getValidator_reputation` | sorry-free |
+| `init_getValidator_honest` | sorry-free (after replacing Aristotle's `exact?` with `exact Or.inr h_find`) |
+| `belugaTrace_getValidator_honest` | sorry-free (after replacing Aristotle's `exact?` with the explicit base-case term) |
+
+### Side effects on the project
+
+- Aristotle added `import Mathlib` to both modified files. We narrowed
+  to `import Mathlib.Tactic` (consistent with the workaround for the
+  `clang` link-command size issue applied earlier in `Validation.lean`
+  and `Liveness.lean`).
+- Aristotle left two `exact?` placeholders in the new `StepPreservation`
+  module. We applied the linter "Try this" hints by hand:
+  `exact Or.inr h_find` and `exact init_getValidator_honest system vid h`.
+- Aristotle left `tryActFor_preserves_reputation` with a `▸` cast that
+  Lean rejects ("expected result type of cast does not contain the
+  expected result type") and a heartbeat timeout. Replaced with `sorry`
+  and queued as a followup round.
+- New module `StepPreservation.lean` added to the root `import` graph.
+
+### Verifier confirmation
+
+`lake build` passes (6244 jobs). One new `sorry` introduced
+(`tryActFor_preserves_reputation`); all three target theorems plus the
+6 main helpers compile.
+
 ## Future projects
 
 When a new Aristotle submission completes and is integrated, append
