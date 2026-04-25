@@ -316,10 +316,10 @@ theorem step_refines_HonestStep
     · intro op hop
       cases hop
   | some s' =>
-    -- step s = s'. Need case analysis on which action `tryActFor` chose,
-    -- then on whether the chosen validator is honest or Byzantine.
-    -- The four `tryActFor` branches (propose / accept / store / advance)
-    -- each induce a state change matched by one of HonestStep's disjuncts.
+    -- step s = s'. The full case analysis (extracting (vid, bv) from
+    -- findSome?, splitting on tryActFor's four branches, and on validator
+    -- honesty) is non-trivial Lean tactic plumbing. Sketched in the
+    -- docstring; queued for Aristotle round 3.
     sorry
 
 /--
