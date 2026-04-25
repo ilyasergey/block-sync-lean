@@ -243,6 +243,13 @@ single submission.
 - **Acknowledge in chat.** When a proof returns from Aristotle, surface it: which theorem, project ID, hand vs. delegated, anything I'd flag in the diff.
 - **Cost awareness.** Each submission costs API budget. Write a good prompt, wait, review — don't churn submissions on the same theorem.
 
+## Project tracking
+
+In-flight, queued, and completed Aristotle projects are tracked in
+[aristotle-projects.md](aristotle-projects.md). That file is the single
+source of truth for "who is filling what, and when did it land?". Update
+it on every submission and completion.
+
 ## Reference
 
 - Docs (auth-gated, in PDFs under [docs/aristotle/](aristotle/)).

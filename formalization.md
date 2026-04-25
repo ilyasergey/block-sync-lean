@@ -89,6 +89,7 @@ out the distinction.
 | Detailed item-by-item status | [docs/formalization-status.md](docs/formalization-status.md) |
 | Phased plan & scope decisions | [docs/formalization-plan.md](docs/formalization-plan.md) |
 | Aristotle delegation workflow | [docs/aristotle-workflow.md](docs/aristotle-workflow.md) |
+| Aristotle project tracker (active / queued / completed submissions) | [docs/aristotle-projects.md](docs/aristotle-projects.md) |
 | Per-stage changelog | [changelogs/](changelogs/) |
 | The paper | [docs/Block_Sync_Project.pdf](docs/Block_Sync_Project.pdf) |
 
