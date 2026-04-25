@@ -3,6 +3,14 @@
 Lean 4 formalization of [*Beluga: Block Synchronization for BFT Consensus
 Protocols*](docs/Block_Sync_Project.pdf).
 
+> **Mechanization findings:** see
+> [`docs/mechanization-findings.md`](docs/mechanization-findings.md)
+> for a paper-side log of observations the formalization surfaced
+> (paper terminology, no Lean — written so it can be folded back into
+> the paper). Headline finding so far: **F-1, scheduler-fairness
+> assumption missing from Lemmas 1 & 2** — see also
+> [`docs/paper-feedback-l1-l2-fairness.md`](docs/paper-feedback-l1-l2-fairness.md).
+
 ## Paper → code map
 
 The single source of truth for which paper item lives where in this repo.

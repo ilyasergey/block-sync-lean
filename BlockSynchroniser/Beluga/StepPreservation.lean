@@ -26,7 +26,7 @@ lemma updateValidator_getValidator_reputation (s : BelugaState) (vid actor : Val
     ∃ bv', (updateValidator s actor f).getValidator vid = some bv' ∧
       bv'.reputation = bv.reputation := by
   simp_all +decide [ updateValidator ];
-  unfold BelugaState.getValidator at h ⊢; simp_all +decide [ List.find?_eq_some_iff_append, List.find?_cons ] ;
+  unfold BelugaState.getValidator at h ⊢; simp_all +decide [ List.find?_eq_some_iff_append ] ;
   grind
 
 /-! ## tryActFor preserves getValidator and reputation -/
@@ -40,8 +40,26 @@ lemma tryActFor_preserves_reputation (system : BlockSynchroniserSystem) (s : Bel
     (h : s.getValidator vid = some bv) (s' : BelugaState)
     (h' : tryActFor system s vid_actor bv_actor = some s') :
     ∃ bv', s'.getValidator vid = some bv' ∧ bv'.reputation = bv.reputation := by
-  -- proof: aristotle (project 91c97602) — partial; ▸ + heartbeat issue, queued for round 3e-followup
-  sorry
+  -- proof: aristotle (project bb79d236)
+  revert h'
+  unfold tryActFor
+  cases h'' : List.find? _ s.blocks <;> simp +decide
+  · cases h''' : List.find? _ s.blocks <;> simp +decide
+    · split_ifs <;> simp_all +decide [doPropose, doAdvance]
+      · unfold BelugaState.getValidator at *; aesop
+      · intro h
+        rw [← h]
+        apply updateValidator_getValidator_reputation
+        · assumption
+        · grind
+    · split_ifs <;> simp_all +decide [doStore]
+      · unfold doPropose; aesop
+      · rintro rfl
+        exact updateValidator_getValidator_reputation _ _ _ _ _ h (by intros; rfl)
+  · split_ifs <;> simp_all +decide [doPropose, doAccept]
+    · unfold BelugaState.getValidator at *; aesop
+    · rintro rfl
+      exact updateValidator_getValidator_reputation _ _ _ _ _ h (by intros; rfl)
 
 /-! ## step preserves getValidator and reputation -/
 
@@ -89,7 +107,7 @@ theorem init_getValidator_honest (system : BlockSynchroniserSystem) (vid : Valid
     grind;
   -- proof: aristotle (project 91c97602)
   unfold BelugaState.getValidator; simp +decide [ BelugaState.init ] ;
-  use vid; simp_all +decide [ Function.comp ] ;
+  use vid; simp_all +decide
   exact Or.inr h_find
 
 /-

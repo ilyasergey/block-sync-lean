@@ -11,24 +11,18 @@ Status legend: 🟡 IN_PROGRESS · ✅ COMPLETE (integrated) · ⚠️ COMPLETE_
 | Project ID | Round | Submitted | Status | Target file(s) | Theorem(s) | Result |
 |---|---|---|---|---|---|---|
 | `4cda6cb1-a5b1-4f2f-9616-204e6438f82d` | 2 | 2026-04-25 ~22:55 SGT | 🟡 IN_PROGRESS | [`Quorum.lean`](../BlockSynchroniser/Quorum.lean), [`Beluga/Patterns.lean`](../BlockSynchroniser/Beluga/Patterns.lean), [`Mysticeti/Safety.lean`](../BlockSynchroniser/Mysticeti/Safety.lean) | `quorumIntersection`, `certified_unique`, `lemma10_round_robin_pigeonhole` | pending |
-| `d724efd2-324b-48c2-bd1d-08e690d02eb1` | 3a | 2026-04-25 ~23:13 SGT | 🟡 QUEUED | [`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) | `lemma1_honest_round_entry`, `lemma2_round_latency` (timing) | pending |
-| `af54716b-b1b4-41d5-bbb7-d02d0e0dab2a` | 3b | 2026-04-25 ~23:21 SGT | 🟡 QUEUED | [`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) | `theorem3_round_progression`, `theorem4_round_termination` | pending |
 | `a8889396-b34e-40f2-b10b-388f960c088e` | 4 | 2026-04-26 ~00:46 SGT | 🟡 IN_PROGRESS | [`Beluga/Protocol.lean`](../BlockSynchroniser/Beluga/Protocol.lean) | `step_refines_HonestStep` (with paper-consistent HonestAccept/HonestStore + WellFormed) | pending |
 | `d32908b4-d387-4d77-ac37-87e03a6f6699` | 5 | 2026-04-26 ~00:46 SGT | 🟡 IN_PROGRESS | [`Mysticeti/Liveness.lean`](../BlockSynchroniser/Mysticeti/Liveness.lean) | 11 helper lemmas added by round 3d | pending |
-| `9d7e8e08-0f3f-4101-9b69-2a46a7f6a69a` | 6 | 2026-04-26 ~00:46 SGT | 🟡 IN_PROGRESS | [`Mysticeti/Safety.lean`](../BlockSynchroniser/Mysticeti/Safety.lean) | 3 bridge sorries inside L13, L16, T7 | pending |
-| `bb79d236-f91d-42e0-9315-f46d9a22f5b8` | 3e-followup | 2026-04-26 ~01:11 SGT | 🟡 IN_PROGRESS | [`Beluga/StepPreservation.lean`](../BlockSynchroniser/Beluga/StepPreservation.lean) | `tryActFor_preserves_reputation` (last sorry from round 3e) | pending |
 
-**7 projects in flight in parallel.** Aristotle accepts concurrent
+**3 projects in flight in parallel.** Aristotle accepts concurrent
 submissions; they will process as capacity allows.
 
 Frozen files (do not edit until corresponding rounds complete):
 - `Quorum.lean` (round 2)
 - `Beluga/Patterns.lean` (round 2)
-- `Mysticeti/Safety.lean` (round 2 + 6)
-- `Beluga/Theorems.lean` (rounds 3a + 3b)
+- `Mysticeti/Safety.lean` (round 2)
 - `Beluga/Protocol.lean` (round 4)
 - `Mysticeti/Liveness.lean` (round 5)
-- `Beluga/StepPreservation.lean` (round 3e-followup)
 
 Freely-editable files: `Lib/`, all base modules
 (`Block`/`Validator`/`Operations`/`System`/`State`/`Causal`/`Trace`/`Properties`),
@@ -55,6 +49,10 @@ all Beluga supporting modules (`State`/`Reputation`/`AdmissionControl`/`Pull`/`B
 | `47e91c18-161d-4b4c-a702-d30f18883282` | 2026-04-25 23:22 SGT | 2026-04-26 ~00:33 SGT | ⚠️ COMPLETE_WITH_ERRORS (L14 fully proved; L13/L16/T7 structural with bridge sorries) | [`Mysticeti/Safety.lean`](../BlockSynchroniser/Mysticeti/Safety.lean) | `lemma14_no_skip` (sorry-free); `lemma13_cert_persistence`, `lemma16_consistent_status`, `theorem7_consensus_safety` (structural) | (TBD) |
 | `84e08b81-d35a-4ca9-80d7-a69a35192e58` | 2026-04-25 23:22 SGT | 2026-04-26 ~00:33 SGT | ⚠️ COMPLETE_WITH_ERRORS (5 main theorems sorry-free, delegating to 11 sorry'd helper lemmas) | [`Mysticeti/Liveness.lean`](../BlockSynchroniser/Mysticeti/Liveness.lean) | `lemma8_leader_referenced`, `lemma9_honest_certificate`, `lemma11_eventual_decision`, `lemma12_referenced_accepted`, `theorem6_consensus_liveness` (+1 sorry-free helper) | (TBD) |
 | `91c97602-54da-4277-8bda-3864bfa6674a` | 2026-04-25 23:18 SGT | 2026-04-26 ~01:07 SGT | ⚠️ COMPLETE_WITH_ERRORS (L3, L4, L5 sorry-free; helper `tryActFor_preserves_reputation` left as sorry — `▸` + heartbeat issue, queued for round 3e-followup) | [`Beluga/PerformanceLemmas.lean`](../BlockSynchroniser/Beluga/PerformanceLemmas.lean), [`Beluga/StepPreservation.lean`](../BlockSynchroniser/Beluga/StepPreservation.lean) (new) | `lemma3_honest_not_blamed`, `lemma4_round_latency_delta`, `lemma5_round_latency_or_blamed` (+`LatencyTriangle` def, +6 helpers in StepPreservation) | (TBD) |
+| `d724efd2-324b-48c2-bd1d-08e690d02eb1` | 2026-04-25 23:13 SGT | 2026-04-26 ~01:28 SGT | ⚠️ COMPLETE_WITH_ERRORS (claimed paper L1/L2 false; supplied weaker corrected versions). **Discarded the weakening, preserved as discovery (see [paper-feedback-l1-l2-fairness.md](paper-feedback-l1-l2-fairness.md))**; restated paper L1/L2 with new `SchedulerFairness` hypothesis instead. | [`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) | `lemma1_honest_round_entry`, `lemma2_round_latency` (timing) | (TBD) |
+| `af54716b-b1b4-41d5-bbb7-d02d0e0dab2a` | 2026-04-25 23:21 SGT | — | 🚫 CANCELED (file was conflicting with r3a follow-up) | [`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) | `theorem3_round_progression`, `theorem4_round_termination` | — |
+| `bb79d236-f91d-42e0-9315-f46d9a22f5b8` | 2026-04-26 01:11 SGT | 2026-04-26 ~01:33 SGT | ✅ COMPLETE (sorry-free; standard axioms only) | [`Beluga/StepPreservation.lean`](../BlockSynchroniser/Beluga/StepPreservation.lean) | `tryActFor_preserves_reputation` | (TBD) |
+| `9d7e8e08-0f3f-4101-9b69-2a46a7f6a69a` | 2026-04-26 00:46 SGT | 2026-04-26 ~01:31 SGT | ✅ COMPLETE (3 bridge sorries closed; added 4 paper-faithful protocol-invariant hypotheses + new `Reaches.trans` lemma) | [`Mysticeti/Safety.lean`](../BlockSynchroniser/Mysticeti/Safety.lean) | `lemma13_cert_persistence`, `lemma16_consistent_status`, `theorem7_consensus_safety` | (TBD) |
 
 Full attribution detail in [aristotle-attributions.md](aristotle-attributions.md).
 

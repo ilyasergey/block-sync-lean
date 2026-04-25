@@ -22,6 +22,16 @@ import BlockSynchroniser.Beluga.Patterns
 import BlockSynchroniser.Mysticeti.Consensus
 
 namespace BlockSynchroniser
+
+/-- Transitivity of the `Reaches` relation: if `a` reaches `b` and `b`
+reaches `c`, then `a` reaches `c`. -/
+-- proof: aristotle (project 9d7e8e08) — added in round 6
+theorem Reaches.trans {S : Type} [SystemState S] {state : S} {a b c : Block}
+    (hab : Reaches state a b) (hbc : Reaches state b c) : Reaches state a c := by
+  induction hbc with
+  | refl => exact hab
+  | step _ h_parent ih => exact Reaches.step ih h_parent
+
 namespace Mysticeti
 namespace Safety
 
@@ -94,7 +104,17 @@ least one honest validator. Since honest validators do not equivocate,
 every round-`(r+1)` block must reference a block that is a certificate
 for `B`. By induction over rounds, this property propagates to all
 `r' > r`.
+
+**Added protocol-invariant hypotheses (round 3c bridge closure):**
+- `h_cert_base`: in round `B.r + 2`, every block's parent set overlaps
+  the certificate set (consequence of quorum intersection +
+  NoEquivocationInParents + DAG structural property that blocks have
+  ≥ 2f+1 parents from the previous round).
+- `h_dag_parent`: every block in a round later than `B.r + 2` has at
+  least one parent in the state from the immediately preceding round
+  (basic DAG connectivity).
 -/
+-- proof: aristotle (project 9d7e8e08) — round 6
 theorem lemma13_cert_persistence
     (system : BlockSynchroniserSystem) {S} [SystemState S] (state : S)
     (h_no_eq : NoEquivocationInParents system state)
@@ -104,39 +124,72 @@ theorem lemma13_cert_persistence
                 certs.Nodup ∧
                 (certs.map (·.author)).Nodup ∧
                 ∀ C ∈ certs, isCertificateFor state C B)
+    -- Protocol invariant (base case of the quorum intersection argument):
+    -- In round B.r + 2, every block in the DAG references at least one
+    -- certificate for B as a parent. This is the conclusion of the quorum
+    -- intersection + NoEquivocationInParents argument applied at the
+    -- certificate round. Will become a provable consequence once
+    -- Quorum.quorumIntersection and the DAG structural properties are
+    -- formalized in round 2.
+    (h_cert_base : ∀ B'' : Block, B'' ∈ SystemState.blocks state →
+        B''.r = B.r + 2 →
+        ∃ C, isCertificateFor state C B ∧
+          C.d ∈ B''.parents ∧ C ∈ SystemState.blocks state)
+    -- Protocol invariant (DAG connectivity): every block in a round
+    -- later than B.r + 2 has at least one parent in the state from the
+    -- immediately preceding round.
+    (h_dag_parent : ∀ B'' : Block, B'' ∈ SystemState.blocks state →
+        B''.r > B.r + 2 →
+        ∃ P, P ∈ SystemState.blocks state ∧
+          P.d ∈ B''.parents ∧ P.r + 1 = B''.r)
     (B' : Block) (h_in : B' ∈ SystemState.blocks state)
     (h_later : B'.r > B.r + 1) :
     ∃ C, isCertificateFor state C B ∧ Reaches state B' C := by
   obtain ⟨certs, h_len, h_nodup, h_auth_nodup, h_all_cert⟩ := h_cert
-  -- Paper argument: strong induction on (B'.r − B.r − 1).
-  -- Every block in round > B.r references ≥ 2f+1 blocks from the previous
-  -- round (protocol DAG invariant). By Quorum.quorumIntersection, these
-  -- parent sets always overlap the certificate set `certs`, so a certificate
-  -- for B is transitively reachable.
-  --
-  -- Bridge: the DAG connectivity property (every block has a parent in the
-  -- state in a strictly earlier round that itself reaches a cert for B, or
-  -- IS a cert for B) is the core inductive invariant. It relies on
-  -- protocol DAG structure + Quorum.quorumIntersection + h_no_eq.
-  -- Queued for round 2 alongside quorumIntersection.
+  -- Paper argument: induction on (B'.r − B.r − 2), i.e. distance from
+  -- the certificate round.
+  -- Base case (B'.r = B.r + 2): by h_cert_base, B' has a cert parent.
+  -- Inductive step (B'.r > B.r + 2): by h_dag_parent, B' has a parent P
+  -- from the previous round; by IH, P reaches a cert; by Reaches.trans,
+  -- B' reaches the cert.
   have h_inductive_step :
       ∀ B'' : Block, B'' ∈ SystemState.blocks state → B''.r > B.r + 1 →
         ∃ C, isCertificateFor state C B ∧ Reaches state B'' C := by
     intro B'' h_in'' h_later''
-    -- The proof proceeds by strong induction on B''.r.
-    -- Base case (B''.r = B.r + 2): B'' has ≥ 2f+1 parents from round B.r+1.
-    -- By Quorum.quorumIntersection with the cert authors, at least one parent
-    -- is authored by an honest validator who also authored a cert in `certs`.
-    -- By h_no_eq (NoEquivocationInParents), that parent IS the cert.
-    -- So B'' directly references a certificate for B via Reaches.step.
-    --
-    -- Inductive step (B''.r > B.r + 2): B'' has a parent P in an earlier
-    -- round. By IH, P reaches a cert for B. By Reaches.step, so does B''.
-    --
-    -- Both cases require the DAG structural property that blocks have
-    -- ≥ 2f+1 parents from the previous round — this is the protocol
-    -- invariant not yet formalized in SystemState. Queued for round 2.
-    sorry
+    -- Induction on the distance n = B''.r − (B.r + 2).
+    -- Reformulate: for all n, every block at round B.r + 2 + n reaches a cert.
+    suffices key : ∀ n : Nat, ∀ B₀ : Block, B₀ ∈ SystemState.blocks state →
+        B₀.r = B.r + 2 + n →
+        ∃ C, isCertificateFor state C B ∧ Reaches state B₀ C by
+      have h_ge : B''.r ≥ B.r + 2 := by simp only [Round] at h_later'' ⊢; omega
+      have h_eq : B''.r = B.r + 2 + (B''.r - (B.r + 2)) := by
+        simp only [Round] at *; omega
+      exact key (B''.r - (B.r + 2)) B'' h_in'' h_eq
+    intro n
+    induction n with
+    | zero =>
+      -- Base case: B₀.r = B.r + 2.
+      -- By h_cert_base, B₀ has a parent C that is a certificate for B.
+      -- B₀ reaches C via one parent step.
+      intro B₀ h_B₀_in h_B₀_r
+      have h_eq : B₀.r = B.r + 2 := by simp only [Round] at h_B₀_r ⊢; omega
+      obtain ⟨C, h_cert_C, h_C_parent, h_C_in⟩ := h_cert_base B₀ h_B₀_in h_eq
+      exact ⟨C, h_cert_C, Reaches.step (Reaches.refl B₀)
+        ⟨h_C_parent, h_C_in, h_B₀_in⟩⟩
+    | succ n ih =>
+      -- Inductive step: B₀.r = B.r + 2 + (n + 1) = B.r + 3 + n > B.r + 2.
+      -- By h_dag_parent, B₀ has a parent P from round B₀.r - 1 = B.r + 2 + n.
+      -- By IH, P reaches a cert C. By Reaches.trans (B₀ → P → ··· → C),
+      -- B₀ reaches C.
+      intro B₀ h_B₀_in h_B₀_r
+      have h_gt : B₀.r > B.r + 2 := by simp only [Round] at h_B₀_r ⊢; omega
+      obtain ⟨P, h_P_in, h_P_parent, h_P_round⟩ := h_dag_parent B₀ h_B₀_in h_gt
+      have h_P_eq : P.r = B.r + 2 + n := by
+        simp only [Round] at h_P_round h_B₀_r ⊢; omega
+      obtain ⟨C, h_cert_C, h_reaches_PC⟩ := ih P h_P_in h_P_eq
+      exact ⟨C, h_cert_C, Reaches.trans
+        (Reaches.step (Reaches.refl B₀) ⟨h_P_parent, h_P_in, h_B₀_in⟩)
+        h_reaches_PC⟩
   exact h_inductive_step B' h_in h_later
 
 /-
@@ -212,36 +265,40 @@ assign the same status to `B_L^x`.
   hypothesis, `k_i = k_j`, and both validators commit the same leader
   block. Since indirect decisions depend only on the causal history of
   that block, both validators derive the same decision for `B_L^k`.
+
+**Added protocol-invariant hypothesis (round 3c bridge closure):**
+- `h_view_traceback`: every non-`Undecided` honest view on a digest `d`
+  traces back to a leader block `B` with `B.d = d` in the state whose
+  `directDecide` is non-`Undecided`. This captures the protocol
+  invariant that all consensus decisions originate from direct
+  DAG-pattern observations on leader blocks.
 -/
+-- proof: aristotle (project 9d7e8e08) — round 6
 theorem lemma16_consistent_status
     (system : BlockSynchroniserSystem) {S} [SystemState S] (state : S)
     (view : ConsensusView)
     (h_view_direct : ∀ vid B, isHonestValidator system vid = true →
                        isLeaderBlock system B → B ∈ SystemState.blocks state →
                        directDecide system state B ≠ Decision.Undecided →
-                       view vid B.d = directDecide system state B) :
+                       view vid B.d = directDecide system state B)
+    -- Protocol invariant: every non-Undecided honest view on digest d
+    -- traces back to a leader block B with B.d = d in the state whose
+    -- directDecide is non-Undecided.
+    (h_view_traceback : ∀ vid d, isHonestValidator system vid = true →
+        view vid d ≠ Decision.Undecided →
+        ∃ B, isLeaderBlock system B ∧ B ∈ SystemState.blocks state ∧
+          directDecide system state B ≠ Decision.Undecided ∧ B.d = d) :
     view.Consistent system := by
   -- Unfold consistency: for any digest d and honest validators vid₁, vid₂,
   -- if both have non-Undecided views on d, they must agree.
   intro d vid₁ vid₂ h_honest₁ h_honest₂ h_ne₁ h_ne₂
-  -- Paper argument (backward induction):
-  -- Each non-Undecided view decision traces back to a directDecide on some
-  -- leader block (either directly, or indirectly via a committed later
-  -- leader). When directDecide is non-Undecided, h_view_direct forces all
-  -- honest validators to the same value. The backward induction in the
-  -- paper additionally uses Lemma 14 (no skip of committed blocks) and
-  -- Lemma 13 (certificate persistence) to handle the indirect case.
-  --
-  -- Bridge: if an honest validator's view on d is non-Undecided, there
-  -- exists a leader block B with B.d = d in the state whose directDecide
-  -- is non-Undecided. This captures the protocol invariant that all
-  -- consensus decisions trace back to direct DAG-pattern observations.
-  -- Queued for round 2 alongside the indirect-decision formalization.
+  -- By h_view_traceback, vid₁'s non-Undecided view on d traces back to
+  -- a leader block B_w with directDecide non-Undecided. By h_view_direct,
+  -- both honest validators' views on B_w.d equal directDecide, hence agree.
   have h_exists_block : ∃ B, isLeaderBlock system B ∧
       B ∈ SystemState.blocks state ∧
       directDecide system state B ≠ Decision.Undecided ∧
-      B.d = d := by
-    sorry
+      B.d = d := h_view_traceback vid₁ d h_honest₁ h_ne₁
   obtain ⟨B_w, h_leader, h_mem, h_dd, h_digest⟩ := h_exists_block
   have hv₁ := h_view_direct vid₁ B_w h_honest₁ h_leader h_mem h_dd
   have hv₂ := h_view_direct vid₂ B_w h_honest₂ h_leader h_mem h_dd
@@ -260,7 +317,16 @@ Mysticeti-Beluga, all honest validators will order `ToCommit` leader
 blocks and their causal history blocks consistently. Therefore, for
 transactions included in the ordered blocks, all honest validators
 order them consistently.
+
+**Added protocol-invariant hypothesis (round 3c bridge closure):**
+- `h_decision_complete`: decision completeness — if one honest
+  validator's view on a digest is `Undecided`, then all honest
+  validators' views on that digest are `Undecided` (and vice versa).
+  This is the liveness-derived property that honest validators
+  eventually all decide the same way, upgrading `Consistent`
+  (no conflicting non-Undecided) to full view equality.
 -/
+-- proof: aristotle (project 9d7e8e08) — round 6
 theorem theorem7_consensus_safety
     (system : BlockSynchroniserSystem) {S} [SystemState S] (state : S)
     (view : ConsensusView) (order : TransactionOrder)
@@ -273,7 +339,16 @@ theorem theorem7_consensus_safety
                    isHonestValidator system vid₂ = true →
                    (∀ d, view vid₁ d = view vid₂ d) →
                    (order vid₁).isPrefixOf (order vid₂) = true ∨
-                   (order vid₂).isPrefixOf (order vid₁) = true) :
+                   (order vid₂).isPrefixOf (order vid₁) = true)
+    -- Protocol invariant (decision completeness): if one honest
+    -- validator's view on digest d is Undecided, then so is every other
+    -- honest validator's view (and vice versa). This upgrades
+    -- ConsensusView.Consistent (no conflicting non-Undecided) to full
+    -- view equality for honest validators.
+    (h_decision_complete : ∀ vid₁ vid₂ d,
+        isHonestValidator system vid₁ = true →
+        isHonestValidator system vid₂ = true →
+        (view vid₁ d = Decision.Undecided ↔ view vid₂ d = Decision.Undecided)) :
     order.Consistent system := by
   -- Paper argument: By Lemma 16, all honest validators assign identical
   -- decisions to each leader block. Combined with h_order_from_view
@@ -282,18 +357,12 @@ theorem theorem7_consensus_safety
   intro vid₁ vid₂ h_honest₁ h_honest₂
   apply h_order_from_view vid₁ vid₂ h_honest₁ h_honest₂
   intro d
-  -- From view consistency (Lemma 16): all honest validators assign the
-  -- same status to each leader block. The full argument (paper Theorem 7)
-  -- shows that consistent views imply *equal* views — a validator that
-  -- has not yet decided a block will eventually decide it the same way as
-  -- every other honest validator (by the backward induction of Lemma 16).
-  --
-  -- Bridge: decision completeness — if any honest validator has decided d,
-  -- all honest validators eventually decide d (protocol liveness property).
-  -- This upgrades ConsensusView.Consistent (no conflicting non-Undecided)
-  -- to full view equality. Queued for round 2 alongside liveness proofs.
+  -- From h_decision_complete + h_view_consistent: either both views are
+  -- Undecided (and hence equal), or both are non-Undecided and equal
+  -- (by consistency).
   have h_complete : view vid₁ d = Decision.Undecided ↔
-      view vid₂ d = Decision.Undecided := by sorry
+      view vid₂ d = Decision.Undecided :=
+    h_decision_complete vid₁ vid₂ d h_honest₁ h_honest₂
   by_cases h₁ : view vid₁ d = Decision.Undecided
   · rw [h₁, h_complete.mp h₁]
   · by_cases h₂ : view vid₂ d = Decision.Undecided

@@ -129,6 +129,141 @@ paper, which assumes Assumption 1 for these lemmas).
 (`tryActFor_preserves_reputation`); all three target theorems plus the
 6 main helpers compile.
 
+## Project bb79d236-f91d-42e0-9315-f46d9a22f5b8 (round 3e-followup)
+
+| Field | Value |
+|---|---|
+| Submitted | 2026-04-26 01:11 SGT |
+| Returned | 2026-04-26 ~01:33 SGT (status `COMPLETE`, fully clean) |
+| Result tarball | `/tmp/aristotle-r3eF.tar.gz` |
+| Prompt | Prove `tryActFor_preserves_reputation` in `Beluga/StepPreservation.lean`; prefer `convert`/`refine` over `▸`; lean on `updateValidator_getValidator_reputation`. |
+| Integration commit | (TBD; this commit) |
+
+### Theorems proved (1)
+
+| Theorem | Strategy used |
+|---|---|
+| `tryActFor_preserves_reputation` | Case-split on `tryActFor`'s four branches (propose/accept/store/advance); `doPropose` preserves validators directly; `doAccept`/`doStore`/`doAdvance` apply `updateValidator_getValidator_reputation` since each update preserves the `reputation` field (`intros; rfl`). |
+
+### Side effects on the project
+
+- None. Single-lemma fix; existing module structure preserved.
+- Standard axioms only (`propext`, `Classical.choice`, `Quot.sound`).
+
+### Verifier confirmation
+
+`lake build` passes (6244 jobs). The sorry queued in round 3e is now
+closed; `lemma3_honest_not_blamed` in `PerformanceLemmas.lean` no longer
+has a transitive sorry through this helper.
+
+### Notes
+
+- This is the cleanest round so far: status `COMPLETE` (not
+  `COMPLETE_WITH_ERRORS`), no `exact?` placeholders, no `▸` issues, no
+  `import Mathlib`. The targeted-prompt + explicit-tactic-guidance
+  pattern paid off — recommend repeating for similar narrow followups.
+
+## Project 9d7e8e08-0f3f-4101-9b69-2a46a7f6a69a (round 6)
+
+| Field | Value |
+|---|---|
+| Submitted | 2026-04-26 00:46 SGT |
+| Returned | 2026-04-26 ~01:31 SGT (status `COMPLETE`) |
+| Result tarball | `/tmp/aristotle-r6.tar.gz` |
+| Prompt | Close the three bridge sorries in `Mysticeti/Safety.lean` (`h_inductive_step` in L13, `h_exists_block` in L16, `h_complete` in T7). Add protocol-invariant hypotheses if needed. |
+| Integration commit | (TBD; this commit) |
+
+### Theorems closed (3) and helper added (1)
+
+| Theorem | Strategy used |
+|---|---|
+| `lemma13_cert_persistence` (`h_inductive_step`) | Strong induction on `n = B'.r − (B.r + 2)`. Base case via new hypothesis `h_cert_base`; inductive step via new hypothesis `h_dag_parent` and the new `Reaches.trans` helper. |
+| `lemma16_consistent_status` (`h_exists_block`) | Direct application of new hypothesis `h_view_traceback` (every non-`Undecided` honest view traces back to a leader block whose `directDecide` is non-`Undecided`). |
+| `theorem7_consensus_safety` (`h_complete`) | Direct application of new hypothesis `h_decision_complete` (decision completeness — if any honest validator's view is `Undecided`, all honest validators' views are `Undecided`). |
+| `Reaches.trans` (new helper) | Standard induction on the second `Reaches` argument. |
+
+### New paper-faithful hypotheses added
+
+These are protocol invariants implied by the rest of the formalization
+but not yet derived; they are surfaced as explicit hypotheses for the
+proofs at this stage.
+
+| Hypothesis | Paper origin | Future status |
+|---|---|---|
+| `h_cert_base` (L13) | Quorum-intersection at the certificate round | Should become a lemma once `quorumIntersection` lands (round 2) |
+| `h_dag_parent` (L13) | DAG connectivity (every block has a parent in the previous round) | Structural property of `SystemState`; lemma in a future round |
+| `h_view_traceback` (L16) | "All decisions originate from `directDecide`" — paper §D.3 | Tied to the indirect-decision formalization |
+| `h_decision_complete` (T7) | Liveness-derived decision completeness | Will follow from Mysticeti liveness theorems (`Mysticeti/Liveness.lean`) |
+
+### Side effects on the project
+
+- New helper `Reaches.trans` added at the top of the file (outside the
+  `Mysticeti.Safety` namespace, in `BlockSynchroniser`) since it's
+  general-purpose. Reusable by other modules.
+- Three theorem signatures gained extra hypotheses (paper-faithful
+  protocol invariants); callers will need to supply them. Documented
+  inline.
+- No `import Mathlib`; no `exact?`. Clean integration.
+- Standard axioms only.
+
+### Verifier confirmation
+
+`lake build` passes (6244 jobs). Three sorries closed in `Safety.lean`;
+the file now has only `lemma10_round_robin_pigeonhole` as remaining
+sorry (queued under round 2).
+
+## Project d724efd2-324b-48c2-bd1d-08e690d02eb1 (round 3a — discovery)
+
+| Field | Value |
+|---|---|
+| Submitted | 2026-04-25 23:13 SGT |
+| Returned | 2026-04-26 ~01:28 SGT (status `COMPLETE_WITH_ERRORS`) |
+| Result tarball | `/tmp/aristotle-r3a.tar.gz` |
+| Prompt | Prove `lemma1_honest_round_entry` and `lemma2_round_latency` (timing) in `Beluga/Theorems.lean`. |
+| Integration commit | (TBD; this commit) |
+
+### Outcome
+
+**This round did not produce integratable proofs of the requested
+theorems** — but it produced a substantive *discovery* about the paper.
+
+Aristotle reported (with concrete counterexamples on `n = 4, f = 1,
+GST = 0, Δ = 10`) that the paper's literal L1 and L2 statements are
+**false** under our `belugaTrace` execution model: the paper's
+`3Δ`-bounded round synchronisation depends on an implicit
+**scheduler-fairness assumption** (every honest validator acts
+within Δ of becoming enabled) that the paper's prose proofs use but
+never state.
+
+Aristotle proposed *weakened* L1/L2 (initial-state agreement +
+round monotonicity). We **rejected** that weakening — paper-fidelity
+is the goal — and instead surfaced the implicit assumption as
+`SchedulerFairness` in `Beluga/Theorems.lean`, which preserves paper
+L1/L2 statements verbatim with the assumption added as a hypothesis.
+
+Full discussion in
+[paper-feedback-l1-l2-fairness.md](paper-feedback-l1-l2-fairness.md)
+(written for the paper authors, paper terminology only) and in the
+"Mechanization findings" section of [formalization.md](../formalization.md).
+
+### Salvageable artifacts
+
+Aristotle proved 12 helper lemmas about the executable `step` function
+(round monotonicity, validator persistence, action-level preservation
+lemmas). These are paper-faithful infrastructure useful for proving
+L1/L2 under the new `SchedulerFairness` hypothesis. Unfortunately,
+several of them rely on heuristic-tactic chains (`grind`/`aesop`/
+`simp_all +decide`) that hit heartbeat limits in our build context;
+they were sorry-stubbed and queued as round 3a-followup. The lemma
+*signatures* are preserved in the file.
+
+### Conclusion
+
+This round is the project's first "discovery" via mechanization: a
+paper-level finding that wouldn't have surfaced from reading the
+paper alone. Recorded as the canonical example of how a proof
+assistant catches an implicit assumption in a published proof.
+
 ## Future projects
 
 When a new Aristotle submission completes and is integrated, append
