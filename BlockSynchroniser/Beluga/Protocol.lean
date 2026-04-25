@@ -128,17 +128,29 @@ def HonestAdvance
   s'.blocks = s.blocks ∧
   s'.emittedOperations = s.emittedOperations
 
+/-- The validator id that produced an operation. -/
+def operationAuthor : ValidatorOperation → ValidatorId
+  | .block_propose vid _ _ => vid
+  | .block_accept  vid _   => vid
+  | .block_store   vid _   => vid
+
 /--
-Byzantine action: any state transition with no constraint on honest
-validators. The adversary can do *anything* not constrained by honest
-behavior.
+**Byzantine step (refined).**
+
+A transition `s → s'` is a *Byzantine step* iff:
+* The operation log is monotonically extended (`s.emittedOperations` is a
+  prefix of `s'.emittedOperations`), AND
+* Every newly-emitted operation is attributable to a Byzantine validator.
+
+Byzantine validators are otherwise unconstrained: they can propose any
+block (with arbitrary parents/payload), accept any digest, or store any
+block. Honest validators' operations are *not* permitted in a
+Byzantine step — those flow through `HonestStep`'s four cases.
 -/
-def ByzantineStep (_system : BlockSynchroniserSystem) (_s _s' : BelugaState) : Prop :=
-  -- No constraint — Byzantine validators can produce any transition that
-  -- doesn't violate honest validators' commitments. This is a placeholder;
-  -- the precise Byzantine model is refined in Phase 5 (where adversary
-  -- power is constrained for the proofs).
-  True
+def ByzantineStep (system : BlockSynchroniserSystem) (s s' : BelugaState) : Prop :=
+  ∃ newOps : List ValidatorOperation,
+    s'.emittedOperations = s.emittedOperations ++ newOps ∧
+    ∀ op ∈ newOps, isByzantineValidator system (operationAuthor op) = true
 
 /--
 **`HonestStep`** (paper §4 protocol semantics).
@@ -269,20 +281,29 @@ def step (system : BlockSynchroniserSystem) (s : BelugaState) : BelugaState :=
 `step` satisfies the relational `HonestStep`.
 
 PROVIDED SOLUTION
-By case analysis on the action `step` chose: each branch (propose /
-accept / store / advance) constructs the corresponding existential in
-`HonestStep`'s disjunction. The current skeleton `step s = s` makes
-the refinement trivial via `ByzantineStep` (`True` placeholder); once
-`step` is fleshed out the proof becomes substantive case analysis.
+Unfold `step`. Case-split on the result of `findSome?`:
+
+* **No validator can act** (`step s = s`): take `ByzantineStep` with
+  `newOps = []`. The op log is unchanged, the constraint vacuously
+  holds.
+* **Validator `vid` (honest) takes action**: case-split on which action
+  `tryActFor` chose (propose / accept / store / advance). Each branch
+  constructs the corresponding `HonestPropose` / `HonestAccept` /
+  `HonestStore` / `HonestAdvance` existential.
+* **Validator `vid` (Byzantine) takes action**: take `ByzantineStep`
+  with `newOps = [the new operation]`. The op log gained exactly one
+  operation by `vid`, and `vid` is Byzantine.
+
+Currently `tryActFor` does not check honesty before acting, so a
+Byzantine validator could be picked even when honest validators have
+nothing to do; that's why the Byzantine branch is needed. A future
+refinement could constrain `step` to skip Byzantine validators, after
+which only the honest cases apply.
 -/
 theorem step_refines_HonestStep
     (system : BlockSynchroniserSystem) (s : BelugaState) :
     HonestStep system s (step system s) := by
-  -- With the placeholder `step s = s` and `ByzantineStep := True`, this is
-  -- trivially the right disjunct. When `step` is filled in, replace this
-  -- with case analysis matching the action taken.
-  right; right; right; right
-  trivial
+  sorry
 
 /--
 The Beluga-induced trace at step `n` (paper §4 protocol unrolled).

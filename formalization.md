@@ -54,10 +54,12 @@ Status: ✅ done · ◐ in progress · ☐ planned · ⊘ out of scope · ⏸ de
 
 ### Appendix C — Performance bounds
 
-| Paper | Status |
-|---|---|
-| **Lemmas 3, 4, 5** — deterministic worst-case latency bounds | ⏸ Reachable once a timing model + constrained adversary are added (proposed Phase 4.5); not done yet |
-| **Lemmas 6, 7** + **Theorem 5** — expected-latency bounds | ⊘ Probabilistic; genuinely out of scope (would need a probability framework) |
+| Paper | Code | Status |
+|---|---|---|
+| **Lemma 3** — honest validators are not blamed (post-GST) | [`Beluga/PerformanceLemmas.lean :: lemma3_honest_not_blamed`](BlockSynchroniser/Beluga/PerformanceLemmas.lean) | ◐ Stated; `sorry` + paper sketch |
+| **Lemma 4** — round latency Δ when honest reputations dominate | [`Beluga/PerformanceLemmas.lean :: lemma4_round_latency_delta`](BlockSynchroniser/Beluga/PerformanceLemmas.lean) | ◐ Stated; `sorry` + paper sketch |
+| **Lemma 5** — round latency 2Δ-or-blame (deterministic part) | [`Beluga/PerformanceLemmas.lean :: lemma5_round_latency_or_blamed`](BlockSynchroniser/Beluga/PerformanceLemmas.lean) | ◐ Stated as a disjunction; `sorry` + paper sketch |
+| **Lemmas 6, 7** + **Theorem 5** — expected-latency bounds | — | ⊘ Probabilistic; genuinely out of scope (would need a probability framework) |
 
 ### Appendix D — Mysticeti-Beluga (Phase 6)
 
