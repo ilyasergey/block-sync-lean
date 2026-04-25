@@ -218,11 +218,19 @@ transactions included in the ordered blocks, all honest validators
 order them consistently.
 -/
 theorem theorem7_consensus_safety
-    (system : BlockSynchroniserSystem) {S} [SystemState S] (state : S) :
-    -- Statement: all honest validators order transactions consistently.
-    -- Skeleton; consensus order data is part of the full Mysticeti-Beluga
-    -- state model (Phase 6 follow-up).
-    True := by
+    (system : BlockSynchroniserSystem) {S} [SystemState S] (state : S)
+    (view : ConsensusView) (order : TransactionOrder)
+    (h_view_consistent : view.Consistent system)
+    (h_order_from_view :
+      -- transaction ordering is derived consistently from the consensus
+      -- view: if two honest validators have the same view, their orders
+      -- are consistent prefixes of each other.
+      ∀ vid₁ vid₂, isHonestValidator system vid₁ = true →
+                   isHonestValidator system vid₂ = true →
+                   (∀ d, view vid₁ d = view vid₂ d) →
+                   (order vid₁).isPrefixOf (order vid₂) = true ∨
+                   (order vid₂).isPrefixOf (order vid₁) = true) :
+    order.Consistent system := by
   sorry
 
 end Safety

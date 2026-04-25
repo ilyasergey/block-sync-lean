@@ -179,12 +179,18 @@ theorem theorem6_consensus_liveness
     (system : BlockSynchroniserSystem)
     (time : TimeMap)
     (h_time : time.WellFormed)
-    (h_sync : PartiallySynchronous system (belugaTrace system) time) :
-    -- Statement: every "to-commit" leader block and its causal history is
-    -- eventually finalized via block_store by every honest validator.
-    -- Skeleton: the precise "ordered and finalized" predicate ties to the
-    -- consensus order data structure (deferred to a follow-up phase).
-    True := by
+    (h_sync : PartiallySynchronous system (belugaTrace system) time)
+    (order : TransactionOrder) :
+    -- For every transaction included in some block accepted post-GST by
+    -- some honest validator, every honest validator eventually has it in
+    -- their ordered output.
+    ∀ vid_acc, isHonestValidator system vid_acc = true →
+    ∀ k, time k ≥ system.GST →
+    ∀ B, B ∈ (belugaTrace system k).blocks →
+         HasAccepted (belugaTrace system k) vid_acc B.d →
+    ∀ tx, tx ∈ B.payload →
+    ∀ vid_h, isHonestValidator system vid_h = true →
+      tx ∈ order vid_h := by
   sorry
 
 end Liveness

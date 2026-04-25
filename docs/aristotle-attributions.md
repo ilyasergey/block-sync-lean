@@ -19,7 +19,7 @@ the integration commit.
 | Project tarball | `/tmp/aristotle-validation-20260425-212515.tar.gz` |
 | Result tarball  | `/tmp/aristotle-out-validation/project_aristotle/` |
 | Prompt | "Fill in the sorries in BlockSynchroniser/Validation.lean. Each theorem has a PROVIDED SOLUTION sketch in its docstring with the proof strategy. Do not modify any other files." |
-| Integration commit | TBD (commit pending) |
+| Integration commit | `009bb10` |
 
 ### Theorems proved (4)
 
