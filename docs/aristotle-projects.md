@@ -14,16 +14,26 @@ Status legend: 🟡 IN_PROGRESS · ✅ COMPLETE (integrated) · ⚠️ COMPLETE_
 | `d724efd2-324b-48c2-bd1d-08e690d02eb1` | 3a | 2026-04-25 ~23:13 SGT | 🟡 QUEUED | [`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) | `lemma1_honest_round_entry`, `lemma2_round_latency` (timing) | pending |
 | `116385ce-5fc6-4f0c-8083-a2ed4c66d514` | 3f | 2026-04-25 ~23:14 SGT | 🟡 QUEUED | [`Beluga/Protocol.lean`](../BlockSynchroniser/Beluga/Protocol.lean) | `step_refines_HonestStep` | pending |
 | `91c97602-54da-4277-8bda-3864bfa6674a` | 3e | 2026-04-25 ~23:18 SGT | 🟡 QUEUED | [`Beluga/PerformanceLemmas.lean`](../BlockSynchroniser/Beluga/PerformanceLemmas.lean) | `lemma3_honest_not_blamed`, `lemma4_round_latency_delta`, `lemma5_round_latency_or_blamed` | pending |
+| `af54716b-b1b4-41d5-bbb7-d02d0e0dab2a` | 3b | 2026-04-25 ~23:21 SGT | 🟡 QUEUED | [`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) | `theorem3_round_progression`, `theorem4_round_termination` | pending |
+| `47e91c18-161d-4b4c-a702-d30f18883282` | 3c | 2026-04-25 ~23:22 SGT | 🟡 QUEUED | [`Mysticeti/Safety.lean`](../BlockSynchroniser/Mysticeti/Safety.lean) | `lemma13_cert_persistence`, `lemma14_no_skip`, `lemma16_consistent_status`, `theorem7_consensus_safety` | pending |
+| `84e08b81-d35a-4ca9-80d7-a69a35192e58` | 3d | 2026-04-25 ~23:22 SGT | 🟡 QUEUED | [`Mysticeti/Liveness.lean`](../BlockSynchroniser/Mysticeti/Liveness.lean) | `lemma8_leader_referenced`, `lemma9_honest_certificate`, `lemma11_eventual_decision`, `lemma12_referenced_accepted`, `theorem6_consensus_liveness` | pending |
+
+**7 projects in flight in parallel.** Aristotle accepts concurrent
+submissions; they will process as capacity allows.
 
 Frozen files (do not edit until corresponding rounds complete):
-- Round 2: `Quorum.lean`, `Beluga/Patterns.lean`, `Mysticeti/Safety.lean`.
-- Round 3a: `Beluga/Theorems.lean`.
-- Round 3e: `Beluga/PerformanceLemmas.lean`.
-- Round 3f: `Beluga/Protocol.lean`.
+- `Quorum.lean` (round 2)
+- `Beluga/Patterns.lean` (round 2)
+- `Mysticeti/Safety.lean` (round 2 + 3c)
+- `Beluga/Theorems.lean` (rounds 3a + 3b)
+- `Beluga/PerformanceLemmas.lean` (round 3e)
+- `Beluga/Protocol.lean` (round 3f)
+- `Mysticeti/Liveness.lean` (round 3d)
 
-Remaining freely-editable files: `Mysticeti/Liveness.lean` (until 3d
-submitted, which waits on round 2 integration), `Lib/`, all base
-modules.
+Freely-editable files: `Lib/`, all base modules
+(`Block`/`Validator`/`Operations`/`System`/`State`/`Causal`/`Trace`/`Properties`),
+`Validation.lean` (Aristotle round 1 already complete), `Mysticeti/Consensus.lean`,
+all Beluga supporting modules (`State`/`Reputation`/`AdmissionControl`/`Pull`/`BlockExt`/`Examples`).
 
 ## Queued (planned for after round 2)
 
