@@ -18,3 +18,4 @@ import BlockSynchroniser.Beluga.AdmissionControl
 import BlockSynchroniser.Beluga.Pull
 import BlockSynchroniser.Beluga.Protocol
 import BlockSynchroniser.Beluga.Examples
+import BlockSynchroniser.Beluga.Theorems

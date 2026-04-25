@@ -74,12 +74,13 @@ Last updated: 2026-04-25 (after Phase 3, before Aristotle integration of golden_
 
 | Paper | Statement | Lean target | Status |
 |---|---|---|---|
-| **Lemma 1** | After GST, all honest validators enter the same round within 3Δ | `BlockSynchroniser/Beluga/Theorems.lean :: lemma1_honest_round_entry` | ☐ |
-| **Lemma 2** | After GST, round-to-round latency ≤ 3Δ in happy case | `BlockSynchroniser/Beluga/Theorems.lean :: lemma2_round_latency` | ☐ |
-| **Theorem 1** | Block availability (Beluga ⊨ Def 1.3) | `BlockSynchroniser/Beluga/Theorems.lean :: theorem1_block_availability` | ☐ |
-| **Theorem 2** | Causal availability (Beluga ⊨ Def 1.4) | `BlockSynchroniser/Beluga/Theorems.lean :: theorem2_causal_availability` | ☐ |
-| **Theorem 3** | Round-Progression (Beluga ⊨ Def 1.1) | `BlockSynchroniser/Beluga/Theorems.lean :: theorem3_round_progression` | ☐ |
-| **Theorem 4** | Round-Termination (Beluga ⊨ Def 1.2) | `BlockSynchroniser/Beluga/Theorems.lean :: theorem4_round_termination` | ☐ |
+| **Lemma 1** | After GST, all honest validators enter the same round within 3Δ | `BlockSynchroniser/Beluga/Theorems.lean :: lemma1_honest_round_entry` | ◐ Stated (abstract; timing model deferred); `sorry` + paper sketch |
+| **Lemma 2** | After GST, round-to-round latency ≤ 3Δ in happy case | `BlockSynchroniser/Beluga/Theorems.lean :: lemma2_round_latency` | ◐ Stated; `sorry` + paper sketch |
+| **Theorem 1** | Block availability (Beluga ⊨ Def 1.3) | `BlockSynchroniser/Beluga/Theorems.lean :: theorem1_block_availability` | ◐ Stated; `sorry` + paper sketch |
+| **Theorem 2** | Causal availability (Beluga ⊨ Def 1.4) | `BlockSynchroniser/Beluga/Theorems.lean :: theorem2_causal_availability` | ◐ Stated; `sorry` + paper sketch |
+| **Theorem 3** | Round-Progression (Beluga ⊨ Def 1.1) | `BlockSynchroniser/Beluga/Theorems.lean :: theorem3_round_progression` | ◐ Stated; `sorry` + paper sketch |
+| **Theorem 4** | Round-Termination (Beluga ⊨ Def 1.2) | `BlockSynchroniser/Beluga/Theorems.lean :: theorem4_round_termination` | ◐ Stated; `sorry` + paper sketch |
+| §5 corollary | Beluga is a block synchronizer (T1∧T2∧T3∧T4) | `BlockSynchroniser/Beluga/Theorems.lean :: belugaTrace_isBlockSynchronizer` | ✅ Conjunction (gates on T1–T4) |
 
 ## Appendix C — Performance Analysis
 
