@@ -102,12 +102,28 @@ Update on every submission and completion.
 If you must edit a frozen file urgently, run `aristotle cancel <id>`
 first; do not silently edit while a submission is processing.
 
-## Sorry-comment hygiene
+## Sorry-comment hygiene (HARD RULE)
 
-The Lean files reference `sorry` *only* in actual proof obligations (the
-`:= by sorry` pattern). Don't write the word `sorry` in comments —
-`grep -rn 'sorry' BlockSynchroniser/` is used to count proof obligations
-cleanly. Use "stub", "pending", "queued", "incomplete" etc. in prose.
+**Never write the word `sorry` in any comment, docstring, or prose
+in `.lean` files (or `.md` files describing them).** The literal token
+`sorry` may appear *only* as a tactic in `:= by sorry` proof
+obligations. We use `grep -rn 'sorry' BlockSynchroniser/` to count
+remaining proof obligations precisely; any `sorry` in prose pollutes
+that count and leads to wrong status reports.
+
+In prose, use one of: "stub", "pending", "queued", "incomplete",
+"unproved", "left open", "deferred". When describing *what* is at a
+proof obligation, refer to it as "a proof obligation" or "the
+remaining gap".
+
+This rule applies to:
+- doc comments above theorems
+- file-header `-/ ... /-` blocks
+- `--` line comments inside proofs
+- Markdown changelogs, plans, and tracker entries
+
+If Aristotle's output contains the word `sorry` in a comment, strip it
+during integration.
 
 ## Where to find what
 
@@ -120,7 +136,8 @@ cleanly. Use "stub", "pending", "queued", "incomplete" etc. in prose.
 | [docs/aristotle-projects.md](docs/aristotle-projects.md) | Live in-flight / queued / completed Aristotle submissions |
 | [docs/aristotle-attributions.md](docs/aristotle-attributions.md) | Per-project attribution log (for final report) |
 | [docs/aristotle-round3-plan.md](docs/aristotle-round3-plan.md) | Batched submission plan for round 3 |
-| [docs/math-tactical-wall.md](docs/math-tactical-wall.md) | The wall-vs-gap concept (blog seed) |
+| [docs/math-tactical-wall.md](docs/math-tactical-wall.md) | The wall-vs-gap concept (blog seed: conceptual) |
+| [docs/blog-aristotle-integration-gotchas.md](docs/blog-aristotle-integration-gotchas.md) | Operational gotchas integrating Aristotle output (blog seed: practical). **Append new findings here as they come up.** |
 | [docs/final-report-outline.md](docs/final-report-outline.md) | Report skeleton |
 | [changelogs/](changelogs/) | Per-stage timestamped changelogs |
 | [changelogs/2026-04-25-session-narrative.md](changelogs/2026-04-25-session-narrative.md) | Cross-phase decision threads |

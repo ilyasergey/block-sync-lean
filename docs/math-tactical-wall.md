@@ -127,3 +127,13 @@ math IS the work — there's no Mathlib lemma to grep for).
 Document referenced from:
 - [docs/aristotle-workflow.md § Delegation policy](aristotle-workflow.md)
 - [formalization.md § Where to look](../formalization.md) (TODO link)
+
+## Companion blog seed
+
+The conceptual side (this doc) is paired with
+[blog-aristotle-integration-gotchas.md](blog-aristotle-integration-gotchas.md),
+which collects the *operational* gotchas that show up after the
+delegation decision (import-narrowing, `exact?` placeholders, `▸`
+cast mismatches, file-freezing, bundled iteration, etc.). Together
+they're the two halves of a longer post on AI-augmented Lean
+formalization.
