@@ -4,21 +4,22 @@ Precise mapping from [Beluga paper](Block_Sync_Project.pdf) to Lean targets, wit
 
 **Status legend:** ☐ planned · ◐ in progress · ✅ done · ⊘ out of scope · ⏸ deferred
 
-Last updated: 2026-04-25 (after Phase 0).
+Last updated: 2026-04-25 (after Phase 1).
 
 ## §2 — Problem definition (the abstraction)
 
 | Paper | Lean target | Status | Notes |
 |---|---|---|---|
-| §2 — Network model: `n` validators, `f < n/3`, partial synchrony, GST, Δ | `BlockSynchroniser/System.lean :: BlockSynchroniserSystem` | ☐ | Need to add `GST : ℕ`, `Δ : ℕ` to existing struct |
-| §2 — Threat model: pairwise-reliable channels, honest/Byzantine/crashed | `BlockSynchroniser/Validator.lean` | ☐ | Currently binary honest/byzantine; refine if needed |
-| §2.1 — Block structure: `r, d, author, parents, payload, signature` | `BlockSynchroniser/Block.lean :: Block` | ◐ | Existing `Block` lacks `signature`; payload may be optional |
-| §2.1 — Synchronizer interface: `block_propose_i(B,r)`, `block_accept_i(B.d)`, `block_store_i(B)` | `BlockSynchroniser/Operations.lean :: ValidatorOperation` | ✅ | Already correctly modeled |
-| §2.1 — `causal(B)` (causal history) | `BlockSynchroniser/Causal.lean :: causal` | ◐ | Existing list-of-paths definition; replace with inductive `Reaches` |
-| **Definition 1.1 — Round-Progression** | `BlockSynchroniser/Properties.lean :: RoundProgression` | ◐ | Existing as `blockSynchroniserProgressI`; needs rename + cleanup |
-| **Definition 1.2 — Round-Termination** | `BlockSynchroniser/Properties.lean :: RoundTermination` | ◐ | Existing as `blockSynchroniserProgressII`; needs rename |
-| **Definition 1.3 — Block availability** | `BlockSynchroniser/Properties.lean :: BlockAvailability` | ◐ | Existing as `blockSynchroniserAvailability`; rename |
-| **Definition 1.4 — Causal availability** | `BlockSynchroniser/Properties.lean :: CausalAvailability` | ◐ | Existing as `blockSynchroniserCausalAvailability`; rename |
+| §2 — Network model: `n` validators, `f < n/3`, partial synchrony, GST, Δ | `BlockSynchroniser/System.lean :: BlockSynchroniserSystem` | ✅ | `GST`, `Δ` added |
+| §2 — Threat model: pairwise-reliable channels, honest/Byzantine/crashed | `BlockSynchroniser/System.lean :: isHonest`/`isByzantine` | ◐ | Binary honest/byzantine; refine to add crashed if needed |
+| §2.1 — Block structure: `r, d, author, parents, payload, signature` | `BlockSynchroniser/Block.lean :: Block` | ◐ | Lacks `signature` (intentional — irrelevant to abstract synchronizer) |
+| §2.1 — Synchronizer interface: `block_propose_i(B,r)`, `block_accept_i(B.d)`, `block_store_i(B)` | `BlockSynchroniser/Operations.lean :: ValidatorOperation` | ✅ | |
+| §2.1 — `causal(B)` (causal history) | `BlockSynchroniser/Causal.lean :: Reaches` / `causal` | ✅ | Inductive reflexive-transitive parent closure |
+| **Definition 1.1 — Round-Progression** | `BlockSynchroniser/Properties.lean :: RoundProgression` | ✅ | Verbatim paper text in docstring |
+| **Definition 1.2 — Round-Termination** | `BlockSynchroniser/Properties.lean :: RoundTermination` | ✅ | Verbatim paper text in docstring |
+| **Definition 1.3 — Block availability** | `BlockSynchroniser/Properties.lean :: BlockAvailability` | ✅ | Verbatim paper text in docstring |
+| **Definition 1.4 — Causal availability** | `BlockSynchroniser/Properties.lean :: CausalAvailability` | ✅ | Verbatim paper text in docstring |
+| Quorum + intersection lemma | `BlockSynchroniser/Quorum.lean :: IsQuorum` / `quorumIntersection` | ◐ | Stated; proof `sorry` (Phase 2 / delegate to Aristotle) |
 | §2.1 — Goal G1: Optimal push | (no formal target) | ⊘ | Performance goal, not a logical property |
 | §2.1 — Goal G2: Bounded amplification | (no formal target) | ⊘ | Performance goal |
 
@@ -141,11 +142,11 @@ Pseudocode (E), implementation (F), and experimental setup (G) are not theorem-b
 
 | Category | Total | Done | In progress | Planned | Out of scope/deferred |
 |---|---|---|---|---|---|
-| §2 abstraction | 11 | 1 | 5 | 3 | 2 |
+| §2 abstraction | 12 | 7 | 2 | 1 | 2 |
 | §4 Beluga protocol | 12 | 0 | 1 | 11 | 0 |
 | §5 main theorems | 6 | 0 | 0 | 6 | 0 |
 | Appendix C performance | 6 | 0 | 0 | 0 | 6 |
 | Appendix D safety bundle | 5 | 0 | 0 | 5 | 0 |
 | Appendix D liveness | 5 | 0 | 0 | 0 | 5 |
 | Validation | 5 | 0 | 0 | 5 | 0 |
-| **Totals** | **50** | **1** | **6** | **30** | **13** |
+| **Totals** | **51** | **7** | **3** | **28** | **13** |

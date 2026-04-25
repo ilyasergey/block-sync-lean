@@ -1,4 +1,11 @@
--- This module serves as the root of the `BlockSynchroniser` library.
--- Import modules here that should be built as part of the library.
+-- Root of the `BlockSynchroniser` library. Re-exports the per-concept modules.
 
-import BlockSynchroniser.Definitions
+import BlockSynchroniser.Block
+import BlockSynchroniser.Validator
+import BlockSynchroniser.Operations
+import BlockSynchroniser.System
+import BlockSynchroniser.State
+import BlockSynchroniser.Causal
+import BlockSynchroniser.Quorum
+import BlockSynchroniser.Trace
+import BlockSynchroniser.Properties
