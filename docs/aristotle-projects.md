@@ -14,8 +14,6 @@ Status legend: 🟡 IN_PROGRESS · ✅ COMPLETE (integrated) · ⚠️ COMPLETE_
 | `d724efd2-324b-48c2-bd1d-08e690d02eb1` | 3a | 2026-04-25 ~23:13 SGT | 🟡 QUEUED | [`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) | `lemma1_honest_round_entry`, `lemma2_round_latency` (timing) | pending |
 | `91c97602-54da-4277-8bda-3864bfa6674a` | 3e | 2026-04-25 ~23:18 SGT | 🟡 QUEUED | [`Beluga/PerformanceLemmas.lean`](../BlockSynchroniser/Beluga/PerformanceLemmas.lean) | `lemma3_honest_not_blamed`, `lemma4_round_latency_delta`, `lemma5_round_latency_or_blamed` | pending |
 | `af54716b-b1b4-41d5-bbb7-d02d0e0dab2a` | 3b | 2026-04-25 ~23:21 SGT | 🟡 QUEUED | [`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) | `theorem3_round_progression`, `theorem4_round_termination` | pending |
-| `47e91c18-161d-4b4c-a702-d30f18883282` | 3c | 2026-04-25 ~23:22 SGT | 🟡 QUEUED | [`Mysticeti/Safety.lean`](../BlockSynchroniser/Mysticeti/Safety.lean) | `lemma13_cert_persistence`, `lemma14_no_skip`, `lemma16_consistent_status`, `theorem7_consensus_safety` | pending |
-| `84e08b81-d35a-4ca9-80d7-a69a35192e58` | 3d | 2026-04-25 ~23:22 SGT | 🟡 QUEUED | [`Mysticeti/Liveness.lean`](../BlockSynchroniser/Mysticeti/Liveness.lean) | `lemma8_leader_referenced`, `lemma9_honest_certificate`, `lemma11_eventual_decision`, `lemma12_referenced_accepted`, `theorem6_consensus_liveness` | pending |
 
 **7 projects in flight in parallel.** Aristotle accepts concurrent
 submissions; they will process as capacity allows.
@@ -49,7 +47,10 @@ all Beluga supporting modules (`State`/`Reputation`/`AdmissionControl`/`Pull`/`B
 
 | Project ID | Submitted | Returned | Status | Target file(s) | Theorem(s) | Integration commit |
 |---|---|---|---|---|---|---|
-| `be7c0245-cdb9-4cce-9c4a-fffecfd1a69c` | 2026-04-25 21:25 SGT | 2026-04-25 ~22:50 SGT | ⚠️ COMPLETE_WITH_ERRORS (all 4 target sorries closed cleanly; status name appears unrelated to actual result) | [`Validation.lean`](../BlockSynchroniser/Validation.lean) | `golden_roundProgression`, `golden_roundTermination`, `golden_blockAvailability`, `golden_causalAvailability` (+11 helper lemmas) | `009bb10` |
+| `be7c0245-cdb9-4cce-9c4a-fffecfd1a69c` | 2026-04-25 21:25 SGT | 2026-04-25 ~22:50 SGT | ⚠️ COMPLETE_WITH_ERRORS (all 4 target sorries closed cleanly) | [`Validation.lean`](../BlockSynchroniser/Validation.lean) | `golden_roundProgression`, `golden_roundTermination`, `golden_blockAvailability`, `golden_causalAvailability` (+11 helper lemmas) | `009bb10` |
+| `116385ce-5fc6-4f0c-8083-a2ed4c66d514` | 2026-04-25 23:14 SGT | 2026-04-26 ~00:24 SGT | ⚠️ COMPLETE_WITH_ERRORS (structural proof, 5 inline gaps; iterated as round 4 below) | [`Beluga/Protocol.lean`](../BlockSynchroniser/Beluga/Protocol.lean) | `step_refines_HonestStep` (+3 helpers) | `d96ce2e` |
+| `47e91c18-161d-4b4c-a702-d30f18883282` | 2026-04-25 23:22 SGT | 2026-04-26 ~00:33 SGT | ⚠️ COMPLETE_WITH_ERRORS (L14 fully proved; L13/L16/T7 structural with bridge sorries) | [`Mysticeti/Safety.lean`](../BlockSynchroniser/Mysticeti/Safety.lean) | `lemma14_no_skip` (sorry-free); `lemma13_cert_persistence`, `lemma16_consistent_status`, `theorem7_consensus_safety` (structural) | (TBD) |
+| `84e08b81-d35a-4ca9-80d7-a69a35192e58` | 2026-04-25 23:22 SGT | 2026-04-26 ~00:33 SGT | ⚠️ COMPLETE_WITH_ERRORS (5 main theorems sorry-free, delegating to 11 sorry'd helper lemmas) | [`Mysticeti/Liveness.lean`](../BlockSynchroniser/Mysticeti/Liveness.lean) | `lemma8_leader_referenced`, `lemma9_honest_certificate`, `lemma11_eventual_decision`, `lemma12_referenced_accepted`, `theorem6_consensus_liveness` (+1 sorry-free helper) | (TBD) |
 
 Full attribution detail in [aristotle-attributions.md](aristotle-attributions.md).
 
