@@ -8,12 +8,22 @@ Status legend: 🟡 IN_PROGRESS · ✅ COMPLETE (integrated) · ⚠️ COMPLETE_
 
 ## Active
 
-| Project ID | Submitted | Status | Target file(s) | Theorem(s) | Result |
-|---|---|---|---|---|---|
-| `4cda6cb1-a5b1-4f2f-9616-204e6438f82d` | 2026-04-25 ~22:55 SGT | 🟡 IN_PROGRESS | [`Quorum.lean`](../BlockSynchroniser/Quorum.lean), [`Beluga/Patterns.lean`](../BlockSynchroniser/Beluga/Patterns.lean), [`Mysticeti/Safety.lean`](../BlockSynchroniser/Mysticeti/Safety.lean) | `quorumIntersection`, `certified_unique`, `lemma10_round_robin_pigeonhole` | pending |
+| Project ID | Round | Submitted | Status | Target file(s) | Theorem(s) | Result |
+|---|---|---|---|---|---|---|
+| `4cda6cb1-a5b1-4f2f-9616-204e6438f82d` | 2 | 2026-04-25 ~22:55 SGT | 🟡 IN_PROGRESS | [`Quorum.lean`](../BlockSynchroniser/Quorum.lean), [`Beluga/Patterns.lean`](../BlockSynchroniser/Beluga/Patterns.lean), [`Mysticeti/Safety.lean`](../BlockSynchroniser/Mysticeti/Safety.lean) | `quorumIntersection`, `certified_unique`, `lemma10_round_robin_pigeonhole` | pending |
+| `d724efd2-324b-48c2-bd1d-08e690d02eb1` | 3a | 2026-04-25 ~23:13 SGT | 🟡 QUEUED | [`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) | `lemma1_honest_round_entry`, `lemma2_round_latency` (timing) | pending |
+| `116385ce-5fc6-4f0c-8083-a2ed4c66d514` | 3f | 2026-04-25 ~23:14 SGT | 🟡 QUEUED | [`Beluga/Protocol.lean`](../BlockSynchroniser/Beluga/Protocol.lean) | `step_refines_HonestStep` | pending |
+| `91c97602-54da-4277-8bda-3864bfa6674a` | 3e | 2026-04-25 ~23:18 SGT | 🟡 QUEUED | [`Beluga/PerformanceLemmas.lean`](../BlockSynchroniser/Beluga/PerformanceLemmas.lean) | `lemma3_honest_not_blamed`, `lemma4_round_latency_delta`, `lemma5_round_latency_or_blamed` | pending |
 
-Frozen files (do not edit until round completes): `Quorum.lean`,
-`Beluga/Patterns.lean`, `Mysticeti/Safety.lean`.
+Frozen files (do not edit until corresponding rounds complete):
+- Round 2: `Quorum.lean`, `Beluga/Patterns.lean`, `Mysticeti/Safety.lean`.
+- Round 3a: `Beluga/Theorems.lean`.
+- Round 3e: `Beluga/PerformanceLemmas.lean`.
+- Round 3f: `Beluga/Protocol.lean`.
+
+Remaining freely-editable files: `Mysticeti/Liveness.lean` (until 3d
+submitted, which waits on round 2 integration), `Lib/`, all base
+modules.
 
 ## Queued (planned for after round 2)
 
