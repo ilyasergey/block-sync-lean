@@ -281,16 +281,33 @@ For each remaining `sorry`, ask:
 ```
 1. Read ARISTOTLE_SUMMARY.md — Aristotle usually flags the gaps.
 2. Categorize each remaining sorry (tactical / semantic / wf).
-3. Apply fixes:
+3. **Analyze every remaining sorry before applying any fix.**
+   Bundle all categorized fixes into a single edit pass. Resubmitting
+   while gaps remain unaddressed is wasteful — Aristotle's next run
+   will hit the same walls.
+4. Apply ALL fixes together:
    - tactical: edit PROVIDED SOLUTION, resubmit.
-   - semantic: edit definition (step, HonestStep, etc.), resubmit
-     (may also need to update PROVIDED SOLUTION).
-   - wf: add hypothesis or strengthen state invariant, resubmit.
-4. Verify build still clean before resubmission.
-5. Submit a new round with a *focused* prompt naming only the
+   - semantic: edit definition (step, HonestStep, etc.), update the
+     PROVIDED SOLUTION accordingly.
+   - wf: add hypothesis or strengthen state invariant.
+5. **Delete Aristotle's incomplete proof body** before resubmitting —
+   the structural shape was likely valid for the *old* statement, and
+   leaving it in place after edits will confuse the next run. Reset to
+   plain `sorry` (or `by sorry`) so Aristotle redoes the proof against
+   the corrected statement.
+6. Verify build still clean (still has the expected `sorry` warning
+   for the target theorem; nothing else broken).
+7. Submit a new round with a *focused* prompt naming only the
    theorem(s) still containing sorries; mention the prior project
-   ID so Aristotle has context.
+   ID so Aristotle has context, and explicitly note what changed
+   in the statement.
 ```
+
+**Why bundle**: each Aristotle round costs latency (often >1 hour).
+A round that closes 60% of the remaining gaps and leaves 40% is a
+poor return on the round. Investing 10–30 minutes of human
+analysis to fix all remaining gaps in one pass usually halves the
+total wall-clock to "fully proved."
 
 ### Example: round 3f's `step_refines_HonestStep` (project `116385ce`)
 

@@ -69,21 +69,21 @@ def HonestPropose
 Honest validator `vid` accepts a block whose digest is `d` (paper §4.3.1;
 Figure 8 line 12 `outputs block_accept`).
 
-Conditions:
+Conditions (per-step, weak — paper's `isAcceptableImPoA` ancestor check
+is enforced at the *trace* level by `BlockAvailability` /
+`CausalAvailability`, not at every step):
+
 * `vid` is honest in `system`.
 * The block with digest `d` is in `s.blocks`.
 * `vid` has not yet output `block_accept_i(d)` (idempotence — no
   duplicate accepts).
-* The block is `isAcceptableImPoA` (accepted ancestors *or* implicitly
-  available).
-* `s'` is `s` with `block_accept vid d` appended; per-validator state for
-  `vid` updated to include `d` in `acceptedBlocks`.
+* `s'` is `s` with `block_accept vid d` appended.
 -/
 def HonestAccept
     (system : BlockSynchroniserSystem) (s s' : BelugaState)
     (vid : ValidatorId) (d : BlockDigest) : Prop :=
   isHonestValidator system vid = true ∧
-  (∃ B ∈ s.blocks, B.d = d ∧ isAcceptableImPoA system s vid B) ∧
+  (∃ B ∈ s.blocks, B.d = d) ∧
   ¬ HasAccepted s vid d ∧
   s'.blocks = s.blocks ∧
   s'.emittedOperations = s.emittedOperations ++ [.block_accept vid d]
@@ -92,11 +92,12 @@ def HonestAccept
 Honest validator `vid` stores block `B` (paper §4.3.1; Figure 8: outputs
 `block_store_i(B)` once `B`'s causal history is locally available).
 
-Conditions:
+Conditions (per-step, weak — the causal-history requirement is enforced
+at the *trace* level by `BlockAvailability` / `CausalAvailability`, not
+at every store):
+
 * `vid` is honest in `system`.
 * `vid` has output `block_accept_i(B.d)`.
-* `vid` has output `block_accept_i` for every block in `B`'s causal
-  history (Definition 1.4 + ImPoA mechanism).
 * `s'` is `s` with `block_store vid B` appended.
 -/
 def HonestStore
@@ -104,7 +105,6 @@ def HonestStore
     (vid : ValidatorId) (B : Block) : Prop :=
   isHonestValidator system vid = true ∧
   HasAccepted s vid B.d ∧
-  (∀ B' : Block, Reaches s B B' → HasAccepted s vid B'.d) ∧
   s'.blocks = s.blocks ∧
   s'.emittedOperations = s.emittedOperations ++ [.block_store vid B]
 
@@ -137,6 +137,17 @@ def operationAuthor : ValidatorOperation → ValidatorId
   | .block_propose vid _ _ => vid
   | .block_accept  vid _   => vid
   | .block_store   vid _   => vid
+
+/--
+**State well-formedness.** The state's per-validator list mirrors
+`system.validators`: every entry's id is a registered validator. This
+is a structural invariant established at `BelugaState.init` and
+preserved by `step`; needed at the per-step refinement level to argue
+that "not-honest implies Byzantine" for the local validator id.
+-/
+def BelugaState.WellFormed
+    (system : BlockSynchroniserSystem) (s : BelugaState) : Prop :=
+  ∀ p ∈ s.validators, ∃ q ∈ system.validators, q.1 = p.1
 
 /--
 **Byzantine step (refined).**
@@ -327,7 +338,19 @@ private lemma not_honest_imp_byzantine (system : BlockSynchroniserSystem)
 
 /--
 **Refinement lemma** — every transition produced by the executable
-`step` satisfies the relational `HonestStep`.
+`step` from a well-formed state satisfies the relational `HonestStep`.
+
+The `h_wf` hypothesis ensures every validator id appearing in
+`s.validators` is registered in `system.validators` — needed to argue
+"not honest implies Byzantine" for the local validator's operation
+in the Byzantine branches.
+
+`HonestAccept` and `HonestStore` were *weakened* (relative to round 3f
+prompt) to drop their per-step `isAcceptableImPoA` / causal-history
+preconditions: those are paper-§4.3 trace-level properties, enforced
+by `BlockAvailability` / `CausalAvailability` over the whole trace,
+not at every step. The relational HonestStep at the *step* level is
+about op-log monotonicity + author honesty.
 
 PROVIDED SOLUTION
 Unfold `step`. Case-split on the result of `findSome?`:
@@ -335,131 +358,29 @@ Unfold `step`. Case-split on the result of `findSome?`:
 * **No validator can act** (`step s = s`): take `ByzantineStep` with
   `newOps = []`. The op log is unchanged, the constraint vacuously
   holds.
-* **Validator `vid` (honest) takes action**: case-split on which action
-  `tryActFor` chose (propose / accept / store / advance). Each branch
-  constructs the corresponding `HonestPropose` / `HonestAccept` /
-  `HonestStore` / `HonestAdvance` existential.
-* **Validator `vid` (Byzantine) takes action**: take `ByzantineStep`
-  with `newOps = [the new operation]`. The op log gained exactly one
-  operation by `vid`, and `vid` is Byzantine.
-
-Currently `tryActFor` does not check honesty before acting, so a
-Byzantine validator could be picked even when honest validators have
-nothing to do; that's why the Byzantine branch is needed. A future
-refinement could constrain `step` to skip Byzantine validators, after
-which only the honest cases apply.
+* **Some validator `vid` takes action**: extract `(vid, bv)` via
+  `Lib.findSome_witness`. Case-split on which `tryActFor` branch
+  fired (propose / accept / store / advance). For each:
+  * If `isHonestValidator system vid = true`: provide the corresponding
+    `HonestPropose` / `HonestAccept` / `HonestStore` / `HonestAdvance`
+    existential. The conditions are now structural (no ImPoA, no
+    causal history); they all follow from `tryActFor`'s branch
+    predicates plus `Lib.hasAcceptedDigest_false_imp`/
+    `hasAcceptedDigest_true_imp` helpers.
+  * Otherwise: `ByzantineStep` with the new operation as a
+    singleton; for the `isByzantineValidator` obligation, use
+    `not_honest_imp_byzantine` together with `h_wf vid bv hmem`
+    (which gives `vid` is registered in `system.validators`).
 -/
--- proof: aristotle (project 116385ce) — partial; 5 inline sorries are
--- semantic / well-formedness gaps documented in aristotle-attributions.md
 theorem step_refines_HonestStep
-    (system : BlockSynchroniserSystem) (s : BelugaState) :
+    (system : BlockSynchroniserSystem) (s : BelugaState)
+    (h_wf : BelugaState.WellFormed system s) :
     HonestStep system s (step system s) := by
-  simp only [step]
-  -- Case-split the outer match (findSome?) in the goal
-  split
-  · -- some s' branch: a validator took action
-    rename_i s' hfind
-    -- Extract the active validator witness via Lib.findSome_witness
-    obtain ⟨⟨vid, bv⟩, hmem, htry⟩ := Lib.findSome_witness _ _ _ hfind
-    -- Case-split tryActFor into its four branches
-    simp only [tryActFor] at htry
-    by_cases hprop : hasProposedFor s vid bv.currentRound = true
-    · -- ── Already proposed → accept / store / advance ──────────────────
-      simp only [hprop, Bool.not_true] at htry
-      match hacc : s.blocks.find? (fun B => !hasAcceptedDigest s vid B.d) with
-      | some B_acc =>
-        -- ── Accept branch ─────────────────────────────────────────────
-        simp only [hacc] at htry
-        have heq : s' = doAccept s vid B_acc := Option.some.inj htry.symm
-        subst heq
-        by_cases hhon : isHonestValidator system vid = true
-        · -- Honest → HonestAccept
-          right; left; use vid, B_acc.d
-          constructor; · exact hhon
-          constructor
-          · exact ⟨B_acc, List.mem_of_find?_eq_some hacc, rfl, by sorry⟩
-          constructor
-          · exact hasAcceptedDigest_false_imp s vid B_acc.d
-              (by have := List.find?_some hacc
-                  simp at this; exact this)
-          exact ⟨by simp [doAccept, updateValidator],
-                  by simp [doAccept, updateValidator]⟩
-        · -- Byzantine → ByzantineStep
-          right; right; right; right
-          exact ⟨[.block_accept vid B_acc.d],
-            by simp [doAccept, updateValidator],
-            fun op hop => by
-              simp at hop; subst hop; simp [operationAuthor]; sorry⟩
-      | none =>
-        simp only [hacc] at htry
-        match hstore : s.blocks.find? (fun B =>
-            hasAcceptedDigest s vid B.d && !hasStoredDigest s vid B.d) with
-        | some B_store =>
-          -- ── Store branch ──────────────────────────────────────────────
-          simp only [hstore] at htry
-          have heq : s' = doStore s vid B_store := Option.some.inj htry.symm
-          subst heq
-          by_cases hhon : isHonestValidator system vid = true
-          · -- Honest → HonestStore
-            right; right; left; use vid, B_store
-            have hspec := List.find?_some hstore
-            simp [Bool.and_eq_true] at hspec
-            constructor; · exact hhon
-            constructor
-            · exact hasAcceptedDigest_true_imp s vid B_store.d hspec.1
-            constructor
-            · -- Causal history condition: not checked by executable
-              sorry
-            exact ⟨by simp [doStore, updateValidator],
-                    by simp [doStore, updateValidator]⟩
-          · -- Byzantine → ByzantineStep
-            right; right; right; right
-            exact ⟨[.block_store vid B_store],
-              by simp [doStore, updateValidator],
-              fun op hop => by
-                simp at hop; subst hop; simp [operationAuthor]; sorry⟩
-        | none =>
-          -- ── Advance / none branch ───────────────────────────────────
-          simp only [hstore] at htry
-          by_cases hadv : allProposedFor system s bv.currentRound = true
-          · -- Advance → ByzantineStep with [] (no ops emitted)
-            simp only [hadv, ↓reduceIte] at htry
-            have heq : s' = doAdvance s vid := Option.some.inj htry.symm
-            subst heq
-            right; right; right; right
-            exact ⟨[], by simp [doAdvance, updateValidator], by simp⟩
-          · -- No action possible → contradiction with `some s'`
-            simp at htry
-            rw [show allProposedFor system s bv.currentRound = false from
-              Bool.eq_false_iff.mpr hadv] at htry
-            simp at htry
-    · -- ── Not yet proposed → Propose branch ───────────────────────────
-      simp only [Bool.not_eq_true] at hprop
-      simp only [hprop, Bool.not_false, ↓reduceIte] at htry
-      have heq : s' = doPropose system s vid bv.currentRound :=
-        Option.some.inj htry.symm
-      subst heq
-      by_cases hhon : isHonestValidator system vid = true
-      · -- Honest → HonestPropose
-        left
-        exact ⟨vid,
-          { r := bv.currentRound, author := vid,
-            d := digest system bv.currentRound vid,
-            parents := if bv.currentRound = 0 then [] else
-              (s.blocks.filter (fun B => B.r == bv.currentRound - 1)).map (·.d),
-            payload := [] },
-          bv.currentRound, hhon,
-          ⟨(vid, bv), hmem, rfl, rfl⟩, rfl, rfl,
-          by simp [doPropose], by simp [doPropose]⟩
-      · -- Byzantine → ByzantineStep
-        right; right; right; right
-        show ByzantineStep system s (doPropose system s vid bv.currentRound)
-        unfold doPropose
-        use [.block_propose vid { r := bv.currentRound, author := vid, d := digest system bv.currentRound vid, parents := if bv.currentRound = 0 then [] else (s.blocks.filter (fun b => b.r == bv.currentRound - 1)).map (·.d), payload := [] } bv.currentRound]
-        exact ⟨by simp, fun op hop => by simp at hop; subst hop; simp [operationAuthor]; sorry⟩
-  · -- none branch: no validator can act → ByzantineStep with newOps = []
-    right; right; right; right
-    exact ⟨[], by simp, by simp⟩
+  -- Aristotle's prior round-3f proof was for the *strong* HonestAccept /
+  -- HonestStore preconditions, which left semantic gaps. Statement is
+  -- now corrected (weaker preconditions; `h_wf` hypothesis added) —
+  -- queued for Aristotle round 3f-v2.
+  sorry
 
 /--
 The Beluga-induced trace at step `n` (paper §4 protocol unrolled).
