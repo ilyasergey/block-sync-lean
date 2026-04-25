@@ -162,6 +162,32 @@ arg-limit. Don't widen back to `import Mathlib`.
 - Commit Aristotle integrations separately from manual work, with the
   project ID in the message.
 
+## Always update formalization.md after each proof round
+
+[formalization.md](formalization.md) is the single source of truth for
+the paper→code map and per-item status. **Every Aristotle integration
+or hand-proof commit that changes the proof state of a paper item must
+update the corresponding row in formalization.md.**
+
+Update rules:
+
+- A row's status (✅ / ◐ / ☐ / ⊘ / ⏸) reflects the *current* proof
+  state, not the submission state. ✅ means *all dependencies are
+  proved*; ◐ means body proven but at least one transitive dependency
+  is `sorry`; ☐ means stated but no proof body yet.
+- Don't bleed Aristotle bookkeeping into the table — no project IDs,
+  no round numbers, no "in flight" notes. Those live in
+  [docs/aristotle-projects.md](docs/aristotle-projects.md) and
+  [docs/aristotle-attributions.md](docs/aristotle-attributions.md).
+  formalization.md is read by people who care about *paper conformance
+  and proof state*, not the agentic workflow.
+- When a proof closes that a corollary depends on, *also* update the
+  corollary's row (e.g., closing T1–T4 promotes
+  `belugaTrace_isBlockSynchronizer` from ◐ to ✅).
+- New paper-faithful side conditions (e.g., `LatencyTriangle`,
+  `BelugaState.WellFormed`) get an entry in the "Notes on paper
+  consistency" section.
+
 ## Always update the changelog
 
 **Every commit that lands a phase / sub-phase / Aristotle integration /
