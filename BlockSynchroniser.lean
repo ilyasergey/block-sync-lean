@@ -19,3 +19,5 @@ import BlockSynchroniser.Beluga.Pull
 import BlockSynchroniser.Beluga.Protocol
 import BlockSynchroniser.Beluga.Examples
 import BlockSynchroniser.Beluga.Theorems
+import BlockSynchroniser.Mysticeti.Consensus
+import BlockSynchroniser.Mysticeti.Safety
