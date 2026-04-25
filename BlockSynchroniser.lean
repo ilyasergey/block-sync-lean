@@ -1,5 +1,6 @@
 -- Root of the `BlockSynchroniser` library. Re-exports the per-concept modules.
 
+import BlockSynchroniser.Lib.Basic
 import BlockSynchroniser.Block
 import BlockSynchroniser.Validator
 import BlockSynchroniser.Operations
