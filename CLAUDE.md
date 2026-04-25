@@ -1,0 +1,161 @@
+# CLAUDE.md — project startup brief
+
+Read this on every session start and after compaction. It captures the
+operational state and workflows that keep this formalization moving without
+repeating mistakes.
+
+## What this project is
+
+A Lean 4 formalization of [*Beluga: Block Synchronization for BFT Consensus
+Protocols*](docs/Block_Sync_Project.pdf). For the project-wide overview
+including the paper→code map, see [formalization.md](formalization.md).
+
+Lean toolchain: **`leanprover/lean4:v4.28.0`**, matching Aristotle's pinned
+version. Mathlib at commit `8f9d9cff…`. Build: `lake build`. Run:
+`lake exe blocksynchroniser`.
+
+## Two-track workflow: hand-prove + Aristotle delegation
+
+Proofs come from two sources:
+
+- **Hand-proved**: definitions, the four Definition-1 properties,
+  validation scaffolding (Validation.lean's realizability + anti-witness
+  lemmas), one-liners (`rfl`/`simp`/`decide`/`omega`), and `Lib/`
+  helpers when the math is short and the Lean idiom is obvious.
+- **Aristotle (Harmonic)**: substantive proofs where the bottleneck is
+  Lean tactic plumbing (the *math tactical wall* — see
+  [docs/math-tactical-wall.md](docs/math-tactical-wall.md)).
+
+**Default to delegation** for any proof beyond ~10 trivial lines. Hand
+attempts that hit Mathlib API discovery should be cut short.
+
+## The Aristotle workflow (single source of truth)
+
+Operational details live in [docs/aristotle-workflow.md](docs/aristotle-workflow.md).
+Read it before submitting. Key points:
+
+- **Submit**: `aristotle submit "<targeted prompt>" --project-dir . --wait
+  --destination /tmp/aristotle-<scope>-$(date +%s).tar.gz`. Use
+  `run_in_background: true` so the harness notifies on completion.
+- **Targeted prompts**: name the specific theorems by their identifier and
+  file, and explicitly say "leave all other sorries unchanged." This is
+  the *narrow-scope* mechanism. (The earlier `sed sorry → admit` trick
+  doesn't work in Lean 4 — `admit` is a synonym for `sorry`.)
+- **File freezing**: while a project is in flight, *do not edit any
+  file containing a target sorry*. Edit other files freely. Track frozen
+  files in [docs/aristotle-projects.md](docs/aristotle-projects.md).
+- **Concurrent submissions are OK**: Aristotle accepts multiple parallel
+  projects per account. We've run 7 in flight at once.
+- **Integration recipe**: see scripts/aristotle-integrate.sh and the doc.
+  Always extract to a sandbox, diff, copy *only the target files* (other
+  diffs in the tarball are typically your own later changes — Aristotle
+  tarballs reflect the project state at submission time, not at result
+  time).
+- **Provenance markers**: every Aristotle-filled proof carries
+  `-- proof: aristotle (project <id-prefix>)` immediately above. Helper
+  lemmas added by Aristotle get one too (or share a section header).
+  This makes `git blame` and `grep -r "proof: aristotle"` informative.
+- **Attribution doc**: append a section to
+  [docs/aristotle-attributions.md](docs/aristotle-attributions.md) per
+  completed project. This is the source for the eventual final report.
+
+### Iteration loop (when results return with remaining sorries)
+
+If Aristotle returns `COMPLETE_WITH_ERRORS` with leftover sorries, **do not
+just resubmit**. Diagnose every remaining sorry first.
+
+Categories:
+1. **Tactical-wall continuation** — Aristotle ran out of budget on Mathlib
+   unification mid-proof. Refine the `PROVIDED SOLUTION` with specific
+   Mathlib lemma names, resubmit.
+2. **Semantic gap** — the executable definition doesn't satisfy the
+   relational spec it's being refined against. Either tighten the
+   executable, weaken the spec, or parameterize over a well-formedness
+   invariant. Human judgment.
+3. **Missing well-formedness invariant** — proof needs a structural fact
+   true by construction but not in the theorem signature (e.g., "all
+   validators in this state are system-registered"). Add the hypothesis,
+   establish it from the construction, resubmit.
+
+**Bundle every fix into a single edit pass** before resubmitting.
+Resubmitting with some gaps unaddressed is a poor return on the round
+(each round = ~1h wall-clock). Spend 10–30 min diagnosing all gaps.
+
+**Delete Aristotle's incomplete proof body** before resubmitting — the
+structural shape was likely valid for the *old* statement; leaving it
+in place after edits will confuse the next run. Reset to plain `sorry`.
+
+The full iteration pattern is documented in
+[docs/aristotle-workflow.md § Iteration loop](docs/aristotle-workflow.md).
+
+## Concurrency rule (file-disjoint freezing)
+
+When multiple Aristotle projects are in flight simultaneously, the rule:
+
+> Each in-flight project freezes the file(s) containing its target
+> sorries. Edit *only* files outside the union of frozen-file sets.
+
+The freeze map is maintained in
+[docs/aristotle-projects.md](docs/aristotle-projects.md) under "Active".
+Update on every submission and completion.
+
+If you must edit a frozen file urgently, run `aristotle cancel <id>`
+first; do not silently edit while a submission is processing.
+
+## Sorry-comment hygiene
+
+The Lean files reference `sorry` *only* in actual proof obligations (the
+`:= by sorry` pattern). Don't write the word `sorry` in comments —
+`grep -rn 'sorry' BlockSynchroniser/` is used to count proof obligations
+cleanly. Use "stub", "pending", "queued", "incomplete" etc. in prose.
+
+## Where to find what
+
+| Doc | Purpose |
+|---|---|
+| [formalization.md](formalization.md) | Project-wide overview + paper→code map |
+| [docs/formalization-plan.md](docs/formalization-plan.md) | Phased plan, scope decisions |
+| [docs/formalization-status.md](docs/formalization-status.md) | Per-item status table |
+| [docs/aristotle-workflow.md](docs/aristotle-workflow.md) | Aristotle delegation operational manual |
+| [docs/aristotle-projects.md](docs/aristotle-projects.md) | Live in-flight / queued / completed Aristotle submissions |
+| [docs/aristotle-attributions.md](docs/aristotle-attributions.md) | Per-project attribution log (for final report) |
+| [docs/aristotle-round3-plan.md](docs/aristotle-round3-plan.md) | Batched submission plan for round 3 |
+| [docs/math-tactical-wall.md](docs/math-tactical-wall.md) | The wall-vs-gap concept (blog seed) |
+| [docs/final-report-outline.md](docs/final-report-outline.md) | Report skeleton |
+| [changelogs/](changelogs/) | Per-stage timestamped changelogs |
+| [changelogs/2026-04-25-session-narrative.md](changelogs/2026-04-25-session-narrative.md) | Cross-phase decision threads |
+| [scripts/aristotle-integrate.sh](scripts/aristotle-integrate.sh) | Integration helper |
+
+## Build state at last session
+
+If `lake build` is dirty, look at last commit's changelog for the cause
+and fix the imports / definitions before doing other work. The library
+must compile cleanly except for expected `sorry` warnings.
+
+`Validation.lean` and `Mysticeti/Liveness.lean` import `Mathlib.Tactic`
+(narrowed from Aristotle's auto-added `import Mathlib`) — this is
+required to keep the clang executable-link command under the OS
+arg-limit. Don't widen back to `import Mathlib`.
+
+## Commit conventions
+
+- One commit per logical step (Phase, sub-phase, integration round).
+- Commit messages explain what changed and *why*, not just what files
+  were touched.
+- After every successful stage, add a changelog entry under
+  `changelogs/YYYY-MM-DD-<topic>.md`.
+- Commit Aristotle integrations separately from manual work, with the
+  project ID in the message.
+
+## Default working pattern
+
+1. Read CLAUDE.md (this file) and any pending notifications about
+   Aristotle results.
+2. Check [docs/aristotle-projects.md](docs/aristotle-projects.md) for
+   in-flight state.
+3. Decide: integrate a returned result, or iterate, or do hand-proof
+   on free files.
+4. After every change: `lake build`, then commit with a clear message,
+   then update changelogs / status if appropriate.
+5. Stop and ask the user when entering a new phase or making
+   destructive operations (`rm -rf .lake`, force-pushing, etc.).
