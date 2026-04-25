@@ -32,7 +32,7 @@ Status: ✅ done · ◐ in progress · ☐ planned · ⊘ out of scope · ⏸ de
 | §4.2 — Admission Control + parent selection (Figure 8 lines 14–17 + round-advancement rule (i)) | [`Beluga/AdmissionControl.lean`](BlockSynchroniser/Beluga/AdmissionControl.lean) (`acParentSelection`, `canAdvanceByQuorum`) | ✅ |
 | §4.3 — ImPoA (implicit proof-of-availability) + live/bulk classification | [`Beluga/Pull.lean`](BlockSynchroniser/Beluga/Pull.lean) (`implicitlyAvailable`, `isLive`, `classifyMissing`, `isAcceptableImPoA`) | ✅ strong-link only; weak-link inclusion deferred |
 | §4 — `BelugaState`, `BelugaValidator`, `ReputationTable` | [`Beluga/State.lean`](BlockSynchroniser/Beluga/State.lean) | ✅ |
-| §4 — Protocol semantics: `HonestStep` (relational) + executable `step` + `belugaTrace` | [`Beluga/Protocol.lean`](BlockSynchroniser/Beluga/Protocol.lean) | ✅ Implementation; refinement lemma trivial via `ByzantineStep := True` |
+| §4 — Protocol semantics: `HonestStep` (relational) + executable `step` + `belugaTrace` | [`Beluga/Protocol.lean`](BlockSynchroniser/Beluga/Protocol.lean) | ◐ Definitions ✅; the refinement lemma `step_refines_HonestStep` (with paper-consistent `HonestAccept`/`HonestStore` preconditions + `BelugaState.WellFormed`) is currently `sorry` (Aristotle round 4 in flight) |
 | §4 — Executable demos (`#eval`, `lake exe blocksynchroniser`) | [`Beluga/Examples.lean`](BlockSynchroniser/Beluga/Examples.lean) (`system4`, `run`, `reprLog`, `proposersFor`) | ✅ |
 | §4.3 — Random pull complexity bound (`O(1)`) | — | ⊘ probabilistic |
 | §4.4 — Availability pattern | [`Beluga/Patterns.lean :: availabilityPattern`](BlockSynchroniser/Beluga/Patterns.lean) | ✅ strong-link only |
@@ -50,15 +50,15 @@ Status: ✅ done · ◐ in progress · ☐ planned · ⊘ out of scope · ⏸ de
 | §5 — **Theorem 2** — Beluga ⊨ Causal availability | [`Beluga/Theorems.lean :: theorem2_causal_availability`](BlockSynchroniser/Beluga/Theorems.lean) | ◐ Stated; `sorry` + paper sketch |
 | §5 — **Theorem 3** — Beluga ⊨ Round-Progression | [`Beluga/Theorems.lean :: theorem3_round_progression`](BlockSynchroniser/Beluga/Theorems.lean) | ◐ Stated; `sorry` + paper sketch |
 | §5 — **Theorem 4** — Beluga ⊨ Round-Termination | [`Beluga/Theorems.lean :: theorem4_round_termination`](BlockSynchroniser/Beluga/Theorems.lean) | ◐ Stated; `sorry` + paper sketch |
-| §5 corollary — Beluga is a block synchronizer (T1∧T2∧T3∧T4) | [`Beluga/Theorems.lean :: belugaTrace_isBlockSynchronizer`](BlockSynchroniser/Beluga/Theorems.lean) | ✅ Conjunction; gates on T1–T4 |
+| §5 corollary — Beluga is a block synchronizer (T1∧T2∧T3∧T4) | [`Beluga/Theorems.lean :: belugaTrace_isBlockSynchronizer`](BlockSynchroniser/Beluga/Theorems.lean) | ◐ Conjunction proved trivially as `⟨T3, T4, T1, T2⟩`, but T1–T4 are themselves `sorry`, so the corollary is not fully proven yet |
 
 ### Appendix C — Performance bounds
 
 | Paper | Code | Status |
 |---|---|---|
-| **Lemma 3** — honest validators are not blamed (post-GST) | [`Beluga/PerformanceLemmas.lean :: lemma3_honest_not_blamed`](BlockSynchroniser/Beluga/PerformanceLemmas.lean) | ◐ Stated; `sorry` + paper sketch |
-| **Lemma 4** — round latency Δ when honest reputations dominate | [`Beluga/PerformanceLemmas.lean :: lemma4_round_latency_delta`](BlockSynchroniser/Beluga/PerformanceLemmas.lean) | ◐ Stated; `sorry` + paper sketch |
-| **Lemma 5** — round latency 2Δ-or-blame (deterministic part) | [`Beluga/PerformanceLemmas.lean :: lemma5_round_latency_or_blamed`](BlockSynchroniser/Beluga/PerformanceLemmas.lean) | ◐ Stated as a disjunction; `sorry` + paper sketch |
+| **Lemma 3** — honest validators are not blamed (post-GST) | [`Beluga/PerformanceLemmas.lean :: lemma3_honest_not_blamed`](BlockSynchroniser/Beluga/PerformanceLemmas.lean) | ◐ Body proven by Aristotle round 3e (project `91c97602`); transitively depends on `Beluga/StepPreservation.lean :: tryActFor_preserves_reputation` which is currently `sorry` (round 3e-followup `bb79d236` in flight) |
+| **Lemma 4** — round latency Δ when honest reputations dominate | [`Beluga/PerformanceLemmas.lean :: lemma4_round_latency_delta`](BlockSynchroniser/Beluga/PerformanceLemmas.lean) | ✅ Proved by Aristotle round 3e (project `91c97602`); takes `LatencyTriangle` hypothesis (paper Assumption 1, made explicit) |
+| **Lemma 5** — round latency 2Δ-or-blame (deterministic part) | [`Beluga/PerformanceLemmas.lean :: lemma5_round_latency_or_blamed`](BlockSynchroniser/Beluga/PerformanceLemmas.lean) | ✅ Proved by Aristotle round 3e (project `91c97602`); same `LatencyTriangle` hypothesis as L4 |
 | **Lemmas 6, 7** + **Theorem 5** — expected-latency bounds | — | ⊘ Probabilistic; genuinely out of scope (would need a probability framework) |
 
 ### Appendix D — Mysticeti-Beluga (Phase 6)
