@@ -4,7 +4,7 @@ Precise mapping from [Beluga paper](Block_Sync_Project.pdf) to Lean targets, wit
 
 **Status legend:** ☐ planned · ◐ in progress · ✅ done · ⊘ out of scope · ⏸ deferred
 
-Last updated: 2026-04-25 (initial).
+Last updated: 2026-04-25 (after Phase 0).
 
 ## §2 — Problem definition (the abstraction)
 

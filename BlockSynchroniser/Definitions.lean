@@ -199,26 +199,6 @@ namespace Properties
 
 open SystemState
 
--- Validity: If an honest validator V_i invokes block_propose_i(B,r), then every
--- honest validator eventually outputs block_accept(B.d)
-def blockSynchroniserValidity {S} [SystemState S] (system : BlockSynchroniserSystem) (trace: Trace S) : Prop :=
-  ∀ round k (o : Nat) vid block,
-    -- take a snapshot and emitted operations at the moment k
-    let state_k := trace k
-    let operations := SystemState.emittedOperations state_k
-    -- some operation o is the propose operation from validator i
-    operations[o]? = some (.block_propose vid block round) ->
-    -- i is an honest validator
-    isHonestValidator system vid ->
-    -- for any honest validator vid'
-      ∀ vid', isHonestValidator system vid' ->
-        -- there exists a moment k' and an operation o'
-        ∃ k' ≥ k, ∃ o' : Nat,
-        -- such that the operation o' is the accept operation from validator vid' in the same round
-        let state_k' := trace k'
-        let operations' := SystemState.emittedOperations state_k'
-        operations'[o']? = some (.block_accept vid' block.d)
-
 -- Round-Progression: In each round, at least 2f + 1 validators (not
 -- necessarily honest ones) invoke block_propose to disseminate some blocks.
 def blockSynchroniserProgressI {S} [SystemState S] (system : BlockSynchroniserSystem) (trace: Trace S) : Prop :=
@@ -291,35 +271,6 @@ def blockSynchroniserCausalAvailability {S} [SystemState S] (system : BlockSynch
         let state_k' := trace k'
         let operations' := SystemState.emittedOperations state_k'
         operations'[o']? = some (.block_accept vid block'.d)
-
--- Helper: all honest validators eventually store all blocks in the given set
--- at some point of time after k
-def allHonestValidatorsEventuallyStore {S} [SystemState S] (system : BlockSynchroniserSystem)
-    (trace: Trace S) (commonSet : List Block) (k : Nat) : Prop :=
-  ∀ vid, isHonestValidator system vid -> -- any honest validator
-    ∀ block, block ∈ commonSet -> -- for any block in the commonSet
-      ∃ k' ≥ k, ∃ o' : Nat,
-        let state_k' := trace k'
-        let operations' := SystemState.emittedOperations state_k'
-        operations'[o']? = some (.block_store vid block)
-
--- Helper: compute unique authors of blocks in the common set
-def authorsInCommonSet (commonSet : List Block) : List ValidatorId :=
-  commonSet.map (fun block => block.author) |>.eraseDups
-
--- Property 5: 2/3-Available common set: For each round r, all honest validators
--- eventually store (via block_store) a common subset containing blocks from at
--- least 2f + 1 different validators.
-def blockSynchroniserCommonSet {S} [SystemState S] (system : BlockSynchroniserSystem) (trace: Trace S) : Prop :=
-  ∀ round, -- for any round
-    ∃ commonSet, -- there exists a common set of blocks
-      -- All blocks in commonSet have the same round
-      commonSet.all (fun block => block.r = round) ∧
-      -- the common subset contains blocks from at least 2f + 1 validators in round r
-      (authorsInCommonSet commonSet).length ≥ 2 * system.f + 1
-      ∧
-      -- All validators eventually store it at the same round
-      ∃ k, allHonestValidatorsEventuallyStore system trace commonSet k
 
 end Properties
 end BlockSynchroniser
