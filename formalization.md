@@ -97,6 +97,7 @@ out the distinction.
 | Phased plan & scope decisions | [docs/formalization-plan.md](docs/formalization-plan.md) |
 | Aristotle delegation workflow | [docs/aristotle-workflow.md](docs/aristotle-workflow.md) |
 | Aristotle project tracker (active / queued / completed submissions) | [docs/aristotle-projects.md](docs/aristotle-projects.md) |
+| The "math tactical wall" — when to delegate vs hand-prove | [docs/math-tactical-wall.md](docs/math-tactical-wall.md) |
 | Per-stage changelog | [changelogs/](changelogs/) |
 | The paper | [docs/Block_Sync_Project.pdf](docs/Block_Sync_Project.pdf) |
 

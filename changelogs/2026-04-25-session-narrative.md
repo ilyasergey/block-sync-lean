@@ -256,6 +256,46 @@ be restored." This narrative file plus per-phase changelogs are the
 result. Phase entries now capture decisions/discussions, not just
 code changes; narrative entries capture cross-phase threads.
 
+### Proof effort plan + the math tactical wall
+
+After all the structural work landed, the user asked for a proof-effort
+plan ordered simplest-to-hardest, to be executed in small steps with
+commits after each. The plan (in
+[the session-continuation changelog](2026-04-25-session-continuation-phases-4e-onward.md))
+ordered by mathematical simplicity — but the first two attempts (Lemma
+10, `quorumIntersection`) immediately revealed the same pattern:
+
+> The math is in the docstring. What's left is the Lean plumbing —
+> figuring out the right `Finset.*` lemma, massaging types,
+> getting the goal into the shape some Mathlib lemma expects. Tedious
+> for a human, fast for Aristotle.
+
+Both got prepped (statement strengthened, sketch refined) and queued
+for Aristotle round 2 instead of hand-proved.
+
+I named this pattern the **math tactical wall**: the moment in a proof
+where the bottleneck shifts from math content to tactic plumbing. It
+became the load-bearing concept for our human/AI division of labor.
+The user liked the framing and asked me to document it prominently as
+seed for a future blog post. Result:
+[docs/math-tactical-wall.md](../docs/math-tactical-wall.md) — a
+stand-alone note with definition, why-it-matters, worked example,
+decision cues, and a pitch.
+
+Cross-references added: [`docs/aristotle-workflow.md`](../docs/aristotle-workflow.md)
+(in delegation policy), [`formalization.md`](../formalization.md)
+(in "Where to look").
+
+## Open proof-effort threads
+
+- **Step 1**: Lemma 10 — prepped, queued for Aristotle round 2.
+- **Step 2**: `quorumIntersection` — prepped, queued for Aristotle
+  round 2.
+- **Step 3**: `certified_unique` — about to attempt by hand. Has a
+  separate *content gap*: `NoEquivocationInParents` as currently
+  stated only covers within-one-block parents; needs strengthening to
+  cross-block before the proof goes through.
+
 ## Open questions / what's left
 
 - **Aristotle round 1** (`be7c0245-…`, IN_PROGRESS at ~26%): integrate

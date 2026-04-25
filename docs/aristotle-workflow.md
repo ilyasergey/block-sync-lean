@@ -250,6 +250,18 @@ In-flight, queued, and completed Aristotle projects are tracked in
 source of truth for "who is filling what, and when did it land?". Update
 it on every submission and completion.
 
+## Concept: the math tactical wall
+
+The delegation policy hinges on a recurring pattern we call the *math
+tactical wall* — the moment in a proof where the math is clear and only
+the Lean plumbing remains. See [math-tactical-wall.md](math-tactical-wall.md)
+for the full definition, worked example, and decision cues.
+
+In short: when you find yourself grepping Mathlib for `Finset.card_*`
+or trying tactics in sequence (`exact?` / `apply?` / `simp [<random>]`),
+you've hit the wall. Aristotle is much better at plumbing than a human
+is, so that's the cue to delegate.
+
 ## Reference
 
 - Docs (auth-gated, in PDFs under [docs/aristotle/](aristotle/)).
