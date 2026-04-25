@@ -34,17 +34,33 @@ abbrev opsAt {S} [SystemState S] (trace : Trace S) (k : Nat) : List ValidatorOpe
 def Emitted {S} [SystemState S] (state : S) (op : ValidatorOperation) : Prop :=
   op ∈ SystemState.emittedOperations state
 
+instance {S} [SystemState S] (state : S) (op : ValidatorOperation) :
+    Decidable (Emitted state op) :=
+  inferInstanceAs (Decidable (op ∈ SystemState.emittedOperations state))
+
 /-- True iff validator `vid` has accepted block digest `d` in `state`. -/
 def HasAccepted {S} [SystemState S] (state : S) (vid : ValidatorId) (d : BlockDigest) : Prop :=
   Emitted state (.block_accept vid d)
+
+instance {S} [SystemState S] (state : S) (vid : ValidatorId) (d : BlockDigest) :
+    Decidable (HasAccepted state vid d) :=
+  inferInstanceAs (Decidable (Emitted state _))
 
 /-- True iff validator `vid` has stored block `B` in `state`. -/
 def HasStored {S} [SystemState S] (state : S) (vid : ValidatorId) (B : Block) : Prop :=
   Emitted state (.block_store vid B)
 
+instance {S} [SystemState S] (state : S) (vid : ValidatorId) (B : Block) :
+    Decidable (HasStored state vid B) :=
+  inferInstanceAs (Decidable (Emitted state _))
+
 /-- True iff validator `vid` has proposed block `B` for round `r` in `state`. -/
 def HasProposed {S} [SystemState S] (state : S) (vid : ValidatorId) (B : Block) (r : Round) : Prop :=
   Emitted state (.block_propose vid B r)
+
+instance {S} [SystemState S] (state : S) (vid : ValidatorId) (B : Block) (r : Round) :
+    Decidable (HasProposed state vid B r) :=
+  inferInstanceAs (Decidable (Emitted state _))
 
 /-- Author of the round-`round` block whose digest is `d`, if such a propose
 operation appears in `ops`. -/
