@@ -20,6 +20,7 @@ those statements are placeholders pending the timing model from
 -/
 import BlockSynchroniser.System
 import BlockSynchroniser.Properties
+import BlockSynchroniser.Timing
 import BlockSynchroniser.Beluga.Protocol
 
 namespace BlockSynchroniser
@@ -56,11 +57,14 @@ validator can accept at least `2f+1` round-`r-1` blocks and enter round
 `r` by time `GST + 3Δ`.
 -/
 theorem lemma1_honest_round_entry
-    (system : BlockSynchroniserSystem) :
+    (system : BlockSynchroniserSystem)
+    (time : TimeMap)
+    (h_time : time.WellFormed)
+    (h_sync : PartiallySynchronous system (belugaTrace system) time) :
     ∀ vid₁ vid₂,
       isHonestValidator system vid₁ = true →
       isHonestValidator system vid₂ = true →
-      ∃ k,
+      ∀ k, time k ≥ system.GST + 3 * system.Δ →
         match (belugaTrace system k).getValidator vid₁,
               (belugaTrace system k).getValidator vid₂ with
         | some bv₁, some bv₂ => bv₁.currentRound = bv₂.currentRound
@@ -89,11 +93,15 @@ all honest validators can accept at least `2f+1` round `r` blocks by
 time `t_r + 3Δ`, and enter their round `r+1` block by time `t_r + 3Δ`.
 -/
 theorem lemma2_round_latency
-    (system : BlockSynchroniserSystem) :
+    (system : BlockSynchroniserSystem)
+    (time : TimeMap)
+    (h_time : time.WellFormed)
+    (h_sync : PartiallySynchronous system (belugaTrace system) time) :
     ∀ vid r k,
       isHonestValidator system vid = true →
+      time k ≥ system.GST →
       (∃ bv, (belugaTrace system k).getValidator vid = some bv ∧ bv.currentRound = r) →
-      ∃ k' ≥ k,
+      ∃ k' ≥ k, time k' ≤ time k + 3 * system.Δ ∧
         ∃ bv, (belugaTrace system k').getValidator vid = some bv ∧
               bv.currentRound = r + 1 := by
   sorry

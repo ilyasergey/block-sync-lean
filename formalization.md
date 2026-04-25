@@ -41,8 +41,8 @@ Status: ✅ done · ◐ in progress · ☐ planned · ⊘ out of scope · ⏸ de
 
 | Paper | Code | Status |
 |---|---|---|
-| §5 — **Lemma 1** — after GST, all honest validators reach the same round within 3Δ | [`Beluga/Theorems.lean :: lemma1_honest_round_entry`](BlockSynchroniser/Beluga/Theorems.lean) | ◐ Stated abstractly (timing model deferred); `sorry` + paper sketch |
-| §5 — **Lemma 2** — round-to-round latency ≤ 3Δ in the happy case | [`Beluga/Theorems.lean :: lemma2_round_latency`](BlockSynchroniser/Beluga/Theorems.lean) | ◐ Stated abstractly; `sorry` + paper sketch |
+| §5 — **Lemma 1** — after GST, all honest validators reach the same round within 3Δ | [`Beluga/Theorems.lean :: lemma1_honest_round_entry`](BlockSynchroniser/Beluga/Theorems.lean) | ◐ Stated with timing (`time k ≥ GST + 3Δ`); `sorry` + paper sketch |
+| §5 — **Lemma 2** — round-to-round latency ≤ 3Δ in the happy case | [`Beluga/Theorems.lean :: lemma2_round_latency`](BlockSynchroniser/Beluga/Theorems.lean) | ◐ Stated with timing (`time k' ≤ time k + 3Δ`); `sorry` + paper sketch |
 | §5 — **Theorem 1** — Beluga ⊨ Block availability | [`Beluga/Theorems.lean :: theorem1_block_availability`](BlockSynchroniser/Beluga/Theorems.lean) | ◐ Stated; `sorry` + paper sketch |
 | §5 — **Theorem 2** — Beluga ⊨ Causal availability | [`Beluga/Theorems.lean :: theorem2_causal_availability`](BlockSynchroniser/Beluga/Theorems.lean) | ◐ Stated; `sorry` + paper sketch |
 | §5 — **Theorem 3** — Beluga ⊨ Round-Progression | [`Beluga/Theorems.lean :: theorem3_round_progression`](BlockSynchroniser/Beluga/Theorems.lean) | ◐ Stated; `sorry` + paper sketch |
@@ -63,16 +63,16 @@ Status: ✅ done · ◐ in progress · ☐ planned · ⊘ out of scope · ⏸ de
 | D.1.1 — Direct / indirect decision rules | [`Mysticeti/Consensus.lean :: directDecide` / `indirectDecideStep`](BlockSynchroniser/Mysticeti/Consensus.lean) | ✅ |
 | D.1.1 — Skip pattern / certificate pattern (at next round) | [`Mysticeti/Consensus.lean :: skipPattern` / `certificatePatternAt`](BlockSynchroniser/Mysticeti/Consensus.lean) | ✅ |
 | D.1.2 — Round-robin leader schedule | [`Mysticeti/Consensus.lean :: leaderOf` / `isLeaderBlock`](BlockSynchroniser/Mysticeti/Consensus.lean) | ✅ |
-| **Lemma 8** — leader block referenced next round (after GST) | `Mysticeti/Liveness.lean :: lemma8_leader_referenced` | ⏸ liveness side; reachable after Phase 4.5 |
-| **Lemma 9** — honest validators create certificate for honest leader | `Mysticeti/Liveness.lean :: lemma9_honest_certificate` | ⏸ liveness side |
+| **Lemma 8** — leader block referenced next round (after GST) | [`Mysticeti/Liveness.lean :: lemma8_leader_referenced`](BlockSynchroniser/Mysticeti/Liveness.lean) | ◐ Stated with timing (post-GST + 4Δ bound); `sorry` + paper sketch |
+| **Lemma 9** — honest validators create certificate for honest leader | [`Mysticeti/Liveness.lean :: lemma9_honest_certificate`](BlockSynchroniser/Mysticeti/Liveness.lean) | ◐ Stated; `sorry` + paper sketch |
 | **Lemma 10** — round-robin pigeonhole (3 consecutive honest leaders in any 3f+3 window) | [`Mysticeti/Safety.lean :: lemma10_round_robin_pigeonhole`](BlockSynchroniser/Mysticeti/Safety.lean) | ◐ Stated; `sorry` + paper sketch (pure combinatorics) |
-| **Lemma 11** — undecided leader block eventually decided | `Mysticeti/Liveness.lean :: lemma11_eventual_decision` | ⏸ liveness side |
-| **Lemma 12** — block referenced by 2f+1 ⇒ honest validators output `block_accept` | `Mysticeti/Liveness.lean :: lemma12_referenced_accepted` | ⏸ liveness side |
+| **Lemma 11** — undecided leader block eventually decided | [`Mysticeti/Liveness.lean :: lemma11_eventual_decision`](BlockSynchroniser/Mysticeti/Liveness.lean) | ◐ Stated with timing; `sorry` + paper sketch |
+| **Lemma 12** — block referenced by 2f+1 ⇒ honest validators output `block_accept` | [`Mysticeti/Liveness.lean :: lemma12_referenced_accepted`](BlockSynchroniser/Mysticeti/Liveness.lean) | ◐ Stated with timing; `sorry` + paper sketch |
 | **Lemma 13** — certificate persistence across rounds | [`Mysticeti/Safety.lean :: lemma13_cert_persistence`](BlockSynchroniser/Mysticeti/Safety.lean) | ◐ Stated (skeleton conclusion); `sorry` + paper sketch |
 | **Lemma 14** — no honest validator skips a directly-committed leader | [`Mysticeti/Safety.lean :: lemma14_no_skip`](BlockSynchroniser/Mysticeti/Safety.lean) | ◐ Stated (skeleton); `sorry` + paper sketch |
 | **Lemma 15** — at most one certified leader per round | [`Mysticeti/Safety.lean :: lemma15_unique_cert`](BlockSynchroniser/Mysticeti/Safety.lean) | ◐ Reduces to `Beluga/Patterns.lean :: certified_unique` (which is itself sorry'd) |
 | **Lemma 16** — consistent leader-status decision across honest validators | [`Mysticeti/Safety.lean :: lemma16_consistent_status`](BlockSynchroniser/Mysticeti/Safety.lean) | ◐ Skeleton; `sorry` + paper sketch |
-| **Theorem 6** — Mysticeti-Beluga consensus liveness | `Mysticeti/Liveness.lean :: theorem6_consensus_liveness` | ⏸ deferred (post-Phase 4.5) |
+| **Theorem 6** — Mysticeti-Beluga consensus liveness | [`Mysticeti/Liveness.lean :: theorem6_consensus_liveness`](BlockSynchroniser/Mysticeti/Liveness.lean) | ◐ Skeleton statement; `sorry` + paper sketch |
 | **Theorem 7** — Mysticeti-Beluga consensus safety | [`Mysticeti/Safety.lean :: theorem7_consensus_safety`](BlockSynchroniser/Mysticeti/Safety.lean) | ◐ Skeleton; `sorry` + paper sketch |
 
 ## Not in the paper — internal validation
@@ -106,6 +106,7 @@ block-sync-lean/
 ├── BlockSynchroniser/
 │   ├── Block, Validator, Operations.lean
 │   ├── System, State, Trace.lean
+│   ├── Timing.lean             ← TimeMap, PartiallySynchronous
 │   ├── Causal.lean             ← inductive Reaches / causal
 │   ├── Quorum.lean             ← BFT quorum-intersection
 │   ├── Properties.lean         ← Definition 1.1–1.4
@@ -122,7 +123,8 @@ block-sync-lean/
 │   │   └── Theorems.lean       ← Lemmas 1–2, Theorems 1–4
 │   └── Mysticeti/
 │       ├── Consensus.lean      ← decision rules + leader schedule (D.1)
-│       └── Safety.lean         ← Lemmas 10, 13–16, Theorem 7 (D.3)
+│       ├── Safety.lean         ← Lemmas 10, 13–16, Theorem 7 (D.3)
+│       └── Liveness.lean       ← Lemmas 8, 9, 11, 12, Theorem 6 (D.2)
 ├── Main.lean                   ← drives the executable Beluga trace
 ├── lakefile.lean
 └── lean-toolchain              ← v4.28.0
