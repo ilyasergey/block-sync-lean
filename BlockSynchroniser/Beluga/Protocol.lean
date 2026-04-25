@@ -66,15 +66,26 @@ def HonestPropose
   s'.emittedOperations = s.emittedOperations ++ [.block_propose vid B r]
 
 /--
-Honest validator `vid` accepts a block whose digest is `d` (paper §4.3.1;
+`vid` has accepted all of `B`'s parents in `s` (per-step parent
+availability check matching paper §4.2's "acceptable" condition,
+restricted to the strict-receivability case — the paper's broader
+ImPoA-based acceptance is captured by `Pull.isAcceptableImPoA` and
+will be added as a disjunct in a future refinement).
+-/
+def parentsAccepted (s : BelugaState) (vid : ValidatorId) (B : Block) : Prop :=
+  ∀ parent_d ∈ B.parents, HasAccepted s vid parent_d
+
+/--
+Honest validator `vid` accepts a block whose digest is `d` (paper §4.2,
 Figure 8 line 12 `outputs block_accept`).
 
-Conditions (per-step, weak — paper's `isAcceptableImPoA` ancestor check
-is enforced at the *trace* level by `BlockAvailability` /
-`CausalAvailability`, not at every step):
+Conditions (per-step, paper-faithful):
 
 * `vid` is honest in `system`.
-* The block with digest `d` is in `s.blocks`.
+* A block `B` with digest `d` is in `s.blocks` (vid has received `B`).
+* All of `B`'s parents have already been accepted by `vid` (per the
+  paper's acceptable-block condition — the broader ImPoA disjunct is
+  out-of-scope for the strict per-step refinement).
 * `vid` has not yet output `block_accept_i(d)` (idempotence — no
   duplicate accepts).
 * `s'` is `s` with `block_accept vid d` appended.
@@ -83,7 +94,7 @@ def HonestAccept
     (system : BlockSynchroniserSystem) (s s' : BelugaState)
     (vid : ValidatorId) (d : BlockDigest) : Prop :=
   isHonestValidator system vid = true ∧
-  (∃ B ∈ s.blocks, B.d = d) ∧
+  (∃ B ∈ s.blocks, B.d = d ∧ parentsAccepted s vid B) ∧
   ¬ HasAccepted s vid d ∧
   s'.blocks = s.blocks ∧
   s'.emittedOperations = s.emittedOperations ++ [.block_accept vid d]
@@ -92,12 +103,12 @@ def HonestAccept
 Honest validator `vid` stores block `B` (paper §4.3.1; Figure 8: outputs
 `block_store_i(B)` once `B`'s causal history is locally available).
 
-Conditions (per-step, weak — the causal-history requirement is enforced
-at the *trace* level by `BlockAvailability` / `CausalAvailability`, not
-at every store):
+Conditions (per-step, paper-faithful):
 
 * `vid` is honest in `system`.
 * `vid` has output `block_accept_i(B.d)`.
+* `vid` has output `block_accept_i` for every block in `B`'s causal
+  history (the strict §4.3.1 "ancestors locally available" condition).
 * `s'` is `s` with `block_store vid B` appended.
 -/
 def HonestStore
@@ -105,6 +116,7 @@ def HonestStore
     (vid : ValidatorId) (B : Block) : Prop :=
   isHonestValidator system vid = true ∧
   HasAccepted s vid B.d ∧
+  (∀ B' : Block, Reaches s B B' → HasAccepted s vid B'.d) ∧
   s'.blocks = s.blocks ∧
   s'.emittedOperations = s.emittedOperations ++ [.block_store vid B]
 
@@ -265,8 +277,12 @@ def tryActFor (system : BlockSynchroniserSystem) (s : BelugaState)
   if !hasProposedFor s vid r then
     some (doPropose system s vid r)
   else
-    -- 2. Accept any known unaccepted block
-    match s.blocks.find? (fun B => !hasAcceptedDigest s vid B.d) with
+    -- 2. Accept any known unaccepted block whose parents are all already
+    --    accepted by `vid` (paper §4.2 acceptable-block condition,
+    --    matching `parentsAccepted`).
+    match s.blocks.find? (fun B =>
+            !hasAcceptedDigest s vid B.d &&
+            B.parents.all (fun pd => hasAcceptedDigest s vid pd)) with
     | some B => some (doAccept s vid B)
     | none =>
       -- 3. Store any accepted-but-not-stored block
