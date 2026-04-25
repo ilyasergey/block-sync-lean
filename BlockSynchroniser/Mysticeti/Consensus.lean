@@ -126,5 +126,56 @@ def indirectDecideStep (laterDecision : Decision) (laterReferencesCert : Bool) :
       if laterReferencesCert then Decision.ToCommit else Decision.ToSkip
   | _ => Decision.Undecided
 
+/-! ## Consensus view and transaction order
+
+Per-validator consensus state. In a fully-modeled execution this would
+live inside each validator's local view of the trace; we expose it
+abstractly here so the safety/liveness lemmas can be stated precisely
+without forcing all of `BelugaState` to carry consensus-specific data.
+
+A `ConsensusView` records, for each validator, what `Decision` it has
+assigned to each leader block (identified by its digest). A
+`TransactionOrder` records each validator's local sequence of
+transactions delivered by the consensus layer.
+
+Lemmas in `Mysticeti/Safety.lean` and `Mysticeti/Liveness.lean` take
+these as parameters and constrain them to be derived from the
+underlying state in the obvious way. The full integration with
+`BelugaState` is a follow-up phase.
+-/
+
+/-- Each validator's `Decision` for each leader-block digest. -/
+abbrev ConsensusView := ValidatorId → BlockDigest → Decision
+
+/-- Each validator's locally-ordered transaction stream. -/
+abbrev TransactionOrder := ValidatorId → List Transaction
+
+/--
+A `ConsensusView` is *consistent* across honest validators if no two
+honest validators assign conflicting non-`Undecided` decisions to the
+same leader block. (Captures: "no honest validator commits while
+another skips.")
+-/
+def ConsensusView.Consistent (system : BlockSynchroniserSystem)
+    (view : ConsensusView) : Prop :=
+  ∀ d vid₁ vid₂,
+    isHonestValidator system vid₁ = true →
+    isHonestValidator system vid₂ = true →
+    view vid₁ d ≠ Decision.Undecided →
+    view vid₂ d ≠ Decision.Undecided →
+    view vid₁ d = view vid₂ d
+
+/--
+Two transaction orders are *consistent* if one is a prefix of the
+other (so they agree on the common prefix and grow monotonically).
+-/
+def TransactionOrder.Consistent (system : BlockSynchroniserSystem)
+    (order : TransactionOrder) : Prop :=
+  ∀ vid₁ vid₂,
+    isHonestValidator system vid₁ = true →
+    isHonestValidator system vid₂ = true →
+    (order vid₁).isPrefixOf (order vid₂) = true ∨
+    (order vid₂).isPrefixOf (order vid₁) = true
+
 end Mysticeti
 end BlockSynchroniser

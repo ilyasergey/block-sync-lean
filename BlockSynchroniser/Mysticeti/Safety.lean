@@ -11,8 +11,9 @@ lemmas below are pure quorum-intersection / pigeonhole arguments — no
 timing model needed.
 -/
 import BlockSynchroniser.Block
-import BlockSynchroniser.System
 import BlockSynchroniser.State
+import BlockSynchroniser.System
+import BlockSynchroniser.Causal
 import BlockSynchroniser.Quorum
 import BlockSynchroniser.Beluga.Patterns
 import BlockSynchroniser.Mysticeti.Consensus
@@ -22,6 +23,17 @@ namespace Mysticeti
 namespace Safety
 
 open Beluga
+
+/-- `C` is a certificate for `B` if `C` is in round `B.r + 1`, references
+`B` as a parent (so `B.d ∈ C.parents`), and both blocks are in the state.
+
+Direct (round-`r+1`) certificate; the paper's broader notion includes
+transitive references handled below via `Reaches`. -/
+def isCertificateFor {S} [SystemState S] (state : S) (C B : Block) : Prop :=
+  C.r = B.r + 1 ∧
+  B.d ∈ C.parents ∧
+  C ∈ SystemState.blocks state ∧
+  B ∈ SystemState.blocks state
 
 /--
 **Lemma 10 (paper Appendix D.3).**
@@ -83,16 +95,15 @@ for `B`. By induction over rounds, this property propagates to all
 theorem lemma13_cert_persistence
     (system : BlockSynchroniserSystem) {S} [SystemState S] (state : S)
     (h_no_eq : NoEquivocationInParents system state)
-    (B : Block) (r : Round)
+    (B : Block) (h_B : B ∈ SystemState.blocks state)
     (h_cert : ∃ certs : List Block,
                 certs.length ≥ 2 * system.f + 1 ∧
-                (∀ C ∈ certs, C.r = r ∧ C ∈ SystemState.blocks state ∧
-                              certificatePattern system state C ∧
-                              -- C is a certificate for B
-                              True))   -- placeholder for "C references B"
-    (B' : Block) (h_later : B'.r > r) (h_in : B' ∈ SystemState.blocks state) :
-    -- B' references (transitively) a certificate for B in round r
-    True := by  -- conclusion shape stubbed pending the precise paper formulation
+                certs.Nodup ∧
+                (certs.map (·.author)).Nodup ∧
+                ∀ C ∈ certs, isCertificateFor state C B)
+    (B' : Block) (h_in : B' ∈ SystemState.blocks state)
+    (h_later : B'.r > B.r + 1) :
+    ∃ C, isCertificateFor state C B ∧ Reaches state B' C := by
   sorry
 
 /--
@@ -119,11 +130,12 @@ while another skips it.
 -/
 theorem lemma14_no_skip
     (system : BlockSynchroniserSystem) {S} [SystemState S] (state : S)
-    (B : Block) (h_direct_commit : directDecide system state B = Decision.ToCommit) :
-    -- No honest validator decides to skip B (direct or indirect)
-    -- Statement skeleton; the precise "no honest skip" predicate ties to
-    -- the indirect-decide search and lives in a follow-up phase.
-    True := by
+    (view : ConsensusView)
+    (B : Block) (h_direct_commit : directDecide system state B = Decision.ToCommit)
+    (h_view_direct : ∀ vid, isHonestValidator system vid = true →
+                       view vid B.d = directDecide system state B) :
+    ∀ vid, isHonestValidator system vid = true →
+      view vid B.d ≠ Decision.ToSkip := by
   sorry
 
 /--
@@ -183,12 +195,13 @@ assign the same status to `B_L^x`.
   that block, both validators derive the same decision for `B_L^k`.
 -/
 theorem lemma16_consistent_status
-    (system : BlockSynchroniserSystem) {S} [SystemState S] (state : S) :
-    -- Statement: all honest validators agree on each leader block's status.
-    -- Skeleton; full state-by-state formulation requires the per-validator
-    -- consensus state from Phase 4's protocol semantics + indirect decision
-    -- recursion.
-    True := by
+    (system : BlockSynchroniserSystem) {S} [SystemState S] (state : S)
+    (view : ConsensusView)
+    (h_view_direct : ∀ vid B, isHonestValidator system vid = true →
+                       isLeaderBlock system B → B ∈ SystemState.blocks state →
+                       directDecide system state B ≠ Decision.Undecided →
+                       view vid B.d = directDecide system state B) :
+    view.Consistent system := by
   sorry
 
 /--

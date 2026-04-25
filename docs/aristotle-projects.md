@@ -8,9 +8,7 @@ Status legend: 🟡 IN_PROGRESS · ✅ COMPLETE (integrated) · ⚠️ COMPLETE_
 
 ## Active
 
-| Project ID | Submitted | Status | Target file(s) | Theorem(s) | Result |
-|---|---|---|---|---|---|
-| `be7c0245-cdb9-4cce-9c4a-fffecfd1a69c` | 2026-04-25 21:25 SGT | 🟡 IN_PROGRESS | [`Validation.lean`](../BlockSynchroniser/Validation.lean) | `golden_roundProgression`, `golden_roundTermination`, `golden_blockAvailability`, `golden_causalAvailability` | pending |
+(none currently in flight)
 
 ## Queued (planned next submissions)
 
@@ -22,7 +20,11 @@ Status legend: 🟡 IN_PROGRESS · ✅ COMPLETE (integrated) · ⚠️ COMPLETE_
 
 ## Completed
 
-(None yet — first submission still in flight.)
+| Project ID | Submitted | Returned | Status | Target file(s) | Theorem(s) | Integration commit |
+|---|---|---|---|---|---|---|
+| `be7c0245-cdb9-4cce-9c4a-fffecfd1a69c` | 2026-04-25 21:25 SGT | 2026-04-25 ~22:50 SGT | ⚠️ COMPLETE_WITH_ERRORS (all 4 target sorries closed cleanly; status name appears unrelated to actual result) | [`Validation.lean`](../BlockSynchroniser/Validation.lean) | `golden_roundProgression`, `golden_roundTermination`, `golden_blockAvailability`, `golden_causalAvailability` (+11 helper lemmas) | TBD |
+
+Full attribution detail in [aristotle-attributions.md](aristotle-attributions.md).
 
 ## Conventions
 

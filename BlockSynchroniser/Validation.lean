@@ -36,6 +36,9 @@ distinction spelled out.
   `sorry`).
 -/
 
+import Mathlib.Tactic
+import Mathlib.Data.List.Basic
+import Mathlib.Data.List.Range
 import BlockSynchroniser.System
 import BlockSynchroniser.State
 import BlockSynchroniser.Causal
@@ -139,7 +142,6 @@ theorem not_roundProgression_emptyTrace :
     ¬ RoundProgression goldenSystem emptyTrace := by
   intro h
   obtain ⟨k, hk⟩ := h 0
-  -- `opsAt emptyTrace k = []`, so the filterMap is `[]` and its length is 0.
   simp [opsAt, emptyTrace, emptyState, SystemState.emittedOperations] at hk
 
 /-- The empty trace fails Round-Termination for any honest validator (here,
@@ -201,60 +203,205 @@ def goldenStateAt (n : Nat) : DefaultSystemState where
 /-- The honest-synchronous golden trace. -/
 def goldenTrace : Trace DefaultSystemState := goldenStateAt
 
-/-- **Definition 1.1 — Round-Progression** holds for `goldenTrace`.
+/-! ## Helper lemmas for golden trace proofs
 
-PROVIDED SOLUTION
-For an arbitrary round `r`, take `k := 36 * r + 4`. After 36*r operations the
-trace has fully simulated rounds `0..r-1`; the next 4 operations are the four
-round-`r` proposes by validators `0,1,2,3`. So `opsAt goldenTrace (36*r + 4)`
-contains four distinct `block_propose _ _ r` operations from validators
-`{0,1,2,3}`, hence the deduplicated list of round-`r` proposers has length
-`4 ≥ 3 = 2f+1`. The proof unfolds `goldenTrace`, `gOpsThrough`, `gRoundOps`,
-computes the prefix, and concludes with `decide` or list-membership lemmas.
+The lemmas in this section, plus the four `golden_*` theorems below, were
+**proved by Aristotle** (Harmonic) — project ID
+`be7c0245-cdb9-4cce-9c4a-fffecfd1a69c`, submitted 2026-04-25 21:25 SGT,
+returned 2026-04-25 ~22:50 SGT. See
+[`docs/aristotle-attributions.md`](../../docs/aristotle-attributions.md)
+for the full attribution log. -/
+
+-- proof: aristotle (project be7c0245)
+theorem gRoundOps_length (r : Round) : (gRoundOps r).length = 36 := by
+  -- The length of `List.range 4` is 4.
+  simp [gRoundOps, List.length_range, List.length_map]
+
+theorem gOpsThrough_length (R : Nat) : (gOpsThrough R).length = 36 * (R + 1) := by
+  unfold gOpsThrough;
+  simp +arith +decide [ mul_comm, gRoundOps_length ]
+
+theorem gOpsThrough_succ (R : Nat) :
+    gOpsThrough (R + 1) = gOpsThrough R ++ gRoundOps (R + 1) := by
+  unfold gOpsThrough; simp +decide [ List.range_succ ]
+
+theorem gOpsThrough_take_full (R : Nat) :
+    (gOpsThrough R).take (36 * (R + 1)) = gOpsThrough R := by
+  rw [List.take_of_length_le]
+  exact le_of_eq (gOpsThrough_length R)
+
+theorem goldenTrace_ops_at_full_round (r : Nat) :
+    opsAt goldenTrace (36 * (r + 1)) = gOpsThrough r := by
+  unfold opsAt goldenTrace goldenStateAt;
+  norm_num [ Nat.mul_div_assoc ];
+  rw [ gOpsThrough_succ, List.take_append_of_le_length ];
+  · exact List.take_of_length_le ( by linarith [ gOpsThrough_length r ] );
+  · rw [ gOpsThrough_length ]
+
+theorem gRoundOps_propose_mem (r : Round) (i : Nat) (hi : i < 4) :
+    ValidatorOperation.block_propose i (gBlock r i) r ∈ gRoundOps r := by
+  interval_cases i <;> simp +decide [ gRoundOps ]
+
+theorem gRoundOps_accept_mem (r : Round) (v i : Nat) (hv : v < 4) (hi : i < 4) :
+    ValidatorOperation.block_accept v (r * 4 + i) ∈ gRoundOps r := by
+  unfold gRoundOps;
+  simp +decide [ hv, hi ]
+
+theorem gRoundOps_store_mem (r : Round) (v i : Nat) (hv : v < 4) (hi : i < 4) :
+    ValidatorOperation.block_store v (gBlock r i) ∈ gRoundOps r := by
+  interval_cases v <;> interval_cases i <;> simp +decide [ gRoundOps ];
+  all_goals exact ⟨ _, by decide, rfl ⟩ ;
+
+theorem gRoundOps_mem_gOpsThrough (r R : Nat) (hr : r ≤ R) (op : ValidatorOperation)
+    (hop : op ∈ gRoundOps r) : op ∈ gOpsThrough R := by
+  exact List.mem_flatMap.mpr ⟨ r, List.mem_range.mpr ( by linarith ), hop ⟩
+
+theorem propose_mem_gOpsThrough (r R : Nat) (hr : r ≤ R) (i : Nat) (hi : i < 4) :
+    ValidatorOperation.block_propose i (gBlock r i) r ∈ gOpsThrough R :=
+  gRoundOps_mem_gOpsThrough r R hr _ (gRoundOps_propose_mem r i hi)
+
+theorem accept_mem_gOpsThrough (r R : Nat) (hr : r ≤ R) (v i : Nat)
+    (hv : v < 4) (hi : i < 4) :
+    ValidatorOperation.block_accept v (r * 4 + i) ∈ gOpsThrough R :=
+  gRoundOps_mem_gOpsThrough r R hr _ (gRoundOps_accept_mem r v i hv hi)
+
+theorem store_mem_gOpsThrough (r R : Nat) (hr : r ≤ R) (v i : Nat)
+    (hv : v < 4) (hi : i < 4) :
+    ValidatorOperation.block_store v (gBlock r i) ∈ gOpsThrough R :=
+  gRoundOps_mem_gOpsThrough r R hr _ (gRoundOps_store_mem r v i hv hi)
+
+theorem isHonest_goldenSystem_iff (vid : ValidatorId) :
+    isHonestValidator goldenSystem vid = true ↔ vid < 4 := by
+  rcases vid with ( _ | _ | _ | _ | vid ) <;> tauto
+
+/-
+**Definition 1.1 — Round-Progression** holds for `goldenTrace`.
 -/
+-- proof: aristotle (project be7c0245)
 theorem golden_roundProgression : RoundProgression goldenSystem goldenTrace := by
-  sorry
+  intro r;
+  refine' ⟨ 36 * ( r + 1 ), _ ⟩;
+  rw [ goldenTrace_ops_at_full_round ];
+  unfold gOpsThrough;
+  unfold gRoundOps; simp +decide [ List.range_succ ] ;
+  rw [ List.filterMap_flatMap ];
+  simp +decide [ List.filterMap ];
+  rw [ List.flatMap_congr ];
+  rotate_right;
+  use fun x => [];
+  · induction r <;> simp_all +decide [ List.range_succ ];
+  · intro x hx; split_ifs <;> simp_all +decide ;
 
-/-- **Definition 1.2 — Round-Termination** holds for `goldenTrace`.
-
-PROVIDED SOLUTION
-For arbitrary round `r` and honest `vid ∈ {0,1,2,3}`, take `k := 36 * (r+1)`.
-At that step all 36 operations of round `r` are in the log, including the 4
-`block_accept vid (r*4 + i)` operations for `i ∈ {0,1,2,3}`. The
-`authorOfDigest` helper, when applied to digest `r*4 + i` and round `r`,
-returns `some i` because the propose operation `block_propose i (gBlock r i) r`
-is present and `(gBlock r i).d = r*4 + i`. So the deduplicated list of
-authors of accepted round-`r` blocks is `[0,1,2,3]`, length `4 ≥ 3 = 2f+1`.
+/-
+**Definition 1.2 — Round-Termination** holds for `goldenTrace`.
 -/
+-- proof: aristotle (project be7c0245)
 theorem golden_roundTermination : RoundTermination goldenSystem goldenTrace := by
-  sorry
+  -- For any round r and honest validator vid, we can choose k = 36 * (r + 1).
+  intro r vid hvid
+  use 36 * (r + 1);
+  -- By definition of `goldenTrace`, we know that `opsAt goldenTrace (36 * (r + 1))` contains all proposers for round `r`.
+  have h_ops : opsAt goldenTrace (36 * (r + 1)) = gOpsThrough r := by
+    exact goldenTrace_ops_at_full_round r;
+  -- By definition of `gOpsThrough`, we know that `gOpsThrough r` contains all proposers for round `r`.
+  have h_proposers : ∀ i < 4, ValidatorOperation.block_accept vid (r * 4 + i) ∈ gOpsThrough r := by
+    exact fun i hi => accept_mem_gOpsThrough r r le_rfl vid i ( by simpa [ isHonest_goldenSystem_iff ] using hvid ) hi;
+  have h_acceptedAuthors : List.toFinset (List.filterMap (fun op => match op with | .block_accept vid' d => if vid' = vid then authorOfDigest (gOpsThrough r) r d else none | _ => none) (gOpsThrough r)) ⊇ {0, 1, 2, 3} := by
+    have h_acceptedAuthors : ∀ i < 4, authorOfDigest (gOpsThrough r) r (r * 4 + i) = some i := by
+      intros i hi
+      have h_propose : ValidatorOperation.block_propose i (gBlock r i) r ∈ gOpsThrough r := by
+        exact propose_mem_gOpsThrough r r le_rfl i hi;
+      have h_unique_propose : ∀ op ∈ gOpsThrough r, op = ValidatorOperation.block_propose i (gBlock r i) r ∨ ¬(match op with | .block_propose _ block r' => block.d == r * 4 + i && r' == r | _ => false) := by
+        intros op hop;
+        contrapose! hop;
+        rcases op with ( _ | _ | _ ) <;> simp +decide at hop ⊢;
+        unfold gOpsThrough at *; simp_all +decide [ List.mem_flatMap ] ;
+        unfold gRoundOps at *; simp_all +decide [ List.mem_flatMap ] ;
+        unfold gBlock at *; aesop;
+      have h_unique_propose : List.find? (fun op => match op with | .block_propose _ block r' => block.d == r * 4 + i && r' == r | _ => false) (gOpsThrough r) = some (ValidatorOperation.block_propose i (gBlock r i) r) := by
+        have h_unique_propose : ∀ {l : List ValidatorOperation}, ValidatorOperation.block_propose i (gBlock r i) r ∈ l → (∀ op ∈ l, op = ValidatorOperation.block_propose i (gBlock r i) r ∨ ¬(match op with | .block_propose _ block r' => block.d == r * 4 + i && r' == r | _ => false)) → List.find? (fun op => match op with | .block_propose _ block r' => block.d == r * 4 + i && r' == r | _ => false) l = some (ValidatorOperation.block_propose i (gBlock r i) r) := by
+          intros l hl hl_unique;
+          induction' l with op l ih;
+          · contradiction;
+          · by_cases h : op = ValidatorOperation.block_propose i ( gBlock r i ) r <;> simp +decide [ h ] at hl hl_unique ⊢;
+            · exact Or.inl rfl;
+            · exact ⟨ by
+                cases op <;> simp +decide;
+                exact fun h₁ h₂ => hl_unique.1 ⟨ h₁, h₂ ⟩, ih ( hl.resolve_left ( Ne.symm h ) ) ( fun op hop => by
+                convert hl_unique.2 op hop using 1;
+                cases op <;> simp +decide [ and_comm ] ) ⟩;
+        exact h_unique_propose h_propose ‹_›;
+      exact Option.bind_eq_some_iff.mpr ⟨ _, h_unique_propose, rfl ⟩;
+    intro x hx;
+    simp +zetaDelta at *;
+    use ValidatorOperation.block_accept vid (r * 4 + x);
+    grind;
+  have h_acceptedAuthors_length : List.length (List.eraseDups (List.filterMap (fun op => match op with | .block_accept vid' d => if vid' = vid then authorOfDigest (gOpsThrough r) r d else none | _ => none) (gOpsThrough r))) ≥ Finset.card (List.toFinset (List.filterMap (fun op => match op with | .block_accept vid' d => if vid' = vid then authorOfDigest (gOpsThrough r) r d else none | _ => none) (gOpsThrough r))) := by
+    have h_acceptedAuthors_length : ∀ (l : List ValidatorId), List.length (List.eraseDups l) ≥ Finset.card (List.toFinset l) := by
+      intro l;
+      induction' l using List.reverseRecOn with l ih;
+      · rfl;
+      · simp +decide [ List.eraseDups_append ];
+        by_cases h : ih ∈ l.toFinset <;> simp_all +decide [ List.removeAll ];
+        exact Nat.lt_succ_of_le ‹_›;
+    exact h_acceptedAuthors_length _;
+  exact h_ops.symm ▸ h_acceptedAuthors_length.trans' ( le_trans ( by decide ) ( Finset.card_mono h_acceptedAuthors ) )
 
-/-- **Definition 1.3 — Block availability** holds for `goldenTrace`.
-
-PROVIDED SOLUTION
-Fix any step `k`, honest `vid`, and digest `d` with `HasAccepted (goldenTrace k) vid d`.
-By construction, `block_accept vid d` appears in `gOpsThrough (k/36)`, so
-`d = r*4 + i` for some `r ≤ k/36` and `i ∈ {0,1,2,3}`. The trace also emits
-`block_store vid (gBlock r i)` later in round `r` (phase 3). Take `k' := k + 36`
-(safely past round `r`'s store phase). At step `k'`, the operation log
-contains `block_store vid (gBlock r i)`, and `(gBlock r i).d = r*4 + i = d`.
+/-
+**Definition 1.3 — Block availability** holds for `goldenTrace`.
 -/
+-- proof: aristotle (project be7c0245)
 theorem golden_blockAvailability : BlockAvailability goldenSystem goldenTrace := by
-  sorry
+  intro k vid d hvid hacc
+  obtain ⟨r, i, hr, hi, hd⟩ : ∃ r i, r ≤ k / 36 ∧ i < 4 ∧ d = r * 4 + i := by
+    -- By definition of `HasAccepted`, we know that `block_accept vid d` is in the operation log of `goldenTrace k`.
+    obtain ⟨op, hop⟩ : ∃ op ∈ (gOpsThrough (k / 36)).take k, op = .block_accept vid d := by
+      unfold HasAccepted at hacc; aesop;
+    -- By definition of `gOpsThrough`, we know that `op` is in `gRoundOps r` for some `r ≤ k / 36`.
+    obtain ⟨r, hr⟩ : ∃ r ≤ k / 36, op ∈ gRoundOps r := by
+      have h_op_in_gRoundOps : op ∈ gOpsThrough (k / 36) := by
+        exact List.mem_of_mem_take hop.1;
+      unfold gOpsThrough at h_op_in_gRoundOps; aesop;
+    unfold gRoundOps at hr; simp_all +decide [ List.mem_append, List.mem_map ] ;
+    exact ⟨ r, hr.1, by obtain ⟨ x, hx, rfl ⟩ := hr.2.2; exact ⟨ x, hx, rfl ⟩ ⟩;
+  refine' ⟨ 36 * ( k / 36 + 1 ), _, _ ⟩;
+  · omega;
+  · refine' ⟨ gBlock r i, _, _ ⟩;
+    · have h_store : ValidatorOperation.block_store vid (gBlock r i) ∈ gOpsThrough (k / 36) := by
+        apply store_mem_gOpsThrough r (k / 36) hr vid i (by
+        exact isHonest_goldenSystem_iff vid |>.1 hvid) hi;
+      convert List.mem_of_mem_take _;
+      exact 36 * ( k / 36 + 1 );
+      grind +suggestions;
+    · aesop
 
-/-- **Definition 1.4 — Causal availability** holds for `goldenTrace`.
-
-PROVIDED SOLUTION
-Fix `k vid d B` with `HasAccepted (goldenTrace k) vid d` and `getBlockByDigest
-(goldenTrace k) d = some B`. The block `B = gBlock r i` for some `r,i`. The
-parents of `B` (if `r > 0`) are the four round-`(r-1)` blocks; iterating, the
-causal closure `Reaches state B B'` consists of `gBlock r' i'` for all
-`(r', i') ≤ (r, _)`. By induction on `r' ≤ r`: at step `36*(r' + 1)` the trace
-has emitted `block_accept vid (r' * 4 + i')` for every `i' ∈ {0,1,2,3}`. So
-`vid` has accepted every causal ancestor's digest. Take `k' := max k (36*(r+1))`.
+/-
+**Definition 1.4 — Causal availability** holds for `goldenTrace`.
 -/
+-- proof: aristotle (project be7c0245)
 theorem golden_causalAvailability : CausalAvailability goldenSystem goldenTrace := by
-  sorry
+  intro k vid d B h_honest h_accept h_block B' h_reaches;
+  -- By definition of `goldenTrace`, we know that `B'` is of the form `gBlock r' i'` for some `r' ≤ k/36` and `i' < 4`.
+  obtain ⟨r', i', hr', hi'⟩ : ∃ r' i', r' ≤ k / 36 ∧ i' < 4 ∧ B' = gBlock r' i' := by
+    have hB'_form : B' ∈ (goldenTrace k).blocks := by
+      have hB'_in_state : ∀ {B B' : Block}, Reaches (goldenTrace k) B B' → B ∈ (goldenTrace k).blocks → B' ∈ (goldenTrace k).blocks := by
+        intros B B' h_reaches hB_in_state; induction h_reaches; aesop;
+        unfold isParent at *; aesop;
+      apply hB'_in_state h_reaches;
+      exact List.mem_of_find?_eq_some h_block;
+    unfold goldenTrace at hB'_form; simp_all +decide ;
+    grind +locals;
+  refine' ⟨ 36 * ( k / 36 + 1 ), _, _ ⟩;
+  · omega;
+  · refine' List.mem_of_mem_take _;
+    exact 36 * ( k / 36 + 1 );
+    convert accept_mem_gOpsThrough r' ( k / 36 ) hr' vid i' _ hi'.1 using 1;
+    · -- By definition of `goldenTrace`, the emitted operations at step `36 * (k / 36 + 1)` are exactly `gOpsThrough (k / 36)`.
+      have h_emitted : SystemState.emittedOperations (goldenTrace (36 * (k / 36 + 1))) = gOpsThrough (k / 36) := by
+        convert goldenTrace_ops_at_full_round ( k / 36 ) using 1;
+      rw [ h_emitted, gOpsThrough_take_full ];
+    · aesop;
+    · exact (isHonest_goldenSystem_iff vid).mp h_honest
 
 /-- The headline non-vacuity result: there exists a trace satisfying all four
 Definition-1 properties. Follows immediately from the four `golden_*` theorems. -/

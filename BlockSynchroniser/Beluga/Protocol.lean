@@ -303,7 +303,24 @@ which only the honest cases apply.
 theorem step_refines_HonestStep
     (system : BlockSynchroniserSystem) (s : BelugaState) :
     HonestStep system s (step system s) := by
-  sorry
+  unfold step
+  generalize hf :
+    s.validators.findSome? (fun p => tryActFor system s p.1 p.2) = result
+  cases result with
+  | none =>
+    -- step s = s. Use ByzantineStep with newOps = [].
+    show HonestStep system s s
+    right; right; right; right
+    refine ⟨[], ?_, ?_⟩
+    · simp
+    · intro op hop
+      cases hop
+  | some s' =>
+    -- step s = s'. Need case analysis on which action `tryActFor` chose,
+    -- then on whether the chosen validator is honest or Byzantine.
+    -- The four `tryActFor` branches (propose / accept / store / advance)
+    -- each induce a state change matched by one of HonestStep's disjuncts.
+    sorry
 
 /--
 The Beluga-induced trace at step `n` (paper §4 protocol unrolled).
