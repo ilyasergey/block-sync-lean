@@ -152,20 +152,138 @@ recompiles of `Validation.lean`, never source-level edits.
 Aristotle remains IN_PROGRESS at ~2% on this project as of Phase 4d
 commit (`3a2d934`). Slow burn.
 
+## Continuing threads (added in second half of session)
+
+### "Write full implementations, omit proofs"
+
+User course-correction during sub-phase 4e: my first cut had `step s = s`
+as a placeholder. Replaced with a real round-robin implementation
+(scan validators in id order; first-applicable action; priority
+propose → accept → store → advance). See `7c044a9` and the
+[continuation changelog](2026-04-25-session-continuation-phases-4e-onward.md).
+
+### Runnable examples
+
+Triggered by user's "Do we have executable examples?" Built
+`BlockSynchroniser/Beluga/Examples.lean` (system4, run, reprLog,
+proposersFor, `#eval` smoke tests) and turned `Main.lean` into a real
+driver. `lake exe blocksynchroniser` now prints a real 20-step Beluga
+trace. Documented at the top of `formalization.md`.
+
+### Phase 5 — main theorems stated
+
+Six theorems (L1, L2, T1, T2, T3, T4) stated against `belugaTrace`,
+each with a verbatim `PROVIDED SOLUTION` from the paper. L1, L2 were
+initially abstract (`∃ k`); refined in Phase 4.5 with timing.
+
+### Phase 6 — Mysticeti-Beluga safety bundle
+
+Decision rules (paper App D.1.1) and round-robin leader schedule
+(D.1.2) implemented in full. Safety lemmas L10, L13, L14, L15, L16,
+T7 stated. **L15 is the only one I closed by hand** (`certified_unique`
+specializes to leader blocks where author is fixed by the schedule).
+Everything else has paper sketches awaiting Aristotle.
+
+### Two kinds of theorems — citation policy adopted
+
+User asked: "What does `golden_roundProgression` correspond to in the
+paper?" Answer: nothing — it's internal validation. Then: "What about
+`certified_unique`?" Answer: paper §4.4 (not Appendix D Lemma 15 as I
+had said). Triggered:
+
+- A clarifying comment block at the top of `Validation.lean`.
+- A "Two kinds of theorems" section in `formalization.md`.
+- Project-wide policy: every paper-aligned definition / lemma / theorem
+  carries an explicit paper citation in its docstring.
+- Restructured `formalization.md`: paper→code map at the very top,
+  before repository layout / two-kinds explanation.
+
+Audit pass added missing citations to `Quorum.lean` (BFT
+quorum-intersection — *not* paper-numbered but standard) and to
+`Properties.lean :: BlockSynchronizer` (Definition 1, paper §2.1
+conjunction).
+
+### Liveness path opened — Phase 4.5
+
+User: "Why can't we do liveness facts and appendix C lemmas?" → "add
+the necessary bits for liveness. No probabilities so far."
+
+Diagnosis: blockers were structural, not effort-level.
+
+- **No timing model** — `Trace = Nat → S` indexes by step number, not
+  wall-clock time. L1/L2 are wall-clock claims, so they had been
+  stated with abstract `∃ k`.
+- **`ByzantineStep := True`** — too permissive; refinement allows
+  Byzantine validators to do *anything*, including impersonate honest
+  ones, breaking proofs.
+
+Phase 4.5 added `BlockSynchroniser/Timing.lean` with `TimeMap`,
+`Monotone`/`Unbounded`/`WellFormed` predicates, and
+`PartiallySynchronous` (post-GST trace advances time ≤ Δ per step).
+Then refined L1/L2 to use it; added App D liveness bundle (L8, L9,
+L11, L12, T6) in `Mysticeti/Liveness.lean`, all with paper sketches.
+
+### ByzantineStep refinement — Phase 4.5b
+
+Triggered by user's "Are we going to revise Byzantine behaviours from
+True to something more meaningful?" Yes. New definition: monotone
+op-log extension where every newly-emitted op is attributable to a
+Byzantine validator. Made the trivial `step_refines_HonestStep` proof
+fail; replaced with a `sorry` + detailed case-analysis sketch.
+
+### App C deterministic L3, L4, L5 — Phase 4.5b
+
+Triggered by user's "Have we done this? Lemmas 3, 4, 5 — deterministic
+worst-case latency bounds…" — prereqs were now in (timing + Byzantine
+constraint), but statements weren't yet in the code. Added in new file
+`BlockSynchroniser/Beluga/PerformanceLemmas.lean`. Probabilistic L6, L7,
+T5 remain ⊘ (would need a probability framework — explicitly
+acknowledged at multiple places).
+
+### Aristotle project tracker created
+
+Triggered by user's "Are you keeping a map which Aristotle queries are
+responsible for which files/theorems to complete?" Answer at the time:
+no, only informal mentions. Created
+[`docs/aristotle-projects.md`](../docs/aristotle-projects.md) — central
+single-source-of-truth for active / queued / completed submissions.
+
+### Detailed-changelog policy adopted
+
+Triggered by user's "Are you maintaining changelogs? Make them very
+detailed so the rough history of this exploration/conversation could
+be restored." This narrative file plus per-phase changelogs are the
+result. Phase entries now capture decisions/discussions, not just
+code changes; narrative entries capture cross-phase threads.
+
 ## Open questions / what's left
 
-- **Sub-phase 4e** (next): `HonestStep` relational small-step + executable
-  `step` function + refinement lemma. The substantive part of Phase 4.
-- **Aristotle integration** (whenever `be7c0245-…` returns): extract,
-  diff, review, apply, verify, attribute, commit. Per the operational
-  recipe.
-- **Aristotle round 2**: queue is `quorumIntersection` (Quorum.lean) and
-  `certified_unique` (Patterns.lean). Eligible to fire in parallel with
-  4e once the round-1 result is integrated and `Validation.lean` is
-  unfrozen.
-- **Validation note**: the small Trace.lean change (Decidable instances)
-  is unrelated to Aristotle's task and shouldn't conflict on integration.
-  Worth verifying when the diff comes back.
+- **Aristotle round 1** (`be7c0245-…`, IN_PROGRESS at ~26%): integrate
+  when it returns. Per the operational recipe in
+  [`docs/aristotle-workflow.md`](../docs/aristotle-workflow.md).
+- **Aristotle round 2**: queue is `quorumIntersection`,
+  `certified_unique`, `lemma10_round_robin_pigeonhole` (pure
+  combinatorics), and the easier App D safety pieces (L13, L14, L16, T7).
+  Eligible to fire in parallel once round 1 unfreezes
+  `Validation.lean`.
+- **Aristotle round 3** (further out): the timing-flavored proofs
+  (L1, L2, L8, L9, L11, L12, T6) and App C L3/L4/L5. Heavier — these
+  rely on the timing model + refined Byzantine semantics in non-trivial
+  ways.
+- **Hand-prove candidates**: `step_refines_HonestStep` (case analysis on
+  step's findSome? result + each `tryActFor` branch). Other Lemma 10
+  could be hand-proven (pure `Fin.range` pigeonhole) but feels slightly
+  delicate.
+- **Validation note**: the Trace.lean change (Decidable instances)
+  added during Phase 4c is unrelated to Aristotle's in-flight task and
+  shouldn't conflict on integration. Worth verifying when the diff
+  comes back.
+- **Outstanding skeleton conclusions**: a few statements have placeholder
+  `True` conclusions (Lemma 13's "B' references a certificate for B"
+  predicate, Lemma 14's "no honest skip", Lemma 16's "consistent
+  decision", Theorem 6's "ordered/finalized", Theorem 7's "consistent
+  ordering"). These need a per-validator consensus-state data
+  structure, deferred to a follow-up phase.
 
 ## Files added this session (in order)
 
