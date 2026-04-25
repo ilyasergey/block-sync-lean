@@ -8,15 +8,23 @@ Status legend: 🟡 IN_PROGRESS · ✅ COMPLETE (integrated) · ⚠️ COMPLETE_
 
 ## Active
 
-(none currently in flight)
+| Project ID | Submitted | Status | Target file(s) | Theorem(s) | Result |
+|---|---|---|---|---|---|
+| `4cda6cb1-a5b1-4f2f-9616-204e6438f82d` | 2026-04-25 ~22:55 SGT | 🟡 IN_PROGRESS | [`Quorum.lean`](../BlockSynchroniser/Quorum.lean), [`Beluga/Patterns.lean`](../BlockSynchroniser/Beluga/Patterns.lean), [`Mysticeti/Safety.lean`](../BlockSynchroniser/Mysticeti/Safety.lean) | `quorumIntersection`, `certified_unique`, `lemma10_round_robin_pigeonhole` | pending |
 
-## Queued (planned next submissions)
+Frozen files (do not edit until round completes): `Quorum.lean`,
+`Beluga/Patterns.lean`, `Mysticeti/Safety.lean`.
+
+## Queued (planned for after round 2)
 
 | Target file(s) | Theorem(s) | Notes |
 |---|---|---|
-| [`Quorum.lean`](../BlockSynchroniser/Quorum.lean) | `quorumIntersection` | BFT pigeonhole / inclusion-exclusion. PROVIDED SOLUTION already in docstring. |
-| [`Beluga/Patterns.lean`](../BlockSynchroniser/Beluga/Patterns.lean) | `certified_unique` | Depends on `quorumIntersection` (no hard dependency for delegation, but cleaner if `quorumIntersection` lands first). |
-| [`Mysticeti/Safety.lean`](../BlockSynchroniser/Mysticeti/Safety.lean) | `lemma10_round_robin_pigeonhole` | Pure combinatorics. Needs Mathlib `Finset.sum_le_card_nsmul` / `Finset.exists_lt_of_sum_lt`. Refined statement (added `n = 3f+1` and `honest count = 2f+1` hypotheses). Refined sketch. |
+| [`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) | `theorem3_round_progression`, `theorem4_round_termination` | Should follow once L1, L2 are stated cleanly with timing. |
+| [`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) | `theorem1_block_availability`, `theorem2_causal_availability` | Depend on `step_refines_HonestStep` and pull mechanism. |
+| [`Mysticeti/Safety.lean`](../BlockSynchroniser/Mysticeti/Safety.lean) | `lemma13_cert_persistence`, `lemma14_no_skip`, `lemma16_consistent_status`, `theorem7_consensus_safety` | After round 2 lands `quorumIntersection` and `lemma10`, these are pure quorum-intersection chains. |
+| [`Mysticeti/Liveness.lean`](../BlockSynchroniser/Mysticeti/Liveness.lean) | L8, L9, L11, L12, T6 | Timing-flavored; biggest dependency tier. |
+| [`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) | L1, L2 (timing) | Foundation for many liveness proofs. |
+| [`Beluga/PerformanceLemmas.lean`](../BlockSynchroniser/Beluga/PerformanceLemmas.lean) | L3, L4, L5 (deterministic) | Reputation + timing; substantive. |
 
 ## Completed
 

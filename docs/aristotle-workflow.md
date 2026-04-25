@@ -278,41 +278,33 @@ Helper lemmas added by Aristotle (in support of a target theorem) get
 the same marker if they're substantive; trivial one-liners may share a
 marker on the section header.
 
-## Submission tip: narrow the scope by `admit`-ing irrelevant sorries
+## Submission tip: narrow scope via targeted prompt
 
 Aristotle's processing time scales with the number of `sorry`s in the
-project, since it tries to fill *all* of them. To speed turnaround when
-you only want a specific subset proved, **temporarily replace
-irrelevant `sorry`s with `admit`** before submission:
+project — it tries to fill all of them by default. To speed
+turnaround when you only want a specific subset proved, use a
+**targeted prompt** naming the theorem(s) explicitly:
 
 ```bash
-# Snapshot current state
-git stash push -m "pre-aristotle-narrowing"
-
-# Replace all sorries you don't want filled
-# (regex: `sorry` immediately preceded by `:= by` or `by`, in files
-# you do NOT want Aristotle touching)
-sed -i '' 's/:= by sorry$/:= by admit/g' BlockSynchroniser/{Quorum.lean,Beluga/Theorems.lean,...}
-
-# Submit — Aristotle now sees only the sorries you care about
-aristotle submit "Fill in the sorries" --project-dir . --wait \
+aristotle submit "Fill in only the following sorries: \
+quorumIntersection (in Quorum.lean), \
+certified_unique (in Beluga/Patterns.lean), \
+lemma10_round_robin_pigeonhole (in Mysticeti/Safety.lean). \
+Leave all other sorries unchanged." \
+  --project-dir . --wait \
   --destination /tmp/aristotle-narrow-$(date +%s).tar.gz
-
-# Restore the original sorries
-git stash pop
 ```
 
-Why this works: `admit` and `sorry` both close any goal, but `admit`
-is *not* in Aristotle's filling list (it's understood as "intentionally
-left admitted"). After the run, restore the `sorry`s — the proofs
-filled by Aristotle for the targeted theorems land in your working
-tree, and the `admit`s in untargeted files are reverted by `git stash
-pop`.
+This relies on Aristotle following the prompt rather than mechanically
+trying every `sorry`. Verify after integration: `git diff
+HEAD -- BlockSynchroniser/` should only touch the named files. If
+Aristotle did touch unrelated files, revert those hunks.
 
-Caveat: if narrowing causes a definition to be admitted that the
-target theorem depends on, Aristotle may fail. Generally safe for
-parallel/independent theorems; use carefully for cross-file
-dependencies.
+> **Note**: an earlier draft of this doc described a `sed`-based
+> `sorry → admit` rewrite to "hide" untargeted goals. That doesn't
+> work in Lean 4 — `admit` is a synonym for `sorry`, so Aristotle
+> sees them identically. The targeted-prompt approach above is the
+> correct mechanism.
 
 ## Concept: the math tactical wall
 
