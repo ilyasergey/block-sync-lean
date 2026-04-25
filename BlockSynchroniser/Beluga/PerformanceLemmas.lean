@@ -7,9 +7,9 @@ Beluga performance bounds — *deterministic* worst-case latency lemmas
 from paper Appendix C.2.
 
 Status: theorem statements + verbatim paper proof sketches; proofs are
-`sorry`. Probabilistic Lemmas 6, 7 and Theorem 5 (expected-latency
-bounds) remain out of scope until/unless we adopt a probability
-framework.
+stubs (queued for Aristotle round 3e). Probabilistic Lemmas 6, 7 and
+Theorem 5 (expected-latency bounds) remain out of scope until/unless we
+adopt a probability framework.
 
 Prerequisites (Phase 4.5): `BlockSynchroniser/Timing.lean` (TimeMap +
 PartiallySynchronous) + `BlockSynchroniser/Beluga/Protocol.lean` (refined

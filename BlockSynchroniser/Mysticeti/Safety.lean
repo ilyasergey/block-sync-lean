@@ -6,7 +6,7 @@ Licensed under the Apache License, Version 2.0.
 Mysticeti-Beluga safety bundle (paper Appendix D.3).
 
 Status: theorem statements + paper proof sketches as docstrings; proofs
-are `sorry` for delegation to Aristotle (Phase 6 stretch). All five
+are stubs for delegation to Aristotle (rounds 2 + 3c). All five
 lemmas below are pure quorum-intersection / pigeonhole arguments — no
 timing model needed.
 -/

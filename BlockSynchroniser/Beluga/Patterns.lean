@@ -115,7 +115,7 @@ Since `h` is honest, both `C₁` and `C₂` are honestly-authored. Apply
 using `h_same_author` and `h_same_round` to discharge the equality
 hypotheses. Conclude `B₁ = B₂`.
 
-This proof depends on `Quorum.quorumIntersection` (currently `sorry`).
+This proof depends on `Quorum.quorumIntersection` (currently pending).
 Queued for Aristotle round 2 — see [docs/aristotle-projects.md](../../docs/aristotle-projects.md).
 -/
 theorem certified_unique

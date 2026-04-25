@@ -5,11 +5,11 @@ Licensed under the Apache License, Version 2.0.
 
 Mysticeti-Beluga liveness bundle (paper Appendix D.2).
 
-Status: theorem statements + paper proof sketches; proofs are `sorry`.
-All five theorems below depend on the timing model from
-`BlockSynchroniser/Timing.lean` and the partial-synchrony predicate
-`PartiallySynchronous`. Without those, liveness can't be precisely
-stated.
+Status: theorem statements + paper proof sketches; proofs are stubs
+(queued for Aristotle round 3d). All five theorems below depend on the
+timing model from `BlockSynchroniser/Timing.lean` and the partial-synchrony
+predicate `PartiallySynchronous`. Without those, liveness can't be
+precisely stated.
 -/
 import BlockSynchroniser.Block
 import BlockSynchroniser.System

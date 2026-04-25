@@ -5,9 +5,9 @@ Licensed under the Apache License, Version 2.0.
 
 Beluga's main theorems (paper §5).
 
-Status: theorem *statements* against `belugaTrace`. Proofs are `sorry` with
-`PROVIDED SOLUTION` sketches drawn directly from the paper's prose. They
-will be filled by hand or via Aristotle in subsequent rounds.
+Status: theorem *statements* against `belugaTrace`. Proofs are stubs with
+`PROVIDED SOLUTION` sketches drawn directly from the paper's prose
+(queued for Aristotle rounds 3a + 3b).
 
 Theorems 3 and 4 (Round-Progression, Round-Termination) are stated purely
 in terms of the abstract Definition-1 properties from `Properties.lean`.

@@ -23,17 +23,16 @@ distinction spelled out.
 ## Three lines of defense (in order of effort)
 
 * **(A) goldenTrace satisfaction.** A concrete honest-synchronous trace
-  (`n=4, f=1`) that satisfies all four properties non-trivially. Stated here;
-  proofs deferred to Aristotle (or a future hand-proof pass) — see the
-  `sorry`-blocks for `PROVIDED SOLUTION` sketches.
+  (`n=4, f=1`) that satisfies all four properties non-trivially. Proved
+  by Aristotle (project be7c0245) — see the `PROVIDED SOLUTION`
+  sketches above each theorem.
 
 * **(B) Realizability.** For each property `P → ∃ Q`, a sibling lemma showing
   the antecedent `P` is reachable in *some* trace. If `P` is never satisfiable,
-  the property is moot. Proved here (without `sorry`).
+  the property is moot. Hand-proved.
 
 * **(C) Anti-witnesses.** Construct `emptyTrace` and show it fails at least
-  one property — catches over-permissive definitions. Proved here (without
-  `sorry`).
+  one property — catches over-permissive definitions. Hand-proved.
 -/
 
 import Mathlib.Tactic
@@ -153,13 +152,13 @@ theorem not_roundTermination_emptyTrace :
   obtain ⟨k, hk⟩ := h 0 0 honest0
   simp [opsAt, emptyTrace, emptyState, SystemState.emittedOperations] at hk
 
-/-! ## (A) goldenTrace satisfaction (deferred)
+/-! ## (A) goldenTrace satisfaction
 
 `goldenTrace` is a concrete honest-synchronous trace where, in each round `r`,
 all four validators propose, accept each others' round-`r` blocks, and store
 them. The four `golden_*` theorems below state that `goldenTrace` satisfies
-each Definition-1 property non-trivially. Proofs are deferred — see the
-`PROVIDED SOLUTION` sketches above each `sorry`. -/
+each Definition-1 property non-trivially. **Proved by Aristotle (project
+be7c0245)** — see the `PROVIDED SOLUTION` sketches above each theorem. -/
 
 /-- The block proposed by validator `i` in round `r`. Digest is unique:
 `r * 4 + i`. For `r = 0` parents is empty; for `r ≥ 1` parents are the four

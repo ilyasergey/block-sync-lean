@@ -21,8 +21,8 @@ a transition system. Two complementary characterizations:
 
 Status: structural skeleton. Honest-action conditions are stated; the
 executable `step` is a minimal honest-schedule placeholder; the
-refinement lemma carries a `PROVIDED SOLUTION` sketch and is `sorry`'d
-for a future sub-phase (or Aristotle round).
+refinement lemma carries a `PROVIDED SOLUTION` sketch and is currently
+a stub (queued for Aristotle round 3).
 -/
 import Mathlib.Tactic
 import BlockSynchroniser.Block
