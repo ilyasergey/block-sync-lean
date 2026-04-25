@@ -3,10 +3,24 @@ Copyright Ilya Sergey
 
 Licensed under the Apache License, Version 2.0.
 
-Validation lemmas for Definition 1's four properties (paper §2.1).
+# Validation lemmas for Definition 1's four properties (paper §2.1).
 
-The risk: every property has the shape `P → ∃ Q` and is satisfied vacuously by
-the empty trace. Three lines of defense, in order of effort:
+**These are NOT paper theorems.** They are *internal sanity checks on our
+formalization*: each one demonstrates that our Lean version of a property is
+satisfiable (or, dually, falsifiable) by a specific concrete trace.
+
+* The paper's Theorems 1–4 (§5) say "**Beluga the protocol** satisfies each of
+  the four properties." Those will live in `BlockSynchroniser/Beluga/Theorems.lean`
+  in Phase 5, and they are stated against `BelugaTrace`, not the hand-built
+  `goldenTrace` here.
+* Everything in *this* file is about catching definition bugs *before* we try
+  to prove the paper theorems. If `goldenTrace` cannot be shown to satisfy
+  `RoundProgression`, the formal version of `RoundProgression` is suspect.
+
+See `formalization.md` (top-level) for the project-wide picture and the
+distinction spelled out.
+
+## Three lines of defense (in order of effort)
 
 * **(A) goldenTrace satisfaction.** A concrete honest-synchronous trace
   (`n=4, f=1`) that satisfies all four properties non-trivially. Stated here;
@@ -17,9 +31,9 @@ the empty trace. Three lines of defense, in order of effort:
   the antecedent `P` is reachable in *some* trace. If `P` is never satisfiable,
   the property is moot. Proved here (without `sorry`).
 
-* **(C) Anti-witnesses.** Construct `emptyTrace` and `byzantineOnlyTrace` and
-  show they fail at least one property — catches over-permissive definitions.
-  Proved here (without `sorry`).
+* **(C) Anti-witnesses.** Construct `emptyTrace` and show it fails at least
+  one property — catches over-permissive definitions. Proved here (without
+  `sorry`).
 -/
 
 import BlockSynchroniser.System
