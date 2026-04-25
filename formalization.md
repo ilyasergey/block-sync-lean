@@ -93,6 +93,65 @@ The four `golden_*` theorems were **proved by Aristotle (project
 `be7c0245`)**. See [docs/aristotle-attributions.md](docs/aristotle-attributions.md).
 The realizability and anti-witness lemmas were hand-proved.
 
+## Notes on paper consistency
+
+Side conditions and refinements added during formalization that aren't
+literally in the paper but are *consistent* with it (i.e., paper claims
+hold under these). Reported here so a reader can spot them.
+
+### Added side conditions (don't invalidate paper claims)
+
+- **`n = 3 * f + 1`** (on `Quorum.quorumIntersection` and
+  `Mysticeti/Safety.lean :: lemma10_round_robin_pigeonhole`).
+  The paper writes `f < n/3` (equiv. `n ≥ 3f+1`) and uses `2f+1`-quorums
+  consistently — which only gives a `≥ f+1` intersection bound when
+  `n = 3f+1` exactly. For `n > 3f+1` the paper's quorum size implicitly
+  scales (or the bound weakens). We pin the lemma to `n = 3f+1`, which
+  matches the paper's worked examples and is unambiguous.
+- **`(system.validators.filter (·.2 = true)).length = 2 * f + 1`** (on
+  `lemma10_round_robin_pigeonhole`). Paper says "there are `2f+1`
+  honest validators" — we surface this as an explicit hypothesis since
+  our `system` allows `n ≥ 3f+1`; combined with `n = 3f+1` it's
+  redundant, but stated explicitly for clarity.
+- **`BelugaState.WellFormed system s`** (on
+  `Beluga/Protocol.lean :: step_refines_HonestStep`): every entry in
+  `s.validators` is registered in `system.validators`. Paper takes this
+  as obvious (a state's validators are *the* system's validators); we
+  add it explicitly because our `BelugaState` data type doesn't enforce
+  it by construction.
+- **`NoEquivocationInParents` (cross-block form)** in
+  `Beluga/Patterns.lean`: extends paper's "honest validators don't
+  equivocate" from within-one-block to *across* honest blocks (any two
+  honest-authored blocks in the state agree on parents at the same
+  `(author, round)`). Needed for the `certified_unique` proof in the
+  case where the shared honest validator authored two distinct blocks
+  each referencing one of the two certified candidates. The paper
+  states this only in passing; we surface it.
+
+### Suspected ambiguity / minor inconsistency
+
+- **Paper §4.2 increase rule vs. Figure 8 lines 24–29**. The prose says
+  `B.watermark[j] = r-1` triggers the reputation increase; the
+  pseudocode says `B'.watermark[j] == r-2`. Off-by-one due to timing
+  framing (post- vs. pre-round-creation). Resolution: we follow the
+  prose (`r-1`); both are consistent if the procedure is invoked at
+  the right moment relative to round increment. Documented inline in
+  `Beluga/Reputation.lean`.
+
+- **Paper Lemma 5 (Appendix C)** mixes "expected latency" with "or at
+  least one malicious validator is blamed" disjunction. The expected
+  side is probabilistic; the disjunctive deterministic side is what we
+  formalize as `lemma5_round_latency_or_blamed`. Not strictly an
+  inconsistency — the paper combines two statements; we split them.
+
+If anything in the formalization turns out to be a *real* inconsistency
+with the paper (i.e., a paper claim cannot be proved as stated), it
+will be flagged here and in [`docs/aristotle-attributions.md`](docs/aristotle-attributions.md)
+under "Issues found while formalizing".
+
+Currently no real inconsistencies detected — only the side conditions
+above.
+
 ## Where to look
 
 | | |
