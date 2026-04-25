@@ -18,6 +18,7 @@ Status legend: 🟡 IN_PROGRESS · ✅ COMPLETE (integrated) · ⚠️ COMPLETE_
 |---|---|---|
 | [`Quorum.lean`](../BlockSynchroniser/Quorum.lean) | `quorumIntersection` | BFT pigeonhole / inclusion-exclusion. PROVIDED SOLUTION already in docstring. |
 | [`Beluga/Patterns.lean`](../BlockSynchroniser/Beluga/Patterns.lean) | `certified_unique` | Depends on `quorumIntersection` (no hard dependency for delegation, but cleaner if `quorumIntersection` lands first). |
+| [`Mysticeti/Safety.lean`](../BlockSynchroniser/Mysticeti/Safety.lean) | `lemma10_round_robin_pigeonhole` | Pure combinatorics. Needs Mathlib `Finset.sum_le_card_nsmul` / `Finset.exists_lt_of_sum_lt`. Refined statement (added `n = 3f+1` and `honest count = 2f+1` hypotheses). Refined sketch. |
 
 ## Completed
 

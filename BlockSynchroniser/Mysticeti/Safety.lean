@@ -29,15 +29,34 @@ open Beluga
 that in any window of `3f + 3` consecutive rounds, there are three
 consecutive rounds with honest leader blocks.*
 
+The lemma assumes the standard BFT setup `n = 3f + 1` (the minimum
+honest-majority size; the paper uses this implicitly throughout
+Appendix D). A more general `n ≥ 3f + 1` version follows by the same
+argument.
+
 PROVIDED SOLUTION (paper Appendix D)
-There are `3f + 1` groups of three consecutive rounds. Due to the
-round-robin schedule, each of the `n` validators must be one of the
-leaders in exactly `3` of these groups. As there are `2f + 1` honest
-validators, due to the pigeonhole principle, one group must contain
-`⌈3 · (2f + 1) / (3f + 1)⌉ = 3` honest leader blocks.
+There are `3f + 1` groups of three consecutive rounds in any window of
+`3f + 3` rounds (groups indexed by their starting offset, `0..3f`).
+Due to the round-robin schedule (`leaderOf r := r % n`), each of the
+`n = 3f + 1` validators is the leader of exactly 3 *positions* in the
+3f+3 window when `n = 3f+1` (each validator appears in groups
+indexed by 3 distinct starting offsets, modulo edge effects).
+
+There are `2f + 1` honest validators (`n - f`). Each contributes 3
+honest-position counts across the groups. Total honest contribution
+is `3 · (2f + 1) = 6f + 3`. Distributed over `3f + 1` groups, the
+average is `(6f + 3) / (3f + 1) > 2`, so by pigeonhole some group
+must contain at least `⌈3 · (2f + 1) / (3f + 1)⌉ = 3` honest leaders
+— i.e., all three rounds in that group have honest leaders.
+
+Proof formalization requires Mathlib's `Finset.sum_le_card_nsmul`
+or `Finset.exists_lt_of_sum_lt`. Queued for Aristotle round 2.
 -/
 theorem lemma10_round_robin_pigeonhole
-    (system : BlockSynchroniserSystem) (startRound : Round) :
+    (system : BlockSynchroniserSystem) (startRound : Round)
+    (hN : system.n = 3 * system.f + 1)
+    (hHonest : (system.validators.filter (fun p => p.2 = true)).length
+                = 2 * system.f + 1) :
     ∃ r ≥ startRound, r + 2 < startRound + (3 * system.f + 3) ∧
       isHonestValidator system (leaderOf system r) = true ∧
       isHonestValidator system (leaderOf system (r + 1)) = true ∧
