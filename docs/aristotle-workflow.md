@@ -55,18 +55,96 @@ Project statuses: `QUEUED`, `IN_PROGRESS`, `COMPLETE`, `COMPLETE_WITH_ERRORS`, `
   ```
 - **Project structure required**: `lakefile.toml` or `lakefile.lean`, `lean-toolchain`, properly-importing `.lean` files. We have all three.
 
-## Our workflow for proofs
+## Operational recipe (concrete)
 
-For every theorem we want proved, the procedure is:
+Use this for every Aristotle round-trip.
 
-1. **State it precisely** with `:= by sorry` in the right file.
-2. **Verify it elaborates** (`lake build` succeeds with the `sorry` in place). Aristotle works best on skeletons that already typecheck modulo `sorry`.
-3. **Try the proof manually first** if it looks tractable (one to two screen lines). Saves a round trip.
-4. **If hard**, write a `PROVIDED SOLUTION` docstring with the paper's proof sketch (Beluga's lemmas have proofs in §5 and Appendix D — copy them in prose).
-5. **Commit current state** to a feature branch before submitting. Aristotle's response replaces files; we want a clean diff to review.
-6. **Submit**: `aristotle submit "Fill in the sorries" --project-dir . --wait`. (For broader work: "Build auxiliary lemmas that would help prove the main sorry'd goal" or one of the cookbook prompts below.)
-7. **Extract the result tarball** to a temp directory, diff against the working copy, review carefully, then apply.
-8. **Verify** the filled-in proof actually builds: `lake build`. Don't trust the `COMPLETE` status alone.
+### 1. Prepare
+
+- Theorem stated with `:= by sorry` in the right file. The file has a docstring `PROVIDED SOLUTION` block above it (paper's proof sketch in prose if available).
+- `lake build` succeeds with the `sorry` in place. Aristotle works best on skeletons that already typecheck modulo `sorry`.
+- Working tree committed on a feature branch (e.g. `aristotle/<theorem-name>`). The tarball reflects the current state, so commits before submission keep the diff reviewable.
+
+### 2. Submit
+
+```bash
+TS=$(date +%Y%m%d-%H%M)
+aristotle submit "Fill in the sorries" \
+  --project-dir . \
+  --wait \
+  --destination /tmp/aristotle-$TS.tar.gz
+```
+
+`--wait` blocks with a live progress display. Without `--wait` it returns a project ID; check later with `aristotle result <id> --wait --destination ...`.
+
+For non-`fill-sorries` work see the **Cookbook prompts** section below.
+
+### 3. Extract to a sandbox (never overwrite the working tree directly)
+
+```bash
+SANDBOX=/tmp/aristotle-out-$TS
+rm -rf "$SANDBOX" && mkdir -p "$SANDBOX"
+tar -xzf /tmp/aristotle-$TS.tar.gz -C "$SANDBOX"
+```
+
+### 4. Diff to find changed files
+
+```bash
+diff -rq BlockSynchroniser "$SANDBOX/BlockSynchroniser"
+```
+
+Aristotle should only change files containing the `sorry`s. Anything else is a red flag.
+
+### 5. Read the actual hunks
+
+```bash
+diff -u BlockSynchroniser/<file>.lean "$SANDBOX/BlockSynchroniser/<file>.lean" > /tmp/aristotle-$TS.diff
+less /tmp/aristotle-$TS.diff
+```
+
+Three checks per filled-in proof:
+
+- Does it match the `PROVIDED SOLUTION` sketch (or a reasonable proof of the same shape)?
+- Tactics readable, or an opaque automation chain?
+- Any residual `sorry`/`admit` left behind?
+
+### 6. Apply surgically
+
+Two options:
+
+```bash
+# Option A — wholesale file copy (when the entire file diff is acceptable)
+cp "$SANDBOX/BlockSynchroniser/<file>.lean" BlockSynchroniser/<file>.lean
+
+# Option B — patch (cherry-pick hunks)
+git apply /tmp/aristotle-$TS.diff           # all hunks
+git apply --reject /tmp/aristotle-$TS.diff  # keep working state on conflict
+```
+
+### 7. Verify
+
+```bash
+lake build
+```
+
+`COMPLETE` from Aristotle is a *claim*, not proof. `lake build` is the ground truth.
+
+If a `sorry` remains: Aristotle gave up partway. Use the `OUT_OF_BUDGET` resume recipe below.
+
+### 8. Annotate and commit
+
+Before committing, add a one-line marker above each filled proof so `git blame`
+and grep both find provenance:
+
+```
+-- proof filled by Aristotle (project <id>)
+```
+
+Commit message form:
+
+```
+phase X.Y: <theorem-names> proofs (filled by Aristotle, project <id>)
+```
 
 ## Cookbook prompts (from docs)
 
@@ -86,34 +164,84 @@ mkdir partial-output && tar -xzf partial.tar.gz -C partial-output
 aristotle submit "Fill in the sorries" --project-dir ./partial-output --wait
 ```
 
-## Division of labor — what to delegate vs. do ourselves
+## Delegation policy (token-aware, concurrency-aware)
 
-**Do ourselves (don't delegate):**
-- All definitions, structures, typeclasses (Aristotle won't change them anyway).
-- The four properties of Definition 1 — phrasing matters, must match paper exactly.
-- Validation/non-vacuity scaffolding (`goldenTrace`, realizability lemmas).
-- Trivial proofs (`rfl`, `simp`, `decide`, one-line `omega`).
-- Quorum-intersection lemma (it's the load-bearing tool — better understood explicitly).
+Default to delegation. Hand-proofs cost my context tokens; Aristotle costs API
+budget. Tokens are scarcer than budget right now, so the bias is **delegate
+unless the proof is one or two lines.**
 
-**Delegate to Aristotle:**
-- Lemma 10 (pigeonhole on round-robin schedule) — pure combinatorics.
-- Lemmas 13–15 (Mysticeti-Beluga safety building blocks) — quorum-intersection chains.
-- Lemma 16 + Theorem 7 (consensus safety) — backward induction.
-- Block-availability / causal-availability theorems (T1, T2) — once the protocol relation is in place.
-- Any auxiliary list/finite-set lemmas we don't want to write.
+### Attempt budget per proof
 
-**Hybrid (maybe try both):**
-- Lemma 1 (3Δ round entry after GST) — try by hand, fall back to Aristotle with a `PROVIDED SOLUTION` from §5.
+A *small* hand-attempt limit, not exhaustive search:
+
+| Proof shape | Hand budget | Then |
+|---|---|---|
+| One-liner: `rfl`, `decide`, `simp`, `omega` | always try first | move on |
+| Short tactical (≤ ~10 lines, no induction) | 1 attempt, ≤ 5 min | delegate |
+| Medium (induction or list arithmetic) | sketch only; if not green in 5 min | delegate |
+| Anything bigger | delegate immediately with a `PROVIDED SOLUTION` |
+
+If I find myself iterating on tactic minutiae or grepping Mathlib for the
+right `simp` lemma, that's the cue to delegate — I am the wrong tool for
+that work.
+
+### Concurrency rule (avoid file conflicts)
+
+When I delegate, I keep working — but **not on files Aristotle is touching.**
+Concretely:
+
+- Before submitting, decide which files Aristotle will modify (the ones with the
+  `sorry`s I'm asking it to fill). These files are *frozen* on my side until
+  the result is integrated.
+- I work on a *different* set of files in parallel. Common patterns:
+  - Aristotle proves `golden_*` in `Validation.lean`; I write `Beluga/Patterns.lean` simultaneously.
+  - Aristotle fills auxiliary list lemmas in a helper file; I sketch the next-phase definitions.
+- When the result returns, I integrate it (steps 3–8 of the operational recipe), then unfreeze that file.
+- If I have to touch a frozen file urgently (definitional bug discovered),
+  I cancel the project (`aristotle cancel <id>`) rather than risk a merge mess.
+
+### Batch when possible
+
+Submitting one project that fills five `sorry`s costs roughly the same
+round-trip as submitting one for one `sorry`. If multiple sorries cluster
+in non-frozen files and don't depend on each other, batch them into a
+single submission.
+
+### What I still do myself
+
+- All definitions, structures, typeclasses (Aristotle won't change them anyway — `def := by sorry` is opaque to it).
+- The four properties of Definition 1 — phrasing must match paper exactly; phrasing changes invalidate downstream proofs.
+- Validation scaffolding (`goldenTrace`, `realizable_*`, anti-witness traces).
+- The quorum-intersection lemma — load-bearing for everything, worth understanding explicitly.
+- One-liners (`rfl`, `simp`, `decide`, `omega`).
+- Final review of every Aristotle-filled proof and the diff.
+
+### What I delegate by default
+
+- `golden_*` satisfaction theorems (computational; tedious).
+- Lemma 10 (round-robin pigeonhole).
+- Lemmas 13–15 (quorum-intersection chains).
+- Lemma 16 + Theorem 7 (backward induction over rounds).
+- Theorems 1, 2 (block / causal availability) — once the protocol relation is in place.
+- Auxiliary list/Finset lemmas I don't want to write.
+- Anything where the paper has a multi-step prose proof I can paste verbatim into a `PROVIDED SOLUTION`.
+
+### Hybrid (attempt → delegate fallback)
+
+- Lemma 1 (3Δ round entry after GST) — try a sketch (≤ 30 min), fall back with `PROVIDED SOLUTION` from §5.
 - Lemma 2 — same.
-- Theorems 3, 4 (Round-Progression, Round-Termination) — start with Aristotle on a sketch, refine.
+- Theorems 3, 4 (Round-Progression, Round-Termination) — try by hand briefly, then delegate with the paper's argument as the sketch.
 
-## Engagement rules
+## Engagement rules (tight)
 
-- **One task per submission.** Don't bundle "fill all sorries" with "refactor everything." The cookbook prompts are mutually exclusive.
-- **Branch hygiene.** Always submit from a clean branch with all work committed. Tarball reflects the current state.
-- **Read every diff.** `COMPLETE` means Aristotle's verifier accepted; it doesn't mean the proof matches our intent or that it's the proof we want maintained long-term.
+- **One task per submission.** Don't bundle "fill all sorries" with "refactor everything."
+- **Branch hygiene.** Submit from a clean, committed feature branch (`aristotle/<scope>`).
+- **Frozen files.** Never edit a file currently under an in-flight Aristotle submission. Cancel the project if you must.
+- **Read every diff.** `COMPLETE` is a claim; the diff is the proof.
 - **Re-build after applying.** `lake build` is the ground truth.
-- **Cost awareness.** Each submission costs budget. Don't poll cheaply — write a good prompt, wait, review.
+- **Annotate provenance.** Every Aristotle-filled proof carries `-- proof filled by Aristotle (project <id>)` and the commit message names the project ID.
+- **Acknowledge in chat.** When a proof returns from Aristotle, surface it: which theorem, project ID, hand vs. delegated, anything I'd flag in the diff.
+- **Cost awareness.** Each submission costs API budget. Write a good prompt, wait, review — don't churn submissions on the same theorem.
 
 ## Reference
 
