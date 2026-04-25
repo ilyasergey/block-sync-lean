@@ -105,82 +105,46 @@ proofs were filled by Aristotle vs hand) lives in
 
 ## Notes on paper consistency
 
-Side conditions and refinements added during formalization that aren't
-literally in the paper but are *consistent* with it (i.e., paper claims
-hold under these). Reported here so a reader can spot them.
+> **Paper-side findings live in [`docs/mechanization-findings.md`](docs/mechanization-findings.md)**
+> (F-1 through F-8: scheduler-fairness for L1/L2, T7's safety/liveness
+> boundary, surfaced protocol invariants, quorum-size pinning, etc.).
+> That file uses paper terminology only and is the working list of
+> edits we plan to propose to the paper authors.
+>
+> The notes below cover only **Lean-side modeling decisions** — items
+> that don't surface a paper concern but explain how our formalization
+> structures things differently from the paper's prose.
 
-### Omitted paper structure (out of scope, no theorem affected)
+### Lean-side modeling notes
 
-- **`signature` field on `Block`** (paper §2.1). The paper's block
-  carries six fields `(r, d, author, parents, payload, signature)`;
+- **`signature` field on `Block` omitted** (paper §2.1). The paper's
+  block carries six fields `(r, d, author, parents, payload, signature)`;
   our [`Block.lean :: Block`](BlockSynchroniser/Block.lean#L22) carries
-  the first five. Signature semantics are not invoked by any theorem
-  in the scope we formalize — the abstract block synchronizer (and
-  every paper theorem we target) treats Byzantine behavior
-  adversarially via the honest/Byzantine partition rather than via
-  signature-based attribution. Adding `signature` would only add
-  data fields and a `verify` predicate that no proof references.
+  the first five. Signature semantics are not invoked by any theorem in
+  the scope we formalize — the abstract block synchronizer (and every
+  paper theorem we target) treats Byzantine behavior adversarially via
+  the honest/Byzantine partition rather than via signature-based
+  attribution. Adding `signature` would only add data fields and a
+  `verify` predicate that no proof references.
 
-### Added side conditions (don't invalidate paper claims)
-
-- **`n = 3 * f + 1`** (on `Quorum.quorumIntersection` and
-  `Mysticeti/Safety.lean :: lemma10_round_robin_pigeonhole`).
-  The paper writes `f < n/3` (equiv. `n ≥ 3f+1`) and uses `2f+1`-quorums
-  consistently — which only gives a `≥ f+1` intersection bound when
-  `n = 3f+1` exactly. For `n > 3f+1` the paper's quorum size implicitly
-  scales (or the bound weakens). We pin the lemma to `n = 3f+1`, which
-  matches the paper's worked examples and is unambiguous.
-- **`(system.validators.filter (·.2 = true)).length = 2 * f + 1`** (on
-  `lemma10_round_robin_pigeonhole`). Paper says "there are `2f+1`
-  honest validators" — we surface this as an explicit hypothesis since
-  our `system` allows `n ≥ 3f+1`; combined with `n = 3f+1` it's
-  redundant, but stated explicitly for clarity.
 - **`BelugaState.WellFormed system s`** (on
-  `Beluga/Protocol.lean :: step_refines_HonestStep`): every entry in
-  `s.validators` is registered in `system.validators`. Paper takes this
-  as obvious (a state's validators are *the* system's validators); we
-  add it explicitly because our `BelugaState` data type doesn't enforce
-  it by construction.
-- **`NoEquivocationInParents` (cross-block form)** in
-  `Beluga/Patterns.lean`: extends paper's "honest validators don't
-  equivocate" from within-one-block to *across* honest blocks (any two
-  honest-authored blocks in the state agree on parents at the same
-  `(author, round)`). Needed for the `certified_unique` proof in the
-  case where the shared honest validator authored two distinct blocks
-  each referencing one of the two certified candidates. The paper
-  states this only in passing; we surface it.
-- **`LatencyTriangle system time`** (on
-  `Beluga/PerformanceLemmas.lean :: lemma4_round_latency_delta` and
-  `lemma5_round_latency_or_blamed`). This is paper Assumption 1
-  (latency triangle) adapted to our trace model: post-GST, if all
-  honest validators are synchronized at round `r`, they all reach
-  round `r+1` within `Δ`. The paper invokes Assumption 1 implicitly
-  in the proofs of L4 and L5; we make it an explicit hypothesis so
-  the dependency is transparent.
+  `Beluga/Protocol.lean :: step_refines_HonestStep`). Every entry in
+  `s.validators` is registered in `system.validators`. The paper conflates
+  state's validators with the system's validators by construction; our
+  `BelugaState` is a separate data type that doesn't enforce this, so we
+  surface it as an explicit hypothesis. Pure modeling artifact — no paper
+  concern.
 
-### Suspected ambiguity / minor inconsistency
+- **Lemma 5 split (Appendix C).** The paper's Lemma 5 mixes "expected
+  latency" with the deterministic "or at least one malicious validator
+  is blamed" disjunction. The expected side is probabilistic and out of
+  scope; we formalize only the deterministic disjunct as
+  `lemma5_round_latency_or_blamed`. This is a Lean-side decomposition
+  decision, not a paper finding.
 
-- **Paper §4.2 increase rule vs. Figure 8 lines 24–29**. The prose says
-  `B.watermark[j] = r-1` triggers the reputation increase; the
-  pseudocode says `B'.watermark[j] == r-2`. Off-by-one due to timing
-  framing (post- vs. pre-round-creation). Resolution: we follow the
-  prose (`r-1`); both are consistent if the procedure is invoked at
-  the right moment relative to round increment. Documented inline in
-  `Beluga/Reputation.lean`.
-
-- **Paper Lemma 5 (Appendix C)** mixes "expected latency" with "or at
-  least one malicious validator is blamed" disjunction. The expected
-  side is probabilistic; the disjunctive deterministic side is what we
-  formalize as `lemma5_round_latency_or_blamed`. Not strictly an
-  inconsistency — the paper combines two statements; we split them.
-
-If anything in the formalization turns out to be a *real* inconsistency
-with the paper (i.e., a paper claim cannot be proved as stated), it
-will be flagged here and in [`docs/aristotle-attributions.md`](docs/aristotle-attributions.md)
-under "Issues found while formalizing".
-
-Currently no real inconsistencies detected — only the side conditions
-above.
+Real paper-side concerns (missing assumptions, scope ambiguities,
+implicit invariants) are recorded in
+[`docs/mechanization-findings.md`](docs/mechanization-findings.md).
 
 ## Where to look
 
