@@ -18,8 +18,23 @@ We distinguish three categories:
   obvious that the proof of a stated theorem actually relies on; we
   recommend stating it as a lemma.
 
-Each finding has a stable identifier (`F-1`, `F-2`, …) so we can
-refer to them across documents.
+Findings are listed in **decreasing order of importance**.
+
+## Summary
+
+| ID | Severity | Category | Affected | Headline | Recommended action |
+|---|---|---|---|---|---|
+| **F-1** | High | Missing assumption | §5 L1, L2 (and downstream §5 T1–T4) | Paper's `3Δ` round-synchronisation bound does not follow from the stated assumptions; prose proofs silently use a *scheduler-fairness* step. | Add **Assumption 2 (scheduler fairness)** stating honest validators act within Δ of becoming enabled. |
+| **F-7** | High | Missing assumption (safety/liveness boundary) | §D.3 T7 | T7's prose proof equates "consistent views" (L16) with "identical views" (needs liveness) and treats `order` as separable from `view` (it isn't). Two non-paper ingredients hidden in one short paragraph. | Either weaken T7's conclusion to prefix-consistency on the *intersection* of decided positions, or import decision-completeness from §D.2 explicitly. |
+| **F-5** | Medium | Surfaced invariant | §D.3 L13, L16, T7 | Each proof relies on a protocol fact the paper takes as obvious — cert-base parents, DAG-parent connectivity, view-traceback to leader blocks, decision completeness. None are stated as lemmas. | Promote each to a named lemma in §D.3. |
+| **F-2** | Medium | Scope-pinning | §2 (model), used throughout | The `\|A∩B\| ≥ f+1` bound for two `(2f+1)`-quorums only holds at `n = 3f+1` exactly; the paper writes `f < n/3` but uses fixed `2f+1` quorums uniformly. | Pin `n = 3f+1` explicitly, or scale quorum size to `n − f`. |
+| **F-3** | Medium | Surfaced invariant | §4.4 (uniqueness consequence) | Paper's "honest validators don't equivocate" is stated within-block; the uniqueness proof needs the *cross-block* form (any two honest blocks agree on parents at the same `(author, round)`). | State the cross-block form alongside the within-block form. |
+| **F-4** | Low | Surfaced invariant (naming) | §C.2 L4, L5 | Proofs of L4/L5 invoke Assumption 1 (latency triangle) implicitly to derive per-round Δ advancement. | Cite Assumption 1 explicitly, or state the round-advancement corollary as a named consequence. |
+| **F-8** | Low | Notational hygiene | §D.1.2 (round-robin), §D.3 L10 | `r mod n` round-robin presumes validator IDs are exactly `{0, …, n−1}`; the paper takes this as obvious. | State that the validator set has IDs `{0, …, n−1}`, or reformulate the schedule via a list index. |
+| **F-6** | Low | Editorial | §4.2 prose vs Figure 8 | Reputation-update trigger is `r−1` in the prose and `r−2` in the pseudocode (off-by-one due to round-increment timing). | Align prose and pseudocode. |
+
+Each entry has a stable identifier (`F-N`) so we can refer to them
+across documents.
 
 ---
 
@@ -77,154 +92,6 @@ recovers the tight `3Δ` bound.
 [paper-feedback-l1-l2-fairness.md](paper-feedback-l1-l2-fairness.md)
 for full discussion, formal counterexample trace, and discussion of
 where the prose silently relies on the assumption.
-
----
-
-## F-2. Scope-pinning: quorum-intersection bound at `n = 3f + 1`
-
-**Affected statement.** Implicit in §2 (BFT model: `f < n/3`) and
-used throughout: any two `(2f+1)`-quorums intersect in at least
-`f + 1` validators (and hence at least one honest validator if
-`|A ∩ B| ≥ f + 1`).
-
-**Finding.** The intersection bound `|A ∩ B| ≥ f + 1` follows from
-inclusion-exclusion only when `n = 3f + 1` exactly:
-
-`|A ∩ B| ≥ |A| + |B| − n = (2f+1) + (2f+1) − (3f+1) = f + 1.`
-
-For `n > 3f + 1` (still satisfying `f < n/3`) the bound becomes
-`|A ∩ B| ≥ 4f + 2 − n`, which can be smaller than `f + 1`. The
-paper writes `f < n/3` but uses `2f + 1` quorums uniformly,
-implicitly fixing the quorum size rather than scaling it with `n`.
-
-**Suggested fix.** Either (a) pin `n = 3f + 1` explicitly in the
-model (matches the paper's worked examples and is unambiguous), or
-(b) replace `2f + 1` with `n − f` in the protocol description so
-the intersection bound holds for all `n ≥ 3f + 1`.
-
-We chose option (a) for the formalization since it matches the
-paper's intent without changing protocol numbers.
-
----
-
-## F-3. Surfaced invariant: cross-block honest non-equivocation
-
-**Affected statement.** Paper §4.4, the uniqueness consequence
-("for any validator and round, at most one block can become
-certified").
-
-**Finding.** The proof requires that *any two honest-authored
-blocks in the state agree on parents at the same `(author, round)`*
-— i.e., honest validators don't equivocate *across blocks*. The
-paper states honest non-equivocation only within a single block
-("an honest validator's block has at most one parent per author"
-or similar in-block phrasings). The cross-block form is what
-discharges the case where the shared honest validator authored
-two distinct blocks each referencing one of two certified
-candidates.
-
-**Suggested fix.** Strengthen the protocol assumption to:
-
-> An honest validator never proposes two blocks that disagree on
-> the parent set at any `(author, round)` it includes.
-
-The paper appears to assume this implicitly when arguing
-"honest validators behave consistently" but does not state it as
-a separate condition.
-
----
-
-## F-4. Surfaced invariant: implicit use of Assumption 1 in L4 & L5
-
-**Affected statements.** Paper Appendix C.2, Lemma 4 (round
-latency `Δ` when honest reputations dominate) and Lemma 5
-(deterministic part — round latency `2Δ` or some malicious
-validator is blamed).
-
-**Finding.** The proofs of L4 and L5 invoke Assumption 1 (latency
-triangle) implicitly, deriving the per-round `Δ` advancement bound
-from "post-GST, the slowest honest validator's round advances
-within `Δ`". This is the conclusion of Assumption 1 specialised to
-round advancement, but the proof prose treats it as immediate.
-
-**Suggested fix.** Cite Assumption 1 explicitly in the proofs of
-L4 and L5, or state a derived corollary
-
-> *Post-GST, if all honest validators are at round `r`, they all
-> reach round `r + 1` within `Δ`,*
-
-as a named consequence of Assumption 1 used by L4, L5.
-
-This is a minor expositional issue; the math is correct, the
-invocation just isn't named.
-
----
-
-## F-5. Surfaced invariants: protocol facts assumed in safety proofs
-
-**Affected statements.** Paper §D.3 (Mysticeti-Beluga safety),
-Lemma 13 (certificate persistence), Lemma 16 (consistent
-leader-status decision), Theorem 7 (consensus safety).
-
-**Finding.** Each proof relies on a protocol invariant the paper
-treats as obvious but doesn't formally state. Mechanizing the
-proofs forced these out:
-
-1. **Cert-base (used in L13).** *In round `B.r + 2`, every block
-   in the DAG references at least one certificate for `B` as a
-   parent.* This is the conclusion of the quorum-intersection
-   argument applied at the certificate round, but the paper's L13
-   proof skips directly from "`2f+1` certificates exist" to
-   "every later block reaches one" without naming this step.
-2. **DAG-parent connectivity (used in L13).** *Every block in a
-   round later than `B.r + 2` has at least one parent in the
-   state from the immediately preceding round.* Used as the
-   inductive step. Implied by the protocol's parent-selection
-   rule but not stated as a lemma.
-3. **View-traceback (used in L16).** *Every non-`Undecided`
-   honest view on a digest `d` traces back to a leader block
-   `B` with `B.d = d` whose `directDecide` is non-`Undecided`.*
-   Captures the protocol invariant that all consensus decisions
-   originate from direct DAG-pattern observations on leader
-   blocks.
-4. **Decision completeness (used in T7).** *If one honest
-   validator's view on a digest is `Undecided`, then all honest
-   validators' views on that digest are `Undecided` (and vice
-   versa).* This is the liveness-derived property that honest
-   validators eventually all decide the same way.
-
-**Suggested fix.** Each is candidate material for a named lemma in
-§D.3. Items (1) and (2) follow from the DAG protocol structure;
-items (3) and (4) follow from §D.1's decision rules and the
-liveness theorems respectively.
-
----
-
-## F-8. Round-robin schedule presumes contiguous validator IDs
-
-**Affected statement.** Paper §D.1.2, round-robin leader schedule
-(`leader_of(r) := validators[r mod n]`), and Lemma 10 (round-robin
-pigeonhole).
-
-**Finding.** The round-robin formula `r mod n` produces a numeric
-identifier in `{0, …, n−1}`. For "the leader of round `r`" to be a
-*registered validator*, the validator set must be indexed by exactly
-that range — i.e., the validators carry IDs `0, 1, …, n−1`. The
-paper takes this as obvious; the formalization made it visible
-because we model `system.validators : List (ValidatorId × Bool)`
-allowing arbitrary ID assignment, which means `r mod n` could
-otherwise produce an ID that nobody has, in which case
-`isHonestValidator(r mod n)` returns `false` for every leader and
-the pigeonhole conclusion fails vacuously.
-
-**Suggested fix.** State explicitly that `system.validators`'s ID
-column is `{0, …, n−1}` (perhaps in §2 alongside `n` and `f`), or
-formulate the round-robin schedule directly in terms of indices into
-the validator list rather than via `r mod n` of an externally
-supplied ID. Either is fine; just pin one.
-
-This is a trivial finding compared to F-1 / F-7 — purely a
-notational hygiene issue. Recording it for completeness.
 
 ---
 
@@ -328,6 +195,155 @@ We recommend one of:
 
 Most BFT papers adopt one of these stances implicitly. We suggest
 being explicit about which.
+
+---
+
+## F-5. Surfaced invariants: protocol facts assumed in safety proofs
+
+**Affected statements.** Paper §D.3 (Mysticeti-Beluga safety),
+Lemma 13 (certificate persistence), Lemma 16 (consistent
+leader-status decision), Theorem 7 (consensus safety).
+
+**Finding.** Each proof relies on a protocol invariant the paper
+treats as obvious but doesn't formally state. Mechanizing the
+proofs forced these out:
+
+1. **Cert-base (used in L13).** *In round `B.r + 2`, every block
+   in the DAG references at least one certificate for `B` as a
+   parent.* This is the conclusion of the quorum-intersection
+   argument applied at the certificate round, but the paper's L13
+   proof skips directly from "`2f+1` certificates exist" to
+   "every later block reaches one" without naming this step.
+2. **DAG-parent connectivity (used in L13).** *Every block in a
+   round later than `B.r + 2` has at least one parent in the
+   state from the immediately preceding round.* Used as the
+   inductive step. Implied by the protocol's parent-selection
+   rule but not stated as a lemma.
+3. **View-traceback (used in L16).** *Every non-`Undecided`
+   honest view on a digest `d` traces back to a leader block
+   `B` with `B.d = d` whose `directDecide` is non-`Undecided`.*
+   Captures the protocol invariant that all consensus decisions
+   originate from direct DAG-pattern observations on leader
+   blocks.
+4. **Decision completeness (used in T7).** *If one honest
+   validator's view on a digest is `Undecided`, then all honest
+   validators' views on that digest are `Undecided` (and vice
+   versa).* This is the liveness-derived property that honest
+   validators eventually all decide the same way. (See F-7a — we
+   flag this separately as a safety/liveness boundary issue.)
+
+**Suggested fix.** Each is candidate material for a named lemma in
+§D.3. Items (1) and (2) follow from the DAG protocol structure;
+items (3) and (4) follow from §D.1's decision rules and the
+liveness theorems respectively.
+
+---
+
+## F-2. Scope-pinning: quorum-intersection bound at `n = 3f + 1`
+
+**Affected statement.** Implicit in §2 (BFT model: `f < n/3`) and
+used throughout: any two `(2f+1)`-quorums intersect in at least
+`f + 1` validators (and hence at least one honest validator if
+`|A ∩ B| ≥ f + 1`).
+
+**Finding.** The intersection bound `|A ∩ B| ≥ f + 1` follows from
+inclusion-exclusion only when `n = 3f + 1` exactly:
+
+`|A ∩ B| ≥ |A| + |B| − n = (2f+1) + (2f+1) − (3f+1) = f + 1.`
+
+For `n > 3f + 1` (still satisfying `f < n/3`) the bound becomes
+`|A ∩ B| ≥ 4f + 2 − n`, which can be smaller than `f + 1`. The
+paper writes `f < n/3` but uses `2f + 1` quorums uniformly,
+implicitly fixing the quorum size rather than scaling it with `n`.
+
+**Suggested fix.** Either (a) pin `n = 3f + 1` explicitly in the
+model (matches the paper's worked examples and is unambiguous), or
+(b) replace `2f + 1` with `n − f` in the protocol description so
+the intersection bound holds for all `n ≥ 3f + 1`.
+
+We chose option (a) for the formalization since it matches the
+paper's intent without changing protocol numbers.
+
+---
+
+## F-3. Surfaced invariant: cross-block honest non-equivocation
+
+**Affected statement.** Paper §4.4, the uniqueness consequence
+("for any validator and round, at most one block can become
+certified").
+
+**Finding.** The proof requires that *any two honest-authored
+blocks in the state agree on parents at the same `(author, round)`*
+— i.e., honest validators don't equivocate *across blocks*. The
+paper states honest non-equivocation only within a single block
+("an honest validator's block has at most one parent per author"
+or similar in-block phrasings). The cross-block form is what
+discharges the case where the shared honest validator authored
+two distinct blocks each referencing one of two certified
+candidates.
+
+**Suggested fix.** Strengthen the protocol assumption to:
+
+> An honest validator never proposes two blocks that disagree on
+> the parent set at any `(author, round)` it includes.
+
+The paper appears to assume this implicitly when arguing
+"honest validators behave consistently" but does not state it as
+a separate condition.
+
+---
+
+## F-4. Surfaced invariant: implicit use of Assumption 1 in L4 & L5
+
+**Affected statements.** Paper Appendix C.2, Lemma 4 (round
+latency `Δ` when honest reputations dominate) and Lemma 5
+(deterministic part — round latency `2Δ` or some malicious
+validator is blamed).
+
+**Finding.** The proofs of L4 and L5 invoke Assumption 1 (latency
+triangle) implicitly, deriving the per-round `Δ` advancement bound
+from "post-GST, the slowest honest validator's round advances
+within `Δ`". This is the conclusion of Assumption 1 specialised to
+round advancement, but the proof prose treats it as immediate.
+
+**Suggested fix.** Cite Assumption 1 explicitly in the proofs of
+L4 and L5, or state a derived corollary
+
+> *Post-GST, if all honest validators are at round `r`, they all
+> reach round `r + 1` within `Δ`,*
+
+as a named consequence of Assumption 1 used by L4, L5.
+
+This is a minor expositional issue; the math is correct, the
+invocation just isn't named.
+
+---
+
+## F-8. Round-robin schedule presumes contiguous validator IDs
+
+**Affected statement.** Paper §D.1.2, round-robin leader schedule
+(`leader_of(r) := validators[r mod n]`), and Lemma 10 (round-robin
+pigeonhole).
+
+**Finding.** The round-robin formula `r mod n` produces a numeric
+identifier in `{0, …, n−1}`. For "the leader of round `r`" to be a
+*registered validator*, the validator set must be indexed by exactly
+that range — i.e., the validators carry IDs `0, 1, …, n−1`. The
+paper takes this as obvious; the formalization made it visible
+because we model `system.validators : List (ValidatorId × Bool)`
+allowing arbitrary ID assignment, which means `r mod n` could
+otherwise produce an ID that nobody has, in which case
+`isHonestValidator(r mod n)` returns `false` for every leader and
+the pigeonhole conclusion fails vacuously.
+
+**Suggested fix.** State explicitly that `system.validators`'s ID
+column is `{0, …, n−1}` (perhaps in §2 alongside `n` and `f`), or
+formulate the round-robin schedule directly in terms of indices into
+the validator list rather than via `r mod n` of an externally
+supplied ID. Either is fine; just pin one.
+
+This is a trivial finding compared to F-1 / F-7 — purely a
+notational hygiene issue. Recording it for completeness.
 
 ---
 
