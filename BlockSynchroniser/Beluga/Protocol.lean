@@ -388,15 +388,157 @@ Unfold `step`. Case-split on the result of `findSome?`:
     `not_honest_imp_byzantine` together with `h_wf vid bv hmem`
     (which gives `vid` is registered in `system.validators`).
 -/
+-- proof: aristotle (project a8889396) — round 4
+-- Helper: the "no-op" case always satisfies HonestStep via ByzantineStep with []
+private lemma honestStep_of_no_op
+    (system : BlockSynchroniserSystem) (s : BelugaState) :
+    HonestStep system s s := by
+  right; right; right; right
+  exact ⟨[], by simp, fun _ h => by simp at h⟩
+
+-- Helper: doAdvance emits no operations, so ByzantineStep with [] works
+private lemma honestStep_of_advance
+    (system : BlockSynchroniserSystem) (s : BelugaState)
+    (vid : ValidatorId) :
+    HonestStep system s (doAdvance s vid) := by
+  right; right; right; right
+  refine ⟨[], ?_, fun _ h => by simp at h⟩
+  simp [doAdvance, updateValidator]
+
+private lemma honestStep_of_propose
+    (system : BlockSynchroniserSystem) (s : BelugaState)
+    (vid : ValidatorId) (bv : BelugaValidator)
+    (h_wf : BelugaState.WellFormed system s)
+    (hmem : (vid, bv) ∈ s.validators) :
+    HonestStep system s (doPropose system s vid bv.currentRound) := by
+  by_cases h : isHonestValidator system vid <;> simp_all +decide [HonestStep]
+  · exact Or.inl ⟨vid, _, _, h, ⟨_, hmem, rfl, rfl⟩, rfl, rfl, rfl, rfl⟩
+  · refine Or.inr <| Or.inr <| Or.inr <| Or.inr ?_
+    use [.block_propose vid
+        ({ r := bv.currentRound, author := vid,
+            d := digest system bv.currentRound vid,
+            parents := if bv.currentRound = 0 then []
+                       else (s.blocks.filter
+                            (fun B => B.r == bv.currentRound - 1)).map (·.d),
+            payload := [] }) bv.currentRound]
+    exact ⟨rfl, fun op hop => by
+      rw [List.mem_singleton.mp hop]
+      exact not_honest_imp_byzantine system vid h (h_wf _ hmem)⟩
+
+private lemma honestStep_of_accept
+    (system : BlockSynchroniserSystem) (s : BelugaState)
+    (vid : ValidatorId) (bv : BelugaValidator)
+    (h_wf : BelugaState.WellFormed system s)
+    (hmem : (vid, bv) ∈ s.validators)
+    (B : Block)
+    (hfind : s.blocks.find? (fun B' =>
+        !hasAcceptedDigest s vid B'.d &&
+        B'.parents.all (fun pd => hasAcceptedDigest s vid pd)) = some B) :
+    HonestStep system s (doAccept s vid B) := by
+  by_cases h : isHonestValidator system vid = true
+  · refine Or.inr <| Or.inl ?_
+    refine ⟨vid, B.d, ⟨h, ?_, ?_, ?_⟩⟩ <;>
+      simp_all +decide [List.find?_eq_some_iff_append]
+    · use B
+      exact ⟨by obtain ⟨as, ⟨x, hx⟩, _⟩ := hfind.2; aesop, rfl,
+             fun x hx => by
+               have := hfind.1.2 x hx
+               exact hasAcceptedDigest_true_imp s vid x this⟩
+    · exact hasAcceptedDigest_false_imp s vid B.d hfind.1.1
+    · unfold doAccept; aesop
+  · refine Or.inr (Or.inr (Or.inr (Or.inr ?_)))
+    use [.block_accept vid B.d]
+    simp +decide [doAccept, operationAuthor]
+    exact ⟨rfl, not_honest_imp_byzantine system vid (by simpa using h) (h_wf _ hmem)⟩
+
+/-
+Causal-history auxiliary (trace-level invariant).
+
+When the accept `find?` returns `none` (no unaccepted block has all
+parents accepted) and `B` itself is accepted, every block reachable
+from `B` is also accepted. This is a trace-level invariant — at
+each accept step `parentsAccepted` is checked, so ancestors are
+accepted bottom-up. A rigorous proof requires reasoning about the
+accumulation of accepted digests across the trace; deferred to a
+dedicated trace-invariant module.
+-/
+private lemma causal_history_of_find_none
+    (s : BelugaState) (vid : ValidatorId) (B : Block)
+    (hacc : HasAccepted s vid B.d)
+    (hfindAccNone : s.blocks.find? (fun B' =>
+        !hasAcceptedDigest s vid B'.d &&
+        B'.parents.all (fun pd => hasAcceptedDigest s vid pd)) = none) :
+    ∀ B' : Block, Reaches s B B' → HasAccepted s vid B'.d := by
+  sorry
+
+private lemma honestStep_of_store
+    (system : BlockSynchroniserSystem) (s : BelugaState)
+    (vid : ValidatorId) (bv : BelugaValidator)
+    (h_wf : BelugaState.WellFormed system s)
+    (hmem : (vid, bv) ∈ s.validators)
+    (B : Block)
+    (hfindAccNone : s.blocks.find? (fun B' =>
+        !hasAcceptedDigest s vid B'.d &&
+        B'.parents.all (fun pd => hasAcceptedDigest s vid pd)) = none)
+    (hfindStore : s.blocks.find? (fun B' =>
+        hasAcceptedDigest s vid B'.d && !hasStoredDigest s vid B'.d) = some B) :
+    HonestStep system s (doStore s vid B) := by
+  by_cases h : isHonestValidator system vid = true
+  · refine Or.inr <| Or.inr <| Or.inl ?_
+    refine ⟨vid, B, h, ?_, ?_, ?_, ?_⟩ <;> simp_all +decide [doStore]
+    · grind +suggestions
+    · have := List.find?_some hfindStore
+      exact causal_history_of_find_none s vid B
+        (hasAcceptedDigest_true_imp s vid B.d (by aesop)) (by aesop)
+    · unfold updateValidator; aesop
+    · unfold updateValidator; aesop
+  · refine Or.inr (Or.inr (Or.inr (Or.inr ?_)))
+    use [.block_store vid B]
+    simp [doStore]
+    exact ⟨rfl, not_honest_imp_byzantine system vid (by simpa using h) (h_wf _ hmem)⟩
+
+private lemma tryActFor_honestStep
+    (system : BlockSynchroniserSystem) (s s' : BelugaState)
+    (vid : ValidatorId) (bv : BelugaValidator)
+    (h_wf : BelugaState.WellFormed system s)
+    (hmem : (vid, bv) ∈ s.validators)
+    (hact : tryActFor system s vid bv = some s') :
+    HonestStep system s s' := by
+  unfold tryActFor at hact
+  cases hfindAcc : s.blocks.find? (fun B =>
+      !hasAcceptedDigest s vid B.d
+      && B.parents.all fun pd => hasAcceptedDigest s vid pd) <;>
+    cases hfindStore : s.blocks.find? (fun B =>
+      hasAcceptedDigest s vid B.d && !hasStoredDigest s vid B.d) <;>
+    simp_all +decide
+  · split_ifs at hact <;> simp_all +decide
+    · exact hact ▸ honestStep_of_propose system s vid bv h_wf hmem
+    · exact hact ▸ honestStep_of_advance system s vid
+  · split_ifs at hact <;> simp_all +decide
+    · exact hact ▸ honestStep_of_propose system s vid bv h_wf hmem
+    · exact hact ▸ honestStep_of_store system s vid bv h_wf hmem _
+        (by simp_all +decide [List.find?_eq_none]) hfindStore
+  · split_ifs at hact <;> simp_all +decide
+    · exact hact ▸ honestStep_of_propose system s vid bv h_wf hmem
+    · exact hact ▸ honestStep_of_accept system s vid bv h_wf hmem _ hfindAcc
+  · split_ifs at hact <;> simp_all +decide
+    · exact hact ▸ honestStep_of_propose system s vid bv h_wf hmem
+    · exact hact ▸ honestStep_of_accept system s vid bv h_wf hmem _ hfindAcc
+
 theorem step_refines_HonestStep
     (system : BlockSynchroniserSystem) (s : BelugaState)
     (h_wf : BelugaState.WellFormed system s) :
     HonestStep system s (step system s) := by
-  -- Aristotle's prior round-3f proof was for the *strong* HonestAccept /
-  -- HonestStore preconditions, which left semantic gaps. Statement is
-  -- now corrected (weaker preconditions; `h_wf` hypothesis added) —
-  -- queued for Aristotle round 3f-v2.
-  sorry
+  by_contra! h_contra
+  obtain ⟨vid, bv, hmem, hact⟩ :
+      ∃ vid bv, (vid, bv) ∈ s.validators ∧
+                tryActFor system s vid bv = some (step system s) := by
+    unfold step at *
+    cases h : List.findSome? (fun x => tryActFor system s x.1 x.2) s.validators <;>
+      simp_all +decide
+    · exact False.elim <| h_contra <| honestStep_of_no_op system s
+    · have := Lib.findSome_witness _ _ _ h; aesop
+  exact h_contra <| tryActFor_honestStep system s _ vid bv h_wf hmem hact
 
 /--
 The Beluga-induced trace at step `n` (paper §4 protocol unrolled).

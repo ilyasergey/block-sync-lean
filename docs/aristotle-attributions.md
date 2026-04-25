@@ -326,6 +326,49 @@ In `Mysticeti/Safety.lean`: `consecutive_triple_exists` (combinatorial).
 - Safety.lean (lemma10): 1 → 0
 - All other counts unchanged.
 
+## Project a8889396-b34e-40f2-b10b-388f960c088e (round 4)
+
+| Field | Value |
+|---|---|
+| Submitted | 2026-04-26 00:46 SGT |
+| Returned | 2026-04-26 ~02:20 SGT (status `COMPLETE_WITH_ERRORS`) |
+| Result tarball | `/tmp/aristotle-r4.tar.gz` |
+| Prompt | Prove `step_refines_HonestStep` in `Beluga/Protocol.lean` under the paper-consistent `HonestAccept`/`HonestStore` preconditions and the new `BelugaState.WellFormed` hypothesis. |
+| Integration commit | (TBD; this commit) |
+
+### Theorems closed (1 main + 6 sorry-free helpers)
+
+| Theorem | Strategy |
+|---|---|
+| `step_refines_HonestStep` (main) | By contradiction. Unfold `step`; case-split on `findSome?`. No-op case via `honestStep_of_no_op`; otherwise extract `(vid, bv)` via `Lib.findSome_witness` and dispatch to `tryActFor_honestStep`. |
+| `tryActFor_honestStep` | Unfold `tryActFor`; case-analyze the four branches (propose/accept/store/advance); dispatch to per-action helper. |
+| `honestStep_of_no_op` | `ByzantineStep` with empty op list — vacuously satisfies the constraint. |
+| `honestStep_of_advance` | `doAdvance` emits no operations, so `ByzantineStep` with `[]` works regardless of honesty. |
+| `honestStep_of_propose` | Case-split on honest/Byzantine. Honest: `HonestPropose` witness. Byzantine: `ByzantineStep` + `not_honest_imp_byzantine`. |
+| `honestStep_of_accept` | Honest: `HonestAccept` witness; uses `List.find?_some`, `hasAcceptedDigest_false_imp`, `hasAcceptedDigest_true_imp`. Byzantine: same pattern as propose. |
+| `honestStep_of_store` | Honest: `HonestStore` witness; delegates causal-history precondition to `causal_history_of_find_none`. Byzantine: same pattern. |
+
+### Remaining sorry (1)
+
+| Lemma | Why deferred |
+|---|---|
+| `causal_history_of_find_none` | Trace-level invariant: `parentsAccepted` is checked at each accept step, so ancestors are accepted bottom-up — but proving it requires reasoning about the accumulation of accepted digests across the entire trace, not single-step state. Deferred to a dedicated trace-invariant module (future work). |
+
+### Side effects
+
+- All seven new helpers are `private` in the `BlockSynchroniser` namespace.
+- No `import Mathlib`. No `exact?` placeholders. Proof body is mostly
+  structural with localised `aesop`/`grind`/`simp_all` calls.
+- Reused three previously-introduced helpers from project `116385ce`
+  (`hasAcceptedDigest_false_imp`, `hasAcceptedDigest_true_imp`,
+  `not_honest_imp_byzantine`).
+
+### Verifier confirmation
+
+`lake build` passes (6244 jobs). One new sorry (`causal_history_of_find_none`);
+`step_refines_HonestStep` itself is sorry-free at the top level but has
+a transitive sorry through this helper.
+
 ## Future projects
 
 When a new Aristotle submission completes and is integrated, append
