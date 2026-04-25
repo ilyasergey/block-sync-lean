@@ -13,14 +13,17 @@ Status legend: 🟡 IN_PROGRESS · ✅ COMPLETE (integrated) · ⚠️ COMPLETE_
 | `d32908b4-d387-4d77-ac37-87e03a6f6699` | 5 | 2026-04-26 ~00:46 SGT | 🟡 IN_PROGRESS | [`Mysticeti/Liveness.lean`](../BlockSynchroniser/Mysticeti/Liveness.lean) | 11 helper lemmas added by round 3d | pending |
 | `58873be7-0f63-412c-8029-873bbd930abe` | 3a-followup | 2026-04-26 ~01:50 SGT | 🟡 IN_PROGRESS | [`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) | L1, L2, T1, T2, T3, T4 (under new `SchedulerFairness` hypothesis) + helpers `step_preserves_validator_ids`, `step_round_monotone` | pending |
 | `3f6cf619-5a7f-4142-9114-c46caafa025f` | 4-followup | 2026-04-26 ~02:30 SGT | 🟡 IN_PROGRESS | [`Beluga/Protocol.lean`](../BlockSynchroniser/Beluga/Protocol.lean) | `causal_history_of_find_none` (trace-level invariant; prompt suggests strengthening to `CausallyClosed` carrier + monotonicity lemmas) | pending |
+| `9f17cf80-caba-4369-90b2-0a99a175e394` | admission-invariant | 2026-04-26 ~03:00 SGT | 🟡 IN_PROGRESS | [`Beluga/AdmissionInvariant.lean`](../BlockSynchroniser/Beluga/AdmissionInvariant.lean) (new), [`Mysticeti/Safety.lean`](../BlockSynchroniser/Mysticeti/Safety.lean) | `belugaTrace_admissionWellFormed` + revised `lemma13_cert_persistence` (uses the new trace invariant + paper §D.3 quorum-intersection argument derived inside the proof) | pending |
 
-**3 projects in flight in parallel.** Aristotle accepts concurrent
+**4 projects in flight in parallel.** Aristotle accepts concurrent
 submissions; they will process as capacity allows.
 
 Frozen files (do not edit until corresponding rounds complete):
 - `Mysticeti/Liveness.lean` (round 5)
 - `Beluga/Theorems.lean` (round 3a-followup)
 - `Beluga/Protocol.lean` (round 4-followup)
+- `Beluga/AdmissionInvariant.lean` (admission-invariant round)
+- `Mysticeti/Safety.lean` (admission-invariant round)
 
 Freely-editable files: `Lib/`, all base modules
 (`Block`/`Validator`/`Operations`/`System`/`State`/`Causal`/`Trace`/`Properties`),
