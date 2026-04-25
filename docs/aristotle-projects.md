@@ -13,8 +13,9 @@ Status legend: 🟡 IN_PROGRESS · ✅ COMPLETE (integrated) · ⚠️ COMPLETE_
 | `4cda6cb1-a5b1-4f2f-9616-204e6438f82d` | 2 | 2026-04-25 ~22:55 SGT | 🟡 IN_PROGRESS | [`Quorum.lean`](../BlockSynchroniser/Quorum.lean), [`Beluga/Patterns.lean`](../BlockSynchroniser/Beluga/Patterns.lean), [`Mysticeti/Safety.lean`](../BlockSynchroniser/Mysticeti/Safety.lean) | `quorumIntersection`, `certified_unique`, `lemma10_round_robin_pigeonhole` | pending |
 | `a8889396-b34e-40f2-b10b-388f960c088e` | 4 | 2026-04-26 ~00:46 SGT | 🟡 IN_PROGRESS | [`Beluga/Protocol.lean`](../BlockSynchroniser/Beluga/Protocol.lean) | `step_refines_HonestStep` (with paper-consistent HonestAccept/HonestStore + WellFormed) | pending |
 | `d32908b4-d387-4d77-ac37-87e03a6f6699` | 5 | 2026-04-26 ~00:46 SGT | 🟡 IN_PROGRESS | [`Mysticeti/Liveness.lean`](../BlockSynchroniser/Mysticeti/Liveness.lean) | 11 helper lemmas added by round 3d | pending |
+| `58873be7-0f63-412c-8029-873bbd930abe` | 3a-followup | 2026-04-26 ~01:50 SGT | 🟡 IN_PROGRESS | [`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) | L1, L2, T1, T2, T3, T4 (under new `SchedulerFairness` hypothesis) + helpers `step_preserves_validator_ids`, `step_round_monotone` | pending |
 
-**3 projects in flight in parallel.** Aristotle accepts concurrent
+**4 projects in flight in parallel.** Aristotle accepts concurrent
 submissions; they will process as capacity allows.
 
 Frozen files (do not edit until corresponding rounds complete):
@@ -23,6 +24,7 @@ Frozen files (do not edit until corresponding rounds complete):
 - `Mysticeti/Safety.lean` (round 2)
 - `Beluga/Protocol.lean` (round 4)
 - `Mysticeti/Liveness.lean` (round 5)
+- `Beluga/Theorems.lean` (round 3a-followup)
 
 Freely-editable files: `Lib/`, all base modules
 (`Block`/`Validator`/`Operations`/`System`/`State`/`Causal`/`Trace`/`Properties`),
