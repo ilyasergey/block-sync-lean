@@ -89,6 +89,10 @@ each Definition-1 property is satisfiable / falsifiable by concrete traces
 (non-vacuity validation). The opening comment of `Validation.lean` spells
 out the distinction.
 
+The four `golden_*` theorems were **proved by Aristotle (project
+`be7c0245`)**. See [docs/aristotle-attributions.md](docs/aristotle-attributions.md).
+The realizability and anti-witness lemmas were hand-proved.
+
 ## Where to look
 
 | | |
@@ -97,6 +101,7 @@ out the distinction.
 | Phased plan & scope decisions | [docs/formalization-plan.md](docs/formalization-plan.md) |
 | Aristotle delegation workflow | [docs/aristotle-workflow.md](docs/aristotle-workflow.md) |
 | Aristotle project tracker (active / queued / completed submissions) | [docs/aristotle-projects.md](docs/aristotle-projects.md) |
+| Aristotle attribution log (which proofs Aristotle filled, for the final report) | [docs/aristotle-attributions.md](docs/aristotle-attributions.md) |
 | The "math tactical wall" — when to delegate vs hand-prove | [docs/math-tactical-wall.md](docs/math-tactical-wall.md) |
 | Per-stage changelog | [changelogs/](changelogs/) |
 | The paper | [docs/Block_Sync_Project.pdf](docs/Block_Sync_Project.pdf) |
