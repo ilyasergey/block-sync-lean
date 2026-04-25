@@ -6,14 +6,8 @@ Licensed under the Apache License, Version 2.0.
 Beluga performance bounds — *deterministic* worst-case latency lemmas
 from paper Appendix C.2.
 
-Status: L3, L4, L5 proved (Aristotle round 3e, project 91c97602).
 Probabilistic Lemmas 6, 7 and Theorem 5 (expected-latency bounds)
 remain out of scope until/unless we adopt a probability framework.
-
-Prerequisites (Phase 4.5): `BlockSynchroniser/Timing.lean` (TimeMap +
-PartiallySynchronous) + `BlockSynchroniser/Beluga/Protocol.lean` (refined
-`ByzantineStep` constraining the adversary to attributable Byzantine
-operations).
 -/
 import Mathlib.Tactic
 import BlockSynchroniser.System

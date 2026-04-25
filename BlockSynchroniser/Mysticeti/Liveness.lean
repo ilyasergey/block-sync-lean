@@ -4,12 +4,6 @@ Copyright Ilya Sergey
 Licensed under the Apache License, Version 2.0.
 
 Mysticeti-Beluga liveness bundle (paper Appendix D.2).
-
-Status: round 3d (Aristotle, project `84e08b81`) gave structured proofs
-of all five main theorems delegating to 11 named infrastructure lemmas
-that capture the paper's intermediate steps. The five main theorems
-are fully proved; the 11 helper lemmas are stubs (still depend on the
-timing model + `step` semantics + Beluga protocol facts).
 -/
 import Mathlib.Tactic
 import BlockSynchroniser.Block

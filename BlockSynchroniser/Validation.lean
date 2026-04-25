@@ -23,16 +23,14 @@ distinction spelled out.
 ## Three lines of defense (in order of effort)
 
 * **(A) goldenTrace satisfaction.** A concrete honest-synchronous trace
-  (`n=4, f=1`) that satisfies all four properties non-trivially. Proved
-  by Aristotle (project be7c0245) — see the `PROVIDED SOLUTION`
-  sketches above each theorem.
+  (`n=4, f=1`) that satisfies all four properties non-trivially.
 
 * **(B) Realizability.** For each property `P → ∃ Q`, a sibling lemma showing
   the antecedent `P` is reachable in *some* trace. If `P` is never satisfiable,
-  the property is moot. Hand-proved.
+  the property is moot.
 
 * **(C) Anti-witnesses.** Construct `emptyTrace` and show it fails at least
-  one property — catches over-permissive definitions. Hand-proved.
+  one property — catches over-permissive definitions.
 -/
 
 import Mathlib.Tactic
@@ -157,8 +155,7 @@ theorem not_roundTermination_emptyTrace :
 `goldenTrace` is a concrete honest-synchronous trace where, in each round `r`,
 all four validators propose, accept each others' round-`r` blocks, and store
 them. The four `golden_*` theorems below state that `goldenTrace` satisfies
-each Definition-1 property non-trivially. **Proved by Aristotle (project
-be7c0245)** — see the `PROVIDED SOLUTION` sketches above each theorem. -/
+each Definition-1 property non-trivially. -/
 
 /-- The block proposed by validator `i` in round `r`. Digest is unique:
 `r * 4 + i`. For `r = 0` parents is empty; for `r ≥ 1` parents are the four
@@ -202,14 +199,7 @@ def goldenStateAt (n : Nat) : DefaultSystemState where
 /-- The honest-synchronous golden trace. -/
 def goldenTrace : Trace DefaultSystemState := goldenStateAt
 
-/-! ## Helper lemmas for golden trace proofs
-
-The lemmas in this section, plus the four `golden_*` theorems below, were
-**proved by Aristotle** (Harmonic) — project ID
-`be7c0245-cdb9-4cce-9c4a-fffecfd1a69c`, submitted 2026-04-25 21:25 SGT,
-returned 2026-04-25 ~22:50 SGT. See
-[`docs/aristotle-attributions.md`](../../docs/aristotle-attributions.md)
-for the full attribution log. -/
+/-! ## Helper lemmas for golden trace proofs -/
 
 -- proof: aristotle (project be7c0245)
 theorem gRoundOps_length (r : Round) : (gRoundOps r).length = 36 := by

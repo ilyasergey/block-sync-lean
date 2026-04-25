@@ -48,8 +48,7 @@ universe `U` (after dedup), with `|U| = n = 3f+1` from the hypothesis +
 
 The Lean form: convert `Q₁`, `Q₂` to `Finset` (preserves cardinality via
 `Nodup`); apply `Finset.card_inter_add_card_union`; use `Finset.card_le_card`
-for `Q₁.toFinset ∪ Q₂.toFinset ⊆ U`; bound and conclude. Queued for
-Aristotle round 2 — see [docs/aristotle-projects.md](../docs/aristotle-projects.md).
+for `Q₁.toFinset ∪ Q₂.toFinset ⊆ U`; bound and conclude.
 -/
 theorem quorumIntersection
     (system : BlockSynchroniserSystem)

@@ -210,18 +210,19 @@ leader-status decision), Theorem 7 (consensus safety).
 treats as obvious but doesn't formally state. Mechanizing the
 proofs forced these out:
 
-1. **Cert-base (used in L13).** *In round `B.r + 2`, every block
-   in the DAG references at least one certificate for `B` as a
-   parent.* This is the conclusion of the quorum-intersection
-   argument applied at the certificate round, but the paper's L13
-   proof skips directly from "`2f+1` certificates exist" to
-   "every later block reaches one" without naming this step.
-2. **DAG-parent connectivity (used in L13).** *Every block in a
-   round later than `B.r + 2` has at least one parent in the
-   state from the immediately preceding round.* Used as the
-   inductive step. Implied by the protocol's parent-selection
-   rule but not stated as a lemma.
-3. **View-traceback (used in L16).** *Every non-`Undecided`
+1. **DAG admission well-formedness (used in L13).** *Every block at a
+   positive round has at least `2f+1` distinct-author parents from the
+   immediately preceding round, all themselves in the state.* This is
+   a consequence of Beluga's parent-selection rule but is not named as
+   a lemma in the paper. The proof of L13 (paper §D.3) silently relies
+   on it twice: at round `r+2` it uses quorum intersection between any
+   block's `2f+1` parents and the `2f+1` certificate set of `B`; at
+   later rounds it uses the existence of a parent from the previous
+   round to thread the inductive argument. The paper's prose elides
+   both steps. **Status:** surfaced as an explicit hypothesis; proof
+   that the Beluga trace satisfies it is queued (see commentary on
+   `belugaTrace_admissionWellFormed` in our model).
+2. **View-traceback (used in L16).** *Every non-`Undecided`
    honest view on a digest `d` traces back to a leader block
    `B` with `B.d = d` whose `directDecide` is non-`Undecided`.*
    Captures the protocol invariant that all consensus decisions

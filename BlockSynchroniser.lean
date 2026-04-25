@@ -20,6 +20,7 @@ import BlockSynchroniser.Beluga.AdmissionControl
 import BlockSynchroniser.Beluga.Pull
 import BlockSynchroniser.Beluga.Protocol
 import BlockSynchroniser.Beluga.StepPreservation
+import BlockSynchroniser.Beluga.AdmissionInvariant
 import BlockSynchroniser.Beluga.Examples
 import BlockSynchroniser.Beluga.Theorems
 import BlockSynchroniser.Beluga.PerformanceLemmas

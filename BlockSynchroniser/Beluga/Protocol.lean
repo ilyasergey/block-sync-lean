@@ -18,13 +18,6 @@ a transition system. Two complementary characterizations:
 
 * **`step_refines_HonestStep`** — the bridge: every transition produced
   by `step` satisfies `HonestStep`.
-
-Status: honest-action conditions stated; executable `step` is a
-minimal honest-schedule placeholder; refinement lemma partially proved
-by Aristotle round 3f (project `116385ce`) — the structural case
-analysis is closed, with 5 remaining stubs documenting genuine
-semantic gaps between the executable `step` and the relational
-`HonestStep` spec.
 -/
 import Mathlib.Tactic
 import BlockSynchroniser.Block
@@ -307,11 +300,7 @@ def step (system : BlockSynchroniserSystem) (s : BelugaState) : BelugaState :=
   | some s' => s'
   | none    => s
 
-/-! ### Helper lemmas for `step_refines_HonestStep`
-
-The three private lemmas below + the proof of `step_refines_HonestStep`
-itself were filled by **Aristotle round 3f (project `116385ce`)**. See
-[`docs/aristotle-attributions.md`](../../docs/aristotle-attributions.md). -/
+/-! ### Helper lemmas for `step_refines_HonestStep` -/
 
 -- proof: aristotle (project 116385ce)
 /-

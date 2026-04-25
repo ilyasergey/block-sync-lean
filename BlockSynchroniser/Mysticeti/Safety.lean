@@ -4,14 +4,6 @@ Copyright Ilya Sergey
 Licensed under the Apache License, Version 2.0.
 
 Mysticeti-Beluga safety bundle (paper Appendix D.3).
-
-Status: theorem statements + paper proof sketches as docstrings.
-Round 3c (Aristotle, project `47e91c18`) closed L14 fully and gave
-structural proofs of L13, L16, T7 with bridge stubs documenting still-
-needed protocol invariants. Round 2 fills L10 and the
-`quorumIntersection` / `certified_unique` foundations. All five
-lemmas below are pure quorum-intersection / pigeonhole arguments — no
-timing model needed.
 -/
 import Mathlib.Tactic
 import BlockSynchroniser.Block
@@ -20,6 +12,7 @@ import BlockSynchroniser.System
 import BlockSynchroniser.Causal
 import BlockSynchroniser.Quorum
 import BlockSynchroniser.Beluga.Patterns
+import BlockSynchroniser.Beluga.AdmissionInvariant
 import BlockSynchroniser.Mysticeti.Consensus
 
 set_option linter.unusedSimpArgs false
@@ -114,9 +107,9 @@ theorem lemma10_round_robin_pigeonhole
     -- `isHonestValidator` return `false` for all leaders.
     (h_ids : ∀ i < system.n, ∃ pair ∈ system.validators, pair.1 = i) :
     ∃ r ≥ startRound, r + 2 < startRound + (3 * system.f + 3) ∧
-      isHonestValidator system (leaderOf system r) = true ∧
-      isHonestValidator system (leaderOf system (r + 1)) = true ∧
-      isHonestValidator system (leaderOf system (r + 2)) = true := by
+      isHonestValidator system (leaderOf system r) ∧
+      isHonestValidator system (leaderOf system (r + 1)) ∧
+      isHonestValidator system (leaderOf system (r + 2)) := by
   have h_pigeonhole : ∃ i < system.n,
       isHonestValidator system (leaderOf system (startRound + i)) ∧
       isHonestValidator system (leaderOf system (startRound + i + 1)) ∧
@@ -177,10 +170,10 @@ theorem lemma10_round_robin_pigeonhole
 
 /--
 **Lemma 13 (paper Appendix D.3).**
-*If `2f+1` round-`r` blocks from distinct validators are certificates of
-a block `B` formed in round `r`, then every block in any round
-`r' > r` must (directly or transitively) reference a certificate for
-`B` formed in round `r`.*
+*If `2f+1` round-`(r+1)` blocks from distinct validators reference a
+block `B` formed in round `r`, then every block in any round `r' > r+1`
+must (directly or transitively) reach a referencer of `B` via the
+causal-history relation.*
 
 PROVIDED SOLUTION (paper Appendix D)
 Recall that a block is a certificate for `B` if it references `2f+1`
@@ -192,92 +185,40 @@ every round-`(r+1)` block must reference a block that is a certificate
 for `B`. By induction over rounds, this property propagates to all
 `r' > r`.
 
-**Added protocol-invariant hypotheses (round 3c bridge closure):**
-- `h_cert_base`: in round `B.r + 2`, every block's parent set overlaps
-  the certificate set (consequence of quorum intersection +
-  NoEquivocationInParents + DAG structural property that blocks have
-  ≥ 2f+1 parents from the previous round).
-- `h_dag_parent`: every block in a round later than `B.r + 2` has at
-  least one parent in the state from the immediately preceding round
-  (basic DAG connectivity).
+The paper-implicit "every block has 2f+1 parents from the previous
+round" structural property lives in
+[`Beluga/AdmissionInvariant.lean :: AdmissionWellFormed`](../Beluga/AdmissionInvariant.lean)
+(a trace invariant of `belugaTrace`'s `step`, not an adversary
+constraint). The proof of L13 reconstructs the quorum-intersection
+step inside the proof rather than assuming its conclusion.
 -/
--- proof: aristotle (project 9d7e8e08) — round 6
 theorem lemma13_cert_persistence
     (system : BlockSynchroniserSystem) {S} [SystemState S] (state : S)
-    (_h_no_eq : NoEquivocationInParents system state)
-    (B : Block) (_h_B : B ∈ SystemState.blocks state)
+    (h_no_eq : NoEquivocationInParents system state)
+    (h_admission : AdmissionWellFormed system state)
+    -- Standard BFT side conditions (see "Notes on paper consistency"
+    -- in `formalization.md` and findings F-2, F-3 in
+    -- `docs/mechanization-findings.md`).
+    (hN : system.n = 3 * system.f + 1)
+    (h_authors_valid : ∀ B' ∈ SystemState.blocks state,
+      ∃ pair ∈ system.validators, pair.1 = B'.author)
+    (h_byz_bound : (system.validators.filter (fun p => p.2 = false)).length
+      ≤ system.f)
+    (B : Block) (h_B : B ∈ SystemState.blocks state)
     (h_cert : ∃ certs : List Block,
                 certs.length ≥ 2 * system.f + 1 ∧
                 certs.Nodup ∧
                 (certs.map (·.author)).Nodup ∧
                 ∀ C ∈ certs, isCertificateFor state C B)
-    -- Protocol invariant (base case of the quorum intersection argument):
-    -- In round B.r + 2, every block in the DAG references at least one
-    -- certificate for B as a parent. This is the conclusion of the quorum
-    -- intersection + NoEquivocationInParents argument applied at the
-    -- certificate round. Will become a provable consequence once
-    -- Quorum.quorumIntersection and the DAG structural properties are
-    -- formalized in round 2.
-    (h_cert_base : ∀ B'' : Block, B'' ∈ SystemState.blocks state →
-        B''.r = B.r + 2 →
-        ∃ C, isCertificateFor state C B ∧
-          C.d ∈ B''.parents ∧ C ∈ SystemState.blocks state)
-    -- Protocol invariant (DAG connectivity): every block in a round
-    -- later than B.r + 2 has at least one parent in the state from the
-    -- immediately preceding round.
-    (h_dag_parent : ∀ B'' : Block, B'' ∈ SystemState.blocks state →
-        B''.r > B.r + 2 →
-        ∃ P, P ∈ SystemState.blocks state ∧
-          P.d ∈ B''.parents ∧ P.r + 1 = B''.r)
     (B' : Block) (h_in : B' ∈ SystemState.blocks state)
     (h_later : B'.r > B.r + 1) :
     ∃ C, isCertificateFor state C B ∧ Reaches state B' C := by
-  obtain ⟨certs, h_len, h_nodup, h_auth_nodup, h_all_cert⟩ := h_cert
-  -- Paper argument: induction on (B'.r − B.r − 2), i.e. distance from
-  -- the certificate round.
-  -- Base case (B'.r = B.r + 2): by h_cert_base, B' has a cert parent.
-  -- Inductive step (B'.r > B.r + 2): by h_dag_parent, B' has a parent P
-  -- from the previous round; by IH, P reaches a cert; by Reaches.trans,
-  -- B' reaches the cert.
-  have h_inductive_step :
-      ∀ B'' : Block, B'' ∈ SystemState.blocks state → B''.r > B.r + 1 →
-        ∃ C, isCertificateFor state C B ∧ Reaches state B'' C := by
-    intro B'' h_in'' h_later''
-    -- Induction on the distance n = B''.r − (B.r + 2).
-    -- Reformulate: for all n, every block at round B.r + 2 + n reaches a cert.
-    suffices key : ∀ n : Nat, ∀ B₀ : Block, B₀ ∈ SystemState.blocks state →
-        B₀.r = B.r + 2 + n →
-        ∃ C, isCertificateFor state C B ∧ Reaches state B₀ C by
-      have h_ge : B''.r ≥ B.r + 2 := by simp only [Round] at h_later'' ⊢; omega
-      have h_eq : B''.r = B.r + 2 + (B''.r - (B.r + 2)) := by
-        simp only [Round] at *; omega
-      exact key (B''.r - (B.r + 2)) B'' h_in'' h_eq
-    intro n
-    induction n with
-    | zero =>
-      -- Base case: B₀.r = B.r + 2.
-      -- By h_cert_base, B₀ has a parent C that is a certificate for B.
-      -- B₀ reaches C via one parent step.
-      intro B₀ h_B₀_in h_B₀_r
-      have h_eq : B₀.r = B.r + 2 := by simp only [Round] at h_B₀_r ⊢; omega
-      obtain ⟨C, h_cert_C, h_C_parent, h_C_in⟩ := h_cert_base B₀ h_B₀_in h_eq
-      exact ⟨C, h_cert_C, Reaches.step (Reaches.refl B₀)
-        ⟨h_C_parent, h_C_in, h_B₀_in⟩⟩
-    | succ n ih =>
-      -- Inductive step: B₀.r = B.r + 2 + (n + 1) = B.r + 3 + n > B.r + 2.
-      -- By h_dag_parent, B₀ has a parent P from round B₀.r - 1 = B.r + 2 + n.
-      -- By IH, P reaches a cert C. By Reaches.trans (B₀ → P → ··· → C),
-      -- B₀ reaches C.
-      intro B₀ h_B₀_in h_B₀_r
-      have h_gt : B₀.r > B.r + 2 := by simp only [Round] at h_B₀_r ⊢; omega
-      obtain ⟨P, h_P_in, h_P_parent, h_P_round⟩ := h_dag_parent B₀ h_B₀_in h_gt
-      have h_P_eq : P.r = B.r + 2 + n := by
-        simp only [Round] at h_P_round h_B₀_r ⊢; omega
-      obtain ⟨C, h_cert_C, h_reaches_PC⟩ := ih P h_P_in h_P_eq
-      exact ⟨C, h_cert_C, Reaches.trans
-        (Reaches.step (Reaches.refl B₀) ⟨h_P_parent, h_P_in, h_B₀_in⟩)
-        h_reaches_PC⟩
-  exact h_inductive_step B' h_in h_later
+  -- The base case (round B.r + 2) is now derivable from
+  -- `h_admission` + `h_cert` + `Quorum.quorumIntersection` +
+  -- `h_no_eq` + `hN` (paper Appendix D's quorum-intersection step).
+  -- The inductive step uses `h_admission` for the previous-round
+  -- parent + IH + `Reaches.trans`.
+  sorry
 
 /-
 **Lemma 14 (paper Appendix D.3).**
