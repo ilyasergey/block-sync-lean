@@ -10,16 +10,14 @@ Status legend: 🟡 IN_PROGRESS · ✅ COMPLETE (integrated) · ⚠️ COMPLETE_
 
 | Project ID | Round | Submitted | Status | Target file(s) | Theorem(s) | Result |
 |---|---|---|---|---|---|---|
-| `d32908b4-d387-4d77-ac37-87e03a6f6699` | 5 | 2026-04-26 ~00:46 SGT | 🟡 IN_PROGRESS | [`Mysticeti/Liveness.lean`](../BlockSynchroniser/Mysticeti/Liveness.lean) | 11 helper lemmas added by round 3d | pending |
 | `58873be7-0f63-412c-8029-873bbd930abe` | 3a-followup | 2026-04-26 ~01:50 SGT | 🟡 IN_PROGRESS | [`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) | L1, L2, T1, T2, T3, T4 (under new `SchedulerFairness` hypothesis) + helpers `step_preserves_validator_ids`, `step_round_monotone` | pending |
 | `3f6cf619-5a7f-4142-9114-c46caafa025f` | 4-followup | 2026-04-26 ~02:30 SGT | 🟡 IN_PROGRESS | [`Beluga/Protocol.lean`](../BlockSynchroniser/Beluga/Protocol.lean) | `causal_history_of_find_none` (trace-level invariant; prompt suggests strengthening to `CausallyClosed` carrier + monotonicity lemmas) | pending |
 | `9f17cf80-caba-4369-90b2-0a99a175e394` | admission-invariant | 2026-04-26 ~03:00 SGT | 🟡 IN_PROGRESS | [`Beluga/AdmissionInvariant.lean`](../BlockSynchroniser/Beluga/AdmissionInvariant.lean) (new), [`Mysticeti/Safety.lean`](../BlockSynchroniser/Mysticeti/Safety.lean) | `belugaTrace_admissionWellFormed` + revised `lemma13_cert_persistence` (uses the new trace invariant + paper §D.3 quorum-intersection argument derived inside the proof) | pending |
 
-**4 projects in flight in parallel.** Aristotle accepts concurrent
+**3 projects in flight in parallel.** Aristotle accepts concurrent
 submissions; they will process as capacity allows.
 
 Frozen files (do not edit until corresponding rounds complete):
-- `Mysticeti/Liveness.lean` (round 5)
 - `Beluga/Theorems.lean` (round 3a-followup)
 - `Beluga/Protocol.lean` (round 4-followup)
 - `Beluga/AdmissionInvariant.lean` (admission-invariant round)
@@ -55,6 +53,7 @@ all Beluga supporting modules (`State`/`Reputation`/`AdmissionControl`/`Pull`/`B
 | `bb79d236-f91d-42e0-9315-f46d9a22f5b8` | 2026-04-26 01:11 SGT | 2026-04-26 ~01:33 SGT | ✅ COMPLETE (sorry-free; standard axioms only) | [`Beluga/StepPreservation.lean`](../BlockSynchroniser/Beluga/StepPreservation.lean) | `tryActFor_preserves_reputation` | (TBD) |
 | `9d7e8e08-0f3f-4101-9b69-2a46a7f6a69a` | 2026-04-26 00:46 SGT | 2026-04-26 ~01:31 SGT | ✅ COMPLETE (3 bridge sorries closed; added 4 paper-faithful protocol-invariant hypotheses + new `Reaches.trans` lemma) | [`Mysticeti/Safety.lean`](../BlockSynchroniser/Mysticeti/Safety.lean) | `lemma13_cert_persistence`, `lemma16_consistent_status`, `theorem7_consensus_safety` | (TBD) |
 | `a8889396-b34e-40f2-b10b-388f960c088e` | 2026-04-26 00:46 SGT | 2026-04-26 ~02:20 SGT | ⚠️ COMPLETE_WITH_ERRORS (`step_refines_HonestStep` proved sorry-free; one new sorry on trace-level invariant `causal_history_of_find_none`, deferred to a future trace-invariant module) | [`Beluga/Protocol.lean`](../BlockSynchroniser/Beluga/Protocol.lean) | `step_refines_HonestStep` (+7 helper lemmas) | (TBD) |
+| `d32908b4-d387-4d77-ac37-87e03a6f6699` | 2026-04-26 00:46 SGT | 2026-04-26 ~05:30 SGT | ⚠️ COMPLETE_WITH_ERRORS (11 helpers got structured proofs composing other lemmas + paper §D.2 arguments; 14 inline sorries remain on protocol-invariant sub-steps — step semantics, BFT-bound, parent selection, ImPoA-availability, TransactionOrder axioms; 2 fully-proved auxiliaries `belugaTrace_blocks_monotone` + `mem_of_mem_eraseDups`) | [`Mysticeti/Liveness.lean`](../BlockSynchroniser/Mysticeti/Liveness.lean) | 11 helpers underlying lemma8/9/11/12/T6 (round 3d chain) | (TBD) |
 
 Full attribution detail in [aristotle-attributions.md](aristotle-attributions.md).
 

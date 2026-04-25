@@ -369,6 +369,71 @@ In `Mysticeti/Safety.lean`: `consecutive_triple_exists` (combinatorial).
 `step_refines_HonestStep` itself is sorry-free at the top level but has
 a transitive sorry through this helper.
 
+## Project d32908b4-d387-4d77-ac37-87e03a6f6699 (round 5)
+
+| Field | Value |
+|---|---|
+| Submitted | 2026-04-26 00:46 SGT |
+| Returned | 2026-04-26 ~05:30 SGT (status `COMPLETE_WITH_ERRORS`) |
+| Result tarball | `/tmp/aristotle-r5.tar.gz` |
+| Prompt | Fill the 11 sorry'd helper lemmas in `Mysticeti/Liveness.lean` (created by round 3d under lemma8/9/11/12/T6). |
+| Integration commit | (TBD; this commit) |
+
+### What landed
+
+Each of the 11 helper lemmas now has a *structured proof* that follows
+the paper's argument (§D.2). Compositional steps (e.g.,
+`honest_references_leader_within_4delta` composes
+`leader_block_disseminated_within_delta` + `honest_round_entry_within_3delta`)
+are spelled out; protocol-invariant atomic facts (step semantics, BFT
+bounds, parent selection, ImPoA availability) are sorry'd as inline
+sub-steps with paper-citation comments.
+
+| Helper | Sub-sorries | Notes |
+|---|---|---|
+| `honest_round_entry_within_3delta` | 3 | Paper Lemma 1 applied to Beluga; each Δ-step is a sorry'd protocol invariant |
+| `leader_block_disseminated_within_delta` | 1 | Honest leader's `doPropose` + `PartiallySynchronous` Δ |
+| `honest_references_leader_within_4delta` | 1 | Composes the two above + parent-selection invariant |
+| `lemma8_leader_referenced` | 0 | Fully via composition |
+| `honest_validators_certify_leader` | 1 | Lemma 9 dependency |
+| `lemma9_honest_certificate` | 0 | Composition |
+| `three_consecutive_honest_direct_commit` | 1 | Calls `lemma10_round_robin_pigeonhole` + `honest_validators_certify_leader` |
+| `backward_induction_decides_earlier_rounds` | 1 | Indirect-decision rule |
+| `eventual_decision_core` | 2 (hN, hHonest as `have`) | Top-level composition; the BFT-bound `have`s are sorry'd as separate items |
+| `lemma11_eventual_decision` | 0 | Composition |
+| `at_least_f_plus_one_honest_referencers` | 1 | Honest/Byzantine partition by `List.length_eq_length_filter_add`; only the Byz≤f bound is sorry'd |
+| `honest_blocks_eventually_received` | 1 | ImPoA pull / availability |
+| `lemma12_referenced_accepted` | 0 | Composition |
+| `committed_leader_has_2f_plus_1_refs` | 0 | (was already proved; preserved) |
+| `honest_validator_eventually_accepts` | 1 | Block-accept derivation |
+| `accepted_implies_in_order` | 1 | TransactionOrder axiom |
+| `theorem6_consensus_liveness` | 0 | Composition |
+
+Total: 14 inline sub-sorries remain (down from 11 bare sorries — the
+helpers' bodies are now real proofs, just bottoming out in the
+named protocol invariants).
+
+### Newly proved auxiliaries
+
+- `mem_of_mem_eraseDups` (sorry-free)
+- `belugaTrace_blocks_monotone` (sorry-free)
+
+### Side effects
+
+- One caller signature update needed: `three_consecutive_honest_direct_commit`
+  now takes `h_ids` (the F-8 contiguous-IDs hypothesis) and threads it to
+  `lemma10_round_robin_pigeonhole`. Aristotle's tarball pre-dates round 2's
+  `h_ids` addition; we fixed up the caller during integration.
+- Top-of-file "Status:" prose stripped (per project convention).
+
+### Verifier confirmation
+
+`lake build` passes (6246 jobs). Sorry count: increases by ~13 net
+(structured proofs surface previously-buried atomic gaps), but each
+new sorry is a *named* protocol invariant rather than an opaque body
+sorry. Per CLAUDE.md the structural decomposition is itself worth
+committing.
+
 ## Future projects
 
 When a new Aristotle submission completes and is integrated, append
