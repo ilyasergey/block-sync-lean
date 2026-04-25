@@ -131,11 +131,9 @@ during integration.
 |---|---|
 | [formalization.md](formalization.md) | Project-wide overview + paper→code map |
 | [docs/formalization-plan.md](docs/formalization-plan.md) | Phased plan, scope decisions |
-| [docs/formalization-status.md](docs/formalization-status.md) | Per-item status table |
 | [docs/aristotle-workflow.md](docs/aristotle-workflow.md) | Aristotle delegation operational manual |
 | [docs/aristotle-projects.md](docs/aristotle-projects.md) | Live in-flight / queued / completed Aristotle submissions |
 | [docs/aristotle-attributions.md](docs/aristotle-attributions.md) | Per-project attribution log (for final report) |
-| [docs/aristotle-round3-plan.md](docs/aristotle-round3-plan.md) | Batched submission plan for round 3 |
 | [docs/math-tactical-wall.md](docs/math-tactical-wall.md) | The wall-vs-gap concept (blog seed: conceptual) |
 | [docs/blog-aristotle-integration-gotchas.md](docs/blog-aristotle-integration-gotchas.md) | Operational gotchas integrating Aristotle output (blog seed: practical). **Append new findings here as they come up.** |
 | [docs/mechanization-findings.md](docs/mechanization-findings.md) | Paper-side log of observations the formalization surfaced (paper terminology only, for folding back into the paper). **Append new findings here when mechanization reveals a paper-relevant gap or ambiguity.** |

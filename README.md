@@ -35,7 +35,7 @@ recompiling Mathlib from scratch.
 |---|---|
 | [formalization.md](formalization.md) | **Overview & entry point** |
 | [docs/formalization-plan.md](docs/formalization-plan.md) | Phased plan, file layout, scope |
-| [docs/formalization-status.md](docs/formalization-status.md) | Per-item status, paper-to-Lean mapping |
+| [docs/mechanization-findings.md](docs/mechanization-findings.md) | Paper-side log of observations the formalization surfaced |
 | [docs/aristotle-workflow.md](docs/aristotle-workflow.md) | When and how we delegate proofs |
 | [changelogs/](changelogs/) | Per-stage changelog entries |
 

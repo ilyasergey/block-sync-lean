@@ -150,5 +150,5 @@ See [aristotle-workflow.md](aristotle-workflow.md) for full operational notes. I
 
 ## Tracking progress
 
-- Status of each item: [formalization-status.md](formalization-status.md) — keep this file in sync with reality.
+- Status of each item: the paper→code map at the top of [../formalization.md](../formalization.md) — keep this in sync with reality.
 - After every successful stage: add a timestamped entry to [../changelogs/](../changelogs/).

@@ -132,7 +132,7 @@ Conditions:
 * `s'` differs only in `vid`'s `currentRound`, now `r + 1`.
 
 Note: rule (ii) — `T_rd` timeout expires — is a wall-clock condition.
-We omit it here; see formalization-status for deferred timing items.
+We omit it here; the timing model is deferred (see formalization.md).
 -/
 def HonestAdvance
     (system : BlockSynchroniserSystem) (s s' : BelugaState)

@@ -186,8 +186,8 @@ above.
 
 | | |
 |---|---|
-| Detailed item-by-item status | [docs/formalization-status.md](docs/formalization-status.md) |
 | Phased plan & scope decisions | [docs/formalization-plan.md](docs/formalization-plan.md) |
+| Mechanization findings (paper-side log) | [docs/mechanization-findings.md](docs/mechanization-findings.md) |
 | Aristotle delegation workflow | [docs/aristotle-workflow.md](docs/aristotle-workflow.md) |
 | Aristotle project tracker (active / queued / completed submissions) | [docs/aristotle-projects.md](docs/aristotle-projects.md) |
 | Aristotle attribution log (which proofs Aristotle filled, for the final report) | [docs/aristotle-attributions.md](docs/aristotle-attributions.md) |

@@ -313,8 +313,8 @@ just rely on assumptions that need to be discharged later.
 
 **Why it's a little bad.** A naive sorry-counter sees 11 sorries
 and reports the file as "barely started." A theorem-counter sees
-5 main theorems closed. Both are right. We track both in
-[formalization-status.md](formalization-status.md).
+5 main theorems closed. Both are right. We track both in the
+paper→code map at the top of [`formalization.md`](../formalization.md).
 
 ## Gotcha 19 — strip the word "sorry" from prose during integration
 

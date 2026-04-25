@@ -55,7 +55,7 @@ live.
 Live blocks are pulled deterministically (broadcast to all validators) so
 they're guaranteed to land within one round-trip; bulk blocks use a
 randomized pull (out of scope — random-pull complexity bound is documented
-as deferred in [docs/formalization-status.md](../../docs/formalization-status.md)).
+as deferred in the paper→code map of [`formalization.md`](../../formalization.md)).
 -/
 def isLive (currentRound : Round) (B : Block) : Prop :=
   B.r ≥ currentRound - 1
