@@ -54,22 +54,34 @@ abbrev available := availabilityPattern
 abbrev certified := certificatePattern
 
 /--
-Honest validators don't reference equivocating parents.
+Honest validators don't reference equivocating parents — *cross-block*
+version.
 
-Captures the safety property that, in any state induced by a correct execution,
-honest validators never include two parents from the same `(author, round)`
-pair. In Beluga this is enforced by the AC module (Phase 4); we state it
-abstractly here as a hypothesis on the state.
+Captures the safety property that, in any state induced by a correct
+execution, no two honest validators (whether the same one or two distinct
+ones) ever reference conflicting blocks for the same `(author, round)`
+pair. In Beluga this is enforced by the AC module (Phase 4); we state
+it abstractly here as a hypothesis on the state.
+
+The within-block specialization (`B₁ = B₂`) is the simpler form
+"honest validators don't include two parents from the same proposer
+round in their own block." The cross-block form additionally rules out
+"honest validators reference different round-`r` blocks of the same
+author across two of their own blocks" — needed for `certified_unique`'s
+proof where the shared honest validator may have referenced `B₁` and
+`B₂` from two different blocks of theirs.
 -/
 def NoEquivocationInParents (system : BlockSynchroniserSystem) {S} [SystemState S]
     (state : S) : Prop :=
-  ∀ B parent₁ parent₂,
-    B ∈ SystemState.blocks state →
-    isHonestValidator system B.author →
+  ∀ B₁ B₂ parent₁ parent₂,
+    B₁ ∈ SystemState.blocks state →
+    B₂ ∈ SystemState.blocks state →
+    isHonestValidator system B₁.author = true →
+    isHonestValidator system B₂.author = true →
     parent₁ ∈ SystemState.blocks state →
     parent₂ ∈ SystemState.blocks state →
-    parent₁.d ∈ B.parents →
-    parent₂.d ∈ B.parents →
+    parent₁.d ∈ B₁.parents →
+    parent₂.d ∈ B₂.parents →
     parent₁.author = parent₂.author →
     parent₁.r = parent₂.r →
     parent₁ = parent₂
@@ -88,12 +100,23 @@ which is the load-bearing form for the Mysticeti-Beluga safety theorem
 
 PROVIDED SOLUTION
 Let `S₁ = strongReferencerAuthors state B₁` and `S₂ = strongReferencerAuthors state B₂`.
-By `certificatePattern`, `|S₁| > 2f` and `|S₂| > 2f`. Both lists are sublists
-of `system.validators`, so by `Quorum.quorumIntersection` they share at least
-`f + 1` elements; in particular at least one *honest* validator `h ∈ S₁ ∩ S₂`
-(since at most `f` Byzantines exist). The block `B_h` authored by `h` lists
-both `B₁.d` and `B₂.d` among its parents. By `NoEquivocationInParents` applied
-to `B_h`, `B₁` and `B₂` (which share author and round), `B₁ = B₂`.
+By `certificatePattern`, `|S₁| > 2f` and `|S₂| > 2f`, so both qualify as
+quorums. By `Quorum.quorumIntersection`, they share at least `f+1`
+validators; since at most `f` are Byzantine, at least one *honest*
+validator `h ∈ S₁ ∩ S₂`.
+
+`h ∈ S₁` means there exists a block `C₁` in `state.blocks` with
+`C₁.author = h` and `B₁.d ∈ C₁.parents`. Similarly `h ∈ S₂` gives a
+block `C₂` with `C₂.author = h` and `B₂.d ∈ C₂.parents`. Note `C₁` and
+`C₂` may or may not be the same block.
+
+Since `h` is honest, both `C₁` and `C₂` are honestly-authored. Apply
+`NoEquivocationInParents` (cross-block form) to `(C₁, C₂, B₁, B₂)`,
+using `h_same_author` and `h_same_round` to discharge the equality
+hypotheses. Conclude `B₁ = B₂`.
+
+This proof depends on `Quorum.quorumIntersection` (currently `sorry`).
+Queued for Aristotle round 2 — see [docs/aristotle-projects.md](../../docs/aristotle-projects.md).
 -/
 theorem certified_unique
     {S} [SystemState S] (system : BlockSynchroniserSystem) (state : S)

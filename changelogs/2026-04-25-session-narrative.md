@@ -291,10 +291,26 @@ Cross-references added: [`docs/aristotle-workflow.md`](../docs/aristotle-workflo
 - **Step 1**: Lemma 10 — prepped, queued for Aristotle round 2.
 - **Step 2**: `quorumIntersection` — prepped, queued for Aristotle
   round 2.
-- **Step 3**: `certified_unique` — about to attempt by hand. Has a
-  separate *content gap*: `NoEquivocationInParents` as currently
-  stated only covers within-one-block parents; needs strengthening to
-  cross-block before the proof goes through.
+- **Step 3 (done)**: `certified_unique` — content gap fixed
+  (`NoEquivocationInParents` strengthened from within-block to
+  cross-block). Proof itself queued for Aristotle round 2 (depends on
+  `quorumIntersection`). This step is the counter-example to "always
+  delegate the wall" — the issue here was math content, not Lean
+  plumbing; Aristotle would have produced an invalid or incomplete
+  proof.
+
+## Pattern emerging: walls vs. gaps
+
+Three steps in, the proof effort has revealed a clean dichotomy:
+
+- **Tactical wall** (step 1, step 2): math is in the docstring, plumbing
+  remains. Aristotle's job. Prep + queue, move on.
+- **Content gap** (step 3): a hidden mismatch between the lemma's
+  hypotheses and the proof structure that can only be seen by working
+  the math through. Human's job. Strengthen statement, *then* delegate.
+
+This is captured in the decision-cue table at
+[docs/math-tactical-wall.md § When to push through anyway](../docs/math-tactical-wall.md).
 
 ## Open questions / what's left
 
