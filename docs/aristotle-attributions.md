@@ -264,6 +264,68 @@ paper-level finding that wouldn't have surfaced from reading the
 paper alone. Recorded as the canonical example of how a proof
 assistant catches an implicit assumption in a published proof.
 
+## Project 4cda6cb1-a5b1-4f2f-9616-204e6438f82d (round 2)
+
+| Field | Value |
+|---|---|
+| Submitted | 2026-04-25 22:55 SGT |
+| Returned | 2026-04-26 ~01:39 SGT (status `COMPLETE`) |
+| Result tarball | `/tmp/aristotle-r2.tar.gz` |
+| Prompt | Prove `quorumIntersection`, `certified_unique`, and `lemma10_round_robin_pigeonhole`. |
+| Integration commit | (TBD; this commit) |
+
+### Theorems proved (3 + helpers)
+
+| Theorem | File | Strategy |
+|---|---|---|
+| `Quorum.quorumIntersection` | `Quorum.lean` | Convert lists to `Finset`, apply `Finset.card_union_add_card_inter` (inclusion-exclusion), bound the union by the validator universe. |
+| `Beluga.certified_unique` | `Beluga/Patterns.lean` | Apply `quorumIntersection` to the two `strongReferencerAuthors` lists (size ≥ 2f+1 each); pigeonhole an honest validator into the intersection; apply `NoEquivocationInParents` (cross-block form). |
+| `Mysticeti.Safety.lemma10_round_robin_pigeonhole` | `Mysticeti/Safety.lean` | Decomposed into a pure combinatorial helper `consecutive_triple_exists` (in any circular sequence of length n=3f+1 with ≤ f false positions, three consecutive trues exist) by double-counting; main theorem instantiates with the round-robin honest function and discharges modular wrap-around. |
+
+### Helper lemmas added
+
+In `Beluga/Patterns.lean`: `strongReferencerAuthors_nodup`,
+`strongReferencerAuthors_mem`, `strongReferencerAuthors_are_validators`.
+
+In `Mysticeti/Safety.lean`: `consecutive_triple_exists` (combinatorial).
+
+### New paper-faithful hypotheses surfaced
+
+| Hypothesis | On theorem | Why |
+|---|---|---|
+| `hN : system.n = 3 * system.f + 1` | `quorumIntersection`, `certified_unique`, `lemma10_round_robin_pigeonhole` (already had it for L10) | F-2 — the `≥ f+1` intersection bound only holds at this exact size. |
+| `h_B₁_in`, `h_B₂_in : ∈ SystemState.blocks state` | `certified_unique` | Required for `NoEquivocationInParents`. |
+| `h_authors_valid` | `certified_unique` | Block authors are registered validators. |
+| `h_byz_bound : (validators.filter Byzantine).length ≤ system.f` | `certified_unique` | Standard BFT bound — pigeonholes an honest validator into the quorum intersection. |
+| `h_ids : ∀ i < system.n, ∃ pair ∈ system.validators, pair.1 = i` | `lemma10_round_robin_pigeonhole` | Validator IDs are `{0, …, n-1}`, matching the round-robin's `r % n`. New paper-implicit assumption — see F-8 in `mechanization-findings.md`. |
+
+### Caller updates
+
+- `lemma15_unique_cert` in `Mysticeti/Safety.lean` was updated to thread the four new `certified_unique` hypotheses through.
+- `three_consecutive_honest_direct_commit` in `Mysticeti/Liveness.lean` was updated to take the new `h_ids` and pass it to `lemma10`.
+
+### Side effects
+
+- `import Mathlib` → narrowed to `import Mathlib.Tactic` in three files.
+- Two `exact?` placeholders in `Patterns.lean` replaced with the
+  Lean-suggested explicit terms (`strongReferencerAuthors_mem state B vid hvid`,
+  `strongReferencerAuthors_nodup state B₁`).
+- Aristotle's `Safety.lean` modifications were *cherry-picked* (only
+  `consecutive_triple_exists` + L10 proof + L15 hypothesis pass-through),
+  preserving round 6's L13/L16/T7 work that landed between submission
+  and return.
+- `set_option linter.unusedSimpArgs false` added at the top of the three
+  files since Aristotle's heuristic-tactic chains generate cosmetic
+  warnings only.
+
+### Verifier confirmation
+
+`lake build` passes (6244 jobs). Sorry count drops from 27 to 20:
+- Quorum.lean: 1 → 0
+- Patterns.lean: 1 → 0
+- Safety.lean (lemma10): 1 → 0
+- All other counts unchanged.
+
 ## Future projects
 
 When a new Aristotle submission completes and is integrated, append

@@ -13,6 +13,7 @@ needed protocol invariants. Round 2 fills L10 and the
 lemmas below are pure quorum-intersection / pigeonhole arguments — no
 timing model needed.
 -/
+import Mathlib.Tactic
 import BlockSynchroniser.Block
 import BlockSynchroniser.State
 import BlockSynchroniser.System
@@ -20,6 +21,8 @@ import BlockSynchroniser.Causal
 import BlockSynchroniser.Quorum
 import BlockSynchroniser.Beluga.Patterns
 import BlockSynchroniser.Mysticeti.Consensus
+
+set_option linter.unusedSimpArgs false
 
 namespace BlockSynchroniser
 
@@ -48,45 +51,129 @@ def isCertificateFor {S} [SystemState S] (state : S) (C B : Block) : Prop :=
   C ∈ SystemState.blocks state ∧
   B ∈ SystemState.blocks state
 
-/--
-**Lemma 10 (paper Appendix D.3).**
+/-! ## Lemma 10 — round-robin pigeonhole (paper Appendix D)
+
+There are `3f + 1` groups of three consecutive rounds in any window of
+`3f + 3` rounds. Due to the round-robin schedule, each of the `2f + 1`
+honest validators appears in 3 such groups, contributing `3 · (2f+1)
+= 6f+3` total honest-leader positions across `3f+1` groups — average
+`> 2`, so by pigeonhole some group has 3 honest leaders.
+-/
+
+/-- Combinatorial helper for `lemma10_round_robin_pigeonhole`.
+
+In a circular sequence of length `n = 3f+1` with at most `f` "false"
+positions, three consecutive "true" positions exist. Proved by
+contradiction: each of the `n = 3f+1` triples `(i, i+1, i+2)` has a
+false member; but each false position covers exactly 3 triples
+(by the wrap-around), total coverage `3f < 3f+1`, contradiction.
+-/
+-- proof: aristotle (project 4cda6cb1) — round 2
+lemma consecutive_triple_exists (n f : Nat) (g : Nat → Bool)
+    (hn : n = 3 * f + 1)
+    (h_false_count : (Finset.range n |>.filter (fun i => g i = false)).card ≤ f)
+    (h_wrap1 : g n = g 0) (h_wrap2 : g (n + 1) = g 1) :
+    ∃ i, i < n ∧ g i = true ∧ g (i + 1) = true ∧ g (i + 2) = true := by
+  have h_sum_ge : ∑ i ∈ Finset.range n, (if g i = false then 1 else 0)
+      + ∑ i ∈ Finset.range n, (if g (i + 1) = false then 1 else 0)
+      + ∑ i ∈ Finset.range n, (if g (i + 2) = false then 1 else 0) ≤ 3 * f := by
+    have h_sum_ge : ∑ i ∈ Finset.range n, (if g (i + 1) = false then 1 else 0)
+        = ∑ i ∈ Finset.range n, (if g i = false then 1 else 0) := by
+      rcases n with (_ | _ | n) <;> simp_all +arith +decide [Finset.sum_range_succ']
+      · simp_all +decide [Finset.filter_singleton]
+      · rw [Finset.card_filter, Finset.card_filter]
+        rw [Finset.sum_range_succ, Finset.sum_range_succ']; aesop
+    have h_sum_ge : ∑ i ∈ Finset.range n, (if g (i + 2) = false then 1 else 0)
+        = ∑ i ∈ Finset.range n, (if g i = false then 1 else 0) := by
+      rcases n with (_ | _ | n) <;> simp_all +decide [Finset.sum_range_succ']
+      · simp_all +decide [Finset.filter_singleton]
+      · rw [Finset.card_filter, Finset.card_filter] at *
+        rw [← h_sum_ge, Finset.sum_range_succ, Finset.sum_range_succ']; aesop
+    simp_all +arith +decide [Finset.sum_ite]
+  contrapose! h_sum_ge
+  have h_sum_ge : ∀ i < n, (if g i = false then 1 else 0)
+      + (if g (i + 1) = false then 1 else 0)
+      + (if g (i + 2) = false then 1 else 0) ≥ 1 := by grind
+  simpa only [← Finset.sum_add_distrib] using
+    lt_of_lt_of_le (by norm_num [hn])
+      (Finset.sum_le_sum fun i hi => h_sum_ge i (Finset.mem_range.mp hi))
+
+/-- **Lemma 10 (paper Appendix D.3).**
 *The round-robin schedule of leader blocks in Mysticeti-Beluga ensures
 that in any window of `3f + 3` consecutive rounds, there are three
-consecutive rounds with honest leader blocks.*
-
-The lemma assumes the standard BFT setup `n = 3f + 1` (the minimum
-honest-majority size; the paper uses this implicitly throughout
-Appendix D). A more general `n ≥ 3f + 1` version follows by the same
-argument.
-
-PROVIDED SOLUTION (paper Appendix D)
-There are `3f + 1` groups of three consecutive rounds in any window of
-`3f + 3` rounds (groups indexed by their starting offset, `0..3f`).
-Due to the round-robin schedule (`leaderOf r := r % n`), each of the
-`n = 3f + 1` validators is the leader of exactly 3 *positions* in the
-3f+3 window when `n = 3f+1` (each validator appears in groups
-indexed by 3 distinct starting offsets, modulo edge effects).
-
-There are `2f + 1` honest validators (`n - f`). Each contributes 3
-honest-position counts across the groups. Total honest contribution
-is `3 · (2f + 1) = 6f + 3`. Distributed over `3f + 1` groups, the
-average is `(6f + 3) / (3f + 1) > 2`, so by pigeonhole some group
-must contain at least `⌈3 · (2f + 1) / (3f + 1)⌉ = 3` honest leaders
-— i.e., all three rounds in that group have honest leaders.
-
-Proof formalization requires Mathlib's `Finset.sum_le_card_nsmul`
-or `Finset.exists_lt_of_sum_lt`. Queued for Aristotle round 2.
--/
+consecutive rounds with honest leader blocks.* -/
+-- proof: aristotle (project 4cda6cb1) — round 2
 theorem lemma10_round_robin_pigeonhole
     (system : BlockSynchroniserSystem) (startRound : Round)
     (hN : system.n = 3 * system.f + 1)
     (hHonest : (system.validators.filter (fun p => p.2 = true)).length
-                = 2 * system.f + 1) :
+                = 2 * system.f + 1)
+    -- Validator IDs are {0, ..., n-1}, matching the round-robin's
+    -- `r % n` output. Without this, `leaderOf` could produce IDs that
+    -- don't correspond to any registered validator, making
+    -- `isHonestValidator` return `false` for all leaders.
+    (h_ids : ∀ i < system.n, ∃ pair ∈ system.validators, pair.1 = i) :
     ∃ r ≥ startRound, r + 2 < startRound + (3 * system.f + 3) ∧
       isHonestValidator system (leaderOf system r) = true ∧
       isHonestValidator system (leaderOf system (r + 1)) = true ∧
       isHonestValidator system (leaderOf system (r + 2)) = true := by
-  sorry
+  have h_pigeonhole : ∃ i < system.n,
+      isHonestValidator system (leaderOf system (startRound + i)) ∧
+      isHonestValidator system (leaderOf system (startRound + i + 1)) ∧
+      isHonestValidator system (leaderOf system (startRound + i + 2)) := by
+    have := consecutive_triple_exists (3 * system.f + 1) system.f
+        (fun i => isHonestValidator system ((startRound + i) % (3 * system.f + 1)))
+        rfl ?_ ?_ ?_
+    · unfold leaderOf; aesop
+    · have h_false_count : (Finset.range (3 * system.f + 1)
+          |>.filter (fun i => isHonestValidator system i = false)).card ≤ system.f := by
+        have h_false_count : (Finset.filter (fun i => isHonestValidator system i = false)
+            (Finset.range (3 * system.f + 1))).card
+            ≤ (system.validators.filter (fun p => p.2 = false)).length := by
+          have h_false_count : Finset.filter (fun i => isHonestValidator system i = false)
+              (Finset.range (3 * system.f + 1))
+              ⊆ Finset.image (fun p => p.1) (List.toFinset
+                  (List.filter (fun p => p.2 = false) system.validators)) := by
+            intro i hi
+            simp_all +decide [isHonestValidator]
+            cases h_ids i hi.1 <;> simp_all +decide [BlockSynchroniserSystem.isHonest]
+            cases h : List.find? (fun x => decide (x.1 = i)) system.validators <;>
+              simp_all +decide [List.find?_eq_none]
+            · exact False.elim <| h i |>.2 ‹_› rfl
+            · grind
+          exact le_trans (Finset.card_le_card h_false_count)
+            (Finset.card_image_le.trans (List.toFinset_card_le _))
+        have h_false_count : (system.validators.filter (fun p => p.2 = true)).length
+            + (system.validators.filter (fun p => p.2 = false)).length = system.n := by
+          have h_false_count : ∀ (l : List (ValidatorId × Bool)),
+              (l.filter (fun p => p.2 = true)).length
+              + (l.filter (fun p => p.2 = false)).length = l.length := by
+            intro l; induction l <;> simp +decide [*]; grind
+          rw [h_false_count, system.validatorCountCorrect]
+        grind
+      convert h_false_count using 1
+      refine Finset.card_bij (fun i _ => (startRound + i) % (3 * system.f + 1)) ?_ ?_ ?_ <;>
+        simp +decide [Nat.mod_lt]
+      · exact fun a _ ha' => ⟨Nat.le_of_lt_succ <| Nat.mod_lt _ <| Nat.succ_pos _, ha'⟩
+      · intro a₁ ha₁ ha₂ a₂ ha₃ ha₄ h
+        have := Nat.modEq_iff_dvd.mp h.symm
+        simp_all +decide [Nat.dvd_iff_mod_eq_zero]
+        obtain ⟨k, hk⟩ := this; nlinarith [show k = 0 by nlinarith]
+      · intro b hb hb'
+        use (b + (3 * system.f + 1) - startRound % (3 * system.f + 1)) % (3 * system.f + 1)
+        simp +decide [← ZMod.val_natCast,
+          Nat.cast_sub (show startRound % (3 * system.f + 1) ≤ b + (3 * system.f + 1) from
+            le_trans (Nat.mod_lt _ (Nat.succ_pos _) |> Nat.le_of_lt) (Nat.le_add_left _ _))]
+        simp +decide [Nat.cast_sub (show (startRound : ℕ) % (3 * system.f + 1)
+            ≤ b + (3 * system.f + 1) from
+            le_trans (Nat.mod_lt _ (Nat.succ_pos _) |> Nat.le_of_lt) (Nat.le_add_left _ _))]
+        exact ⟨⟨Nat.le_of_lt_succ <| by exact ZMod.val_lt _,
+              by simpa [Nat.mod_eq_of_lt (show b < 3 * system.f + 1 from
+                Nat.lt_succ_of_le hb)] using hb'⟩, hb⟩
+    · norm_num [Nat.mod_eq_of_lt]
+    · simp +decide [← hN, Nat.mod_eq_of_lt]
+      norm_num [add_assoc, Nat.add_mod]
+  grind
 
 /--
 **Lemma 13 (paper Appendix D.3).**
@@ -117,8 +204,8 @@ for `B`. By induction over rounds, this property propagates to all
 -- proof: aristotle (project 9d7e8e08) — round 6
 theorem lemma13_cert_persistence
     (system : BlockSynchroniserSystem) {S} [SystemState S] (state : S)
-    (h_no_eq : NoEquivocationInParents system state)
-    (B : Block) (h_B : B ∈ SystemState.blocks state)
+    (_h_no_eq : NoEquivocationInParents system state)
+    (B : Block) (_h_B : B ∈ SystemState.blocks state)
     (h_cert : ∃ certs : List Block,
                 certs.length ≥ 2 * system.f + 1 ∧
                 certs.Nodup ∧
@@ -232,7 +319,15 @@ theorem lemma15_unique_cert
     (B₁ B₂ : Block)
     (h_lead₁ : isLeaderBlock system B₁) (h_lead₂ : isLeaderBlock system B₂)
     (h_same_round : B₁.r = B₂.r)
-    (h_cert₁ : certified system state B₁) (h_cert₂ : certified system state B₂) :
+    (h_cert₁ : certified system state B₁) (h_cert₂ : certified system state B₂)
+    -- Additional BFT hypotheses (passed through to `certified_unique`):
+    (hN : system.n = 3 * system.f + 1)
+    (h_B₁_in : B₁ ∈ SystemState.blocks state)
+    (h_B₂_in : B₂ ∈ SystemState.blocks state)
+    (h_authors_valid : ∀ B ∈ SystemState.blocks state,
+      ∃ pair ∈ system.validators, pair.1 = B.author)
+    (h_byz_bound : (system.validators.filter (fun p => p.2 = false)).length
+      ≤ system.f) :
     B₁ = B₂ := by
   -- Specialization of Beluga.certified_unique: leader blocks share author by
   -- definition (both authored by leaderOf system B₁.r = leaderOf system B₂.r).
@@ -240,6 +335,7 @@ theorem lemma15_unique_cert
     unfold isLeaderBlock at h_lead₁ h_lead₂
     rw [h_lead₁, h_lead₂, h_same_round]
   exact certified_unique system state h_no_eq B₁ B₂ h_cert₁ h_cert₂ h_same_author h_same_round
+    hN h_B₁_in h_B₂_in h_authors_valid h_byz_bound
 
 /--
 **Lemma 16 (paper Appendix D.3).**
@@ -328,7 +424,7 @@ order them consistently.
 -/
 -- proof: aristotle (project 9d7e8e08) — round 6
 theorem theorem7_consensus_safety
-    (system : BlockSynchroniserSystem) {S} [SystemState S] (state : S)
+    (system : BlockSynchroniserSystem) {S} [SystemState S] (_state : S)
     (view : ConsensusView) (order : TransactionOrder)
     (h_view_consistent : view.Consistent system)
     (h_order_from_view :

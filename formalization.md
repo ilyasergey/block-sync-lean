@@ -14,7 +14,7 @@ Protocols*](docs/Block_Sync_Project.pdf).
 ## Paper → code map
 
 The single source of truth for which paper item lives where in this repo.
-Status: ✅ done · ◐ in progress · ☐ planned · ⊘ out of scope · ⏸ deferred.
+Status: ✅ done · ◐ in progress · ☐ planned · ⊘ out of scope · ⏸ deferred · ⚠️ proved but with paper-faithfulness concerns flagged in [`docs/mechanization-findings.md`](docs/mechanization-findings.md).
 
 ### §2 — Network model and synchronizer abstraction
 
@@ -46,7 +46,7 @@ Status: ✅ done · ◐ in progress · ☐ planned · ⊘ out of scope · ⏸ de
 | §4.4 — Availability pattern | [`Beluga/Patterns.lean :: availabilityPattern`](BlockSynchroniser/Beluga/Patterns.lean) | ✅ strong-link only |
 | §4.4 — Certificate pattern | [`Beluga/Patterns.lean :: certificatePattern`](BlockSynchroniser/Beluga/Patterns.lean) | ✅ |
 | §4.4 — `available` / `certified` | [`Beluga/Patterns.lean`](BlockSynchroniser/Beluga/Patterns.lean) | ✅ |
-| §4.4 — Uniqueness consequence ("for any validator and round, at most one block can become certified") | [`Beluga/Patterns.lean :: certified_unique`](BlockSynchroniser/Beluga/Patterns.lean) | ◐ stated; `sorry` |
+| §4.4 — Uniqueness consequence ("for any validator and round, at most one block can become certified") | [`Beluga/Patterns.lean :: certified_unique`](BlockSynchroniser/Beluga/Patterns.lean) | ✅ proved (with the BFT side conditions documented in "Notes on paper consistency"). |
 
 ### §5 — Beluga's main theorems (Phase 5)
 
@@ -79,15 +79,15 @@ Status: ✅ done · ◐ in progress · ☐ planned · ⊘ out of scope · ⏸ de
 | D.1.2 — Round-robin leader schedule | [`Mysticeti/Consensus.lean :: leaderOf` / `isLeaderBlock`](BlockSynchroniser/Mysticeti/Consensus.lean) | ✅ |
 | **Lemma 8** — leader block referenced next round (after GST) | [`Mysticeti/Liveness.lean :: lemma8_leader_referenced`](BlockSynchroniser/Mysticeti/Liveness.lean) | ◐ Stated with timing (post-GST + 4Δ bound); `sorry` + paper sketch |
 | **Lemma 9** — honest validators create certificate for honest leader | [`Mysticeti/Liveness.lean :: lemma9_honest_certificate`](BlockSynchroniser/Mysticeti/Liveness.lean) | ◐ Stated; `sorry` + paper sketch |
-| **Lemma 10** — round-robin pigeonhole (3 consecutive honest leaders in any 3f+3 window) | [`Mysticeti/Safety.lean :: lemma10_round_robin_pigeonhole`](BlockSynchroniser/Mysticeti/Safety.lean) | ◐ Stated; `sorry` + paper sketch (pure combinatorics) |
+| **Lemma 10** — round-robin pigeonhole (3 consecutive honest leaders in any 3f+3 window) | [`Mysticeti/Safety.lean :: lemma10_round_robin_pigeonhole`](BlockSynchroniser/Mysticeti/Safety.lean) | ✅ proved (takes `n=3f+1`, honest-count = 2f+1, validator-IDs-contiguous; the last is finding F-8). |
 | **Lemma 11** — undecided leader block eventually decided | [`Mysticeti/Liveness.lean :: lemma11_eventual_decision`](BlockSynchroniser/Mysticeti/Liveness.lean) | ◐ Stated with timing; `sorry` + paper sketch |
 | **Lemma 12** — block referenced by 2f+1 ⇒ honest validators output `block_accept` | [`Mysticeti/Liveness.lean :: lemma12_referenced_accepted`](BlockSynchroniser/Mysticeti/Liveness.lean) | ◐ Stated with timing; `sorry` + paper sketch |
-| **Lemma 13** — certificate persistence across rounds | [`Mysticeti/Safety.lean :: lemma13_cert_persistence`](BlockSynchroniser/Mysticeti/Safety.lean) | ◐ Stated (skeleton conclusion); `sorry` + paper sketch |
-| **Lemma 14** — no honest validator skips a directly-committed leader | [`Mysticeti/Safety.lean :: lemma14_no_skip`](BlockSynchroniser/Mysticeti/Safety.lean) | ◐ Stated (skeleton); `sorry` + paper sketch |
-| **Lemma 15** — at most one certified leader per round | [`Mysticeti/Safety.lean :: lemma15_unique_cert`](BlockSynchroniser/Mysticeti/Safety.lean) | ◐ Reduces to `Beluga/Patterns.lean :: certified_unique` (which is itself sorry'd) |
-| **Lemma 16** — consistent leader-status decision across honest validators | [`Mysticeti/Safety.lean :: lemma16_consistent_status`](BlockSynchroniser/Mysticeti/Safety.lean) | ◐ Skeleton; `sorry` + paper sketch |
-| **Theorem 6** — Mysticeti-Beluga consensus liveness | [`Mysticeti/Liveness.lean :: theorem6_consensus_liveness`](BlockSynchroniser/Mysticeti/Liveness.lean) | ◐ Skeleton statement; `sorry` + paper sketch |
-| **Theorem 7** — Mysticeti-Beluga consensus safety | [`Mysticeti/Safety.lean :: theorem7_consensus_safety`](BlockSynchroniser/Mysticeti/Safety.lean) | ◐ Skeleton; `sorry` + paper sketch |
+| **Lemma 13** — certificate persistence across rounds | [`Mysticeti/Safety.lean :: lemma13_cert_persistence`](BlockSynchroniser/Mysticeti/Safety.lean) | ✅ proved with paper-faithful protocol-invariant hypotheses (`h_cert_base`, `h_dag_parent`); see finding F-5. |
+| **Lemma 14** — no honest validator skips a directly-committed leader | [`Mysticeti/Safety.lean :: lemma14_no_skip`](BlockSynchroniser/Mysticeti/Safety.lean) | ✅ proved (round 3c). |
+| **Lemma 15** — at most one certified leader per round | [`Mysticeti/Safety.lean :: lemma15_unique_cert`](BlockSynchroniser/Mysticeti/Safety.lean) | ✅ specialization of `certified_unique`; threads through the same BFT side conditions. |
+| **Lemma 16** — consistent leader-status decision across honest validators | [`Mysticeti/Safety.lean :: lemma16_consistent_status`](BlockSynchroniser/Mysticeti/Safety.lean) | ✅ proved with `h_view_traceback` hypothesis; see finding F-5. |
+| **Theorem 6** — Mysticeti-Beluga consensus liveness | [`Mysticeti/Liveness.lean :: theorem6_consensus_liveness`](BlockSynchroniser/Mysticeti/Liveness.lean) | ◐ Top-level proof closed; transitively depends on 11 helper lemmas still `sorry` (round 5 in flight). |
+| **Theorem 7** — Mysticeti-Beluga consensus safety | [`Mysticeti/Safety.lean :: theorem7_consensus_safety`](BlockSynchroniser/Mysticeti/Safety.lean) | ⚠️ proved with `h_decision_complete` + `h_order_from_view` hypotheses but **finding F-7 flags both as unfaithful** to the paper (liveness ingredient + modeling artifact); restatement pending. |
 
 ## Not in the paper — internal validation
 

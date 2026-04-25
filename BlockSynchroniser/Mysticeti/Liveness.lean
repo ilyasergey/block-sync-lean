@@ -182,6 +182,7 @@ lemma three_consecutive_honest_direct_commit
     (hN : system.n = 3 * system.f + 1)
     (hHonest : (system.validators.filter (fun p => p.2 = true)).length
                 = 2 * system.f + 1)
+    (h_ids : ∀ i < system.n, ∃ pair ∈ system.validators, pair.1 = i)
     (startRound : Round) (k₀ : ℕ) (h_gst : time k₀ ≥ system.GST) :
     ∃ r₁ ≥ startRound, ∃ k' ≥ k₀,
       (∀ B_L ∈ (belugaTrace system k').blocks,
@@ -189,7 +190,7 @@ lemma three_consecutive_honest_direct_commit
         (B_L.r = r₁ ∨ B_L.r = r₁ + 1 ∨ B_L.r = r₁ + 2) →
         directDecide system (belugaTrace system k') B_L = Decision.ToCommit) := by
   obtain ⟨r₁, hr₁_ge, _, h_honest₁, h_honest₂, h_honest₃⟩ :=
-    Safety.lemma10_round_robin_pigeonhole system startRound hN hHonest
+    Safety.lemma10_round_robin_pigeonhole system startRound hN hHonest h_ids
   sorry
 
 /-- Backward induction: once three consecutive honest leaders are committed,

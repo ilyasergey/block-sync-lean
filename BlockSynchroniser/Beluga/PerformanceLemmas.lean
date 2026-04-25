@@ -64,9 +64,9 @@ reputation decreased by honest validators.*
 theorem lemma3_honest_not_blamed
     (system : BlockSynchroniserSystem)
     (time : TimeMap)
-    (h_time : time.WellFormed)
-    (h_sync : PartiallySynchronous system (belugaTrace system) time)
-    (R_L : Nat) :
+    (_h_time : time.WellFormed)
+    (_h_sync : PartiallySynchronous system (belugaTrace system) time)
+    (_R_L : Nat) :
     ∀ vid₁ vid₂,
       isHonestValidator system vid₁ = true →
       isHonestValidator system vid₂ = true →
@@ -111,8 +111,8 @@ theorem lemma4_round_latency_delta
     (system : BlockSynchroniserSystem)
     (time : TimeMap)
     (h_time : time.WellFormed)
-    (h_sync : PartiallySynchronous system (belugaTrace system) time)
-    (R_L : Nat)
+    (_h_sync : PartiallySynchronous system (belugaTrace system) time)
+    (_R_L : Nat)
     (h_lt : LatencyTriangle system time) :
     ∀ r k_r,
       time k_r ≥ system.GST →
@@ -155,8 +155,8 @@ theorem lemma5_round_latency_or_blamed
     (system : BlockSynchroniserSystem)
     (time : TimeMap)
     (h_time : time.WellFormed)
-    (h_sync : PartiallySynchronous system (belugaTrace system) time)
-    (R_L : Nat)
+    (_h_sync : PartiallySynchronous system (belugaTrace system) time)
+    (_R_L : Nat)
     (h_lt : LatencyTriangle system time) :
     ∀ r k_r,
       time k_r ≥ system.GST →

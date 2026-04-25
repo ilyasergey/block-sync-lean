@@ -5,10 +5,13 @@ Licensed under the Apache License, Version 2.0.
 
 Block patterns (paper §4.4).
 -/
+import Mathlib.Tactic
 import BlockSynchroniser.Block
 import BlockSynchroniser.System
 import BlockSynchroniser.State
 import BlockSynchroniser.Quorum
+
+set_option linter.unusedSimpArgs false
 
 namespace BlockSynchroniser
 namespace Beluga
@@ -86,7 +89,47 @@ def NoEquivocationInParents (system : BlockSynchroniserSystem) {S} [SystemState 
     parent₁.r = parent₂.r →
     parent₁ = parent₂
 
-/--
+/-! ## Helper lemmas for `certified_unique` -/
+
+/-
+`strongReferencerAuthors` produces duplicate-free lists (by `eraseDups`).
+-/
+lemma strongReferencerAuthors_nodup {S} [SystemState S] (state : S) (B : Block) :
+    (strongReferencerAuthors state B).Nodup := by
+  -- By definition of `List.eraseDupsBy.loop`, the list is nodup.
+  have h_loop_nodup : ∀ (l : List ValidatorId) (acc : List ValidatorId), List.Nodup acc → List.Nodup (List.eraseDupsBy.loop (fun x1 x2 => x1 == x2) l acc) := by
+    intros l acc hacc; induction' l with hd tl ih generalizing acc <;> simp_all +decide [ List.eraseDupsBy.loop ] ;
+    cases h : acc.any fun x2 => hd == x2 <;> simp_all +decide;
+    grind;
+  exact h_loop_nodup _ _ ( by simp +decide )
+
+/-
+Membership in `strongReferencerAuthors` witnesses a referencing block.
+-/
+lemma strongReferencerAuthors_mem {S} [SystemState S] (state : S) (B : Block) (vid : ValidatorId) :
+    vid ∈ strongReferencerAuthors state B →
+    ∃ C ∈ SystemState.blocks state, C.author = vid ∧ B.d ∈ C.parents := by
+  intro h;
+  unfold strongReferencerAuthors at h;
+  have h_eraseDups : ∀ {l : List ValidatorId}, vid ∈ List.eraseDups l → vid ∈ l := by
+    intros l hl; induction' l using List.reverseRecOn with l ih <;> simp_all +decide [ List.eraseDups_append ] ;
+    grind +suggestions;
+  grind
+
+/-
+Elements of `strongReferencerAuthors` are registered validator IDs
+    (assuming all block authors in the state are registered).
+-/
+lemma strongReferencerAuthors_are_validators {S} [SystemState S]
+    (system : BlockSynchroniserSystem) (state : S) (B : Block)
+    (h_valid : ∀ B ∈ SystemState.blocks state, ∃ pair ∈ system.validators, pair.1 = B.author) :
+    ∀ vid ∈ strongReferencerAuthors state B, ∃ pair ∈ system.validators, pair.1 = vid := by
+  intros vid hvid
+  obtain ⟨C, hC⟩ : ∃ C ∈ SystemState.blocks state, C.author = vid ∧ B.d ∈ C.parents := by
+    exact strongReferencerAuthors_mem state B vid hvid
+  simpa only [hC.2.1] using h_valid C hC.1
+
+/-
 **Uniqueness of certified blocks per `(author, round)` (paper §4.4).**
 
 > *"the certificate pattern implies uniqueness: for any validator and round,
@@ -98,25 +141,13 @@ here. Specializing `B₁.author = B₂.author = leader(r)` gives Appendix D
 which is the load-bearing form for the Mysticeti-Beluga safety theorem
 (Phase 6).
 
-PROVIDED SOLUTION
-Let `S₁ = strongReferencerAuthors state B₁` and `S₂ = strongReferencerAuthors state B₂`.
-By `certificatePattern`, `|S₁| > 2f` and `|S₂| > 2f`, so both qualify as
-quorums. By `Quorum.quorumIntersection`, they share at least `f+1`
-validators; since at most `f` are Byzantine, at least one *honest*
-validator `h ∈ S₁ ∩ S₂`.
-
-`h ∈ S₁` means there exists a block `C₁` in `state.blocks` with
-`C₁.author = h` and `B₁.d ∈ C₁.parents`. Similarly `h ∈ S₂` gives a
-block `C₂` with `C₂.author = h` and `B₂.d ∈ C₂.parents`. Note `C₁` and
-`C₂` may or may not be the same block.
-
-Since `h` is honest, both `C₁` and `C₂` are honestly-authored. Apply
-`NoEquivocationInParents` (cross-block form) to `(C₁, C₂, B₁, B₂)`,
-using `h_same_author` and `h_same_round` to discharge the equality
-hypotheses. Conclude `B₁ = B₂`.
-
-This proof depends on `Quorum.quorumIntersection` (currently pending).
-Queued for Aristotle round 2 — see [docs/aristotle-projects.md](../../docs/aristotle-projects.md).
+The following additional hypotheses beyond the original statement were
+required for the formalization (they are standard BFT assumptions implicit
+in the paper's reasoning):
+- `hN`: the system has exactly `3f+1` validators (needed for quorum intersection)
+- `h_B₁_in`, `h_B₂_in`: both certified blocks are in the state (needed for `NoEquivocationInParents`)
+- `h_authors_valid`: all block authors are registered validators (bounds the universe)
+- `h_byz_bound`: at most `f` validators are Byzantine (needed to find an honest validator in the intersection)
 -/
 theorem certified_unique
     {S} [SystemState S] (system : BlockSynchroniserSystem) (state : S)
@@ -125,9 +156,35 @@ theorem certified_unique
     (h_cert₁ : certified system state B₁)
     (h_cert₂ : certified system state B₂)
     (h_same_author : B₁.author = B₂.author)
-    (h_same_round  : B₁.r      = B₂.r) :
+    (h_same_round  : B₁.r      = B₂.r)
+    -- Additional BFT hypotheses (implicit in the paper):
+    (hN : system.n = 3 * system.f + 1)
+    (h_B₁_in : B₁ ∈ SystemState.blocks state)
+    (h_B₂_in : B₂ ∈ SystemState.blocks state)
+    (h_authors_valid : ∀ B ∈ SystemState.blocks state,
+      ∃ pair ∈ system.validators, pair.1 = B.author)
+    (h_byz_bound : (system.validators.filter (fun p => p.2 = false)).length
+      ≤ system.f) :
     B₁ = B₂ := by
-  sorry
+  -- Apply the quorum intersection lemma to get a shared list with length ≥ f+1 and ∀ vid ∈ shared, vid ∈ S₁ ∧ vid ∈ S₂.
+  obtain ⟨shared, h_shared_nodup, h_shared_length, h_shared_mem⟩ : ∃ shared : List ValidatorId, shared.Nodup ∧ shared.length ≥ system.f + 1 ∧ ∀ vid ∈ shared, vid ∈ strongReferencerAuthors state B₁ ∧ vid ∈ strongReferencerAuthors state B₂ := by
+    apply Quorum.quorumIntersection system (strongReferencerAuthors state B₁) (strongReferencerAuthors state B₂);
+    · constructor
+      · exact strongReferencerAuthors_nodup state B₁
+      · exact ⟨h_cert₁, strongReferencerAuthors_are_validators system state B₁ h_authors_valid⟩
+    · exact ⟨ strongReferencerAuthors_nodup state B₂, h_cert₂, fun vid h => strongReferencerAuthors_are_validators system state B₂ h_authors_valid vid h ⟩;
+    · exact hN;
+  obtain ⟨h, hh⟩ : ∃ h ∈ shared, isHonestValidator system h = true := by
+    contrapose! h_byz_bound;
+    have h_byz_list : List.toFinset (List.filter (fun p => p.2 = false) system.validators |>.map (·.1)) ⊇ List.toFinset shared := by
+      intro x hx; specialize h_shared_mem x; specialize h_byz_bound x; simp_all +decide [ Finset.subset_iff ] ;
+      obtain ⟨ C₁, hC₁, hC₁' ⟩ := strongReferencerAuthors_mem state B₁ x h_shared_mem.1; specialize h_authors_valid C₁ hC₁; simp_all +decide [ isHonestValidator ] ;
+      cases h : system.validators.find? ( fun p => p.1 = x ) <;> simp_all +decide [ BlockSynchroniserSystem.isHonest ];
+      · grind +splitIndPred;
+      · grind;
+    have := Finset.card_le_card h_byz_list; simp_all +decide [ List.toFinset_card_of_nodup ] ;
+    exact h_shared_length.trans_le ( this.trans ( List.toFinset_card_le _ ) |> le_trans <| by simp +decide [ List.toFinset_card_le ] );
+  have := strongReferencerAuthors_mem state B₁ h ( h_shared_mem h hh.1 |>.1 ) ; have := strongReferencerAuthors_mem state B₂ h ( h_shared_mem h hh.1 |>.2 ) ; aesop;
 
 end Beluga
 end BlockSynchroniser

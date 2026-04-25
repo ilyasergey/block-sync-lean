@@ -3,7 +3,11 @@ Copyright Ilya Sergey
 
 Licensed under the Apache License, Version 2.0.
 -/
+import Mathlib.Tactic
 import BlockSynchroniser.System
+
+set_option linter.unusedSimpArgs false
+set_option linter.style.refine false
 
 namespace BlockSynchroniser
 namespace Quorum
@@ -21,7 +25,7 @@ def IsQuorum (system : BlockSynchroniserSystem) (Q : List ValidatorId) : Prop :=
   Q.length ≥ 2 * system.f + 1 ∧
   ∀ vid ∈ Q, ∃ pair ∈ system.validators, pair.1 = vid
 
-/--
+/-
 **Quorum intersection.** *Not in the paper as a numbered lemma — it is the
 standard BFT lemma the paper relies on throughout §5 and Appendix D.*
 
@@ -57,7 +61,15 @@ theorem quorumIntersection
       shared.Nodup ∧
       shared.length ≥ system.f + 1 ∧
       ∀ vid ∈ shared, vid ∈ Q₁ ∧ vid ∈ Q₂ := by
-  sorry
+  unfold IsQuorum at *;
+  refine' ⟨ Q₁.toFinset ∩ Q₂.toFinset |> Finset.toList, _, _, _ ⟩ <;> simp_all +decide [ Finset.subset_iff ];
+  · exact Finset.nodup_toList _;
+  · have h_union : (Q₁.toFinset ∪ Q₂.toFinset).card ≤ system.n := by
+      refine' le_trans ( Finset.card_le_card _ ) _;
+      exact ( system.validators.map ( ·.1 ) ).toFinset;
+      · intro x hx; aesop;
+      · exact le_trans ( Multiset.toFinset_card_le _ ) ( by simp [ system.validatorCountCorrect ] );
+    have := Finset.card_union_add_card_inter Q₁.toFinset Q₂.toFinset; simp_all +decide [ List.toFinset_card_of_nodup ] ; linarith;
 
 end Quorum
 end BlockSynchroniser

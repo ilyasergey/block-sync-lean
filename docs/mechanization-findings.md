@@ -200,6 +200,34 @@ liveness theorems respectively.
 
 ---
 
+## F-8. Round-robin schedule presumes contiguous validator IDs
+
+**Affected statement.** Paper §D.1.2, round-robin leader schedule
+(`leader_of(r) := validators[r mod n]`), and Lemma 10 (round-robin
+pigeonhole).
+
+**Finding.** The round-robin formula `r mod n` produces a numeric
+identifier in `{0, …, n−1}`. For "the leader of round `r`" to be a
+*registered validator*, the validator set must be indexed by exactly
+that range — i.e., the validators carry IDs `0, 1, …, n−1`. The
+paper takes this as obvious; the formalization made it visible
+because we model `system.validators : List (ValidatorId × Bool)`
+allowing arbitrary ID assignment, which means `r mod n` could
+otherwise produce an ID that nobody has, in which case
+`isHonestValidator(r mod n)` returns `false` for every leader and
+the pigeonhole conclusion fails vacuously.
+
+**Suggested fix.** State explicitly that `system.validators`'s ID
+column is `{0, …, n−1}` (perhaps in §2 alongside `n` and `f`), or
+formulate the round-robin schedule directly in terms of indices into
+the validator list rather than via `r mod n` of an externally
+supplied ID. Either is fine; just pin one.
+
+This is a trivial finding compared to F-1 / F-7 — purely a
+notational hygiene issue. Recording it for completeness.
+
+---
+
 ## F-7. Theorem 7's prose proof slips a liveness step into a safety claim
 
 **Affected statement.** Paper §D.3, Theorem 7 (consensus safety).
