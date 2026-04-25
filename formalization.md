@@ -13,8 +13,8 @@ Status: ✅ done · ◐ in progress · ☐ planned · ⊘ out of scope · ⏸ de
 | Paper | Code | Status |
 |---|---|---|
 | §2 — Network model (`n`, `f`, `k`, `GST`, `Δ`) | [`System.lean :: BlockSynchroniserSystem`](BlockSynchroniser/System.lean) | ✅ |
-| §2 — Honest / Byzantine partition | [`System.lean :: isHonest` / `isByzantine`](BlockSynchroniser/System.lean) | ✅ binary partition (matches the paper); a finer-grained crashed-vs-Byzantine refinement is not in the paper and not pursued |
-| §2.1 — Block structure (`r, d, author, parents, payload, signature`) | [`Block.lean :: Block`](BlockSynchroniser/Block.lean) | ✅ five of six fields; `signature` is ⊘ (signature semantics are unused by every theorem we formalize — the abstract synchronizer treats Byzantine behavior adversarially rather than via signature attribution) |
+| §2 — Honest / Byzantine partition | [`System.lean :: isHonest` / `isByzantine`](BlockSynchroniser/System.lean) | ✅ |
+| §2.1 — Block structure (`r, d, author, parents, payload, signature`) | [`Block.lean :: Block`](BlockSynchroniser/Block.lean) | ✅ (signature field omitted — see note below) |
 | §2.1 — Synchronizer interface (`block_propose_i`/`block_accept_i`/`block_store_i`) | [`Operations.lean :: ValidatorOperation`](BlockSynchroniser/Operations.lean) | ✅ |
 | §2.1 — Causal history `causal(B)` | [`Causal.lean :: Reaches` / `causal`](BlockSynchroniser/Causal.lean) | ✅ |
 | §2.1 — **Definition 1.1 — Round-Progression** | [`Properties.lean :: RoundProgression`](BlockSynchroniser/Properties.lean) | ✅ |
@@ -100,6 +100,18 @@ proofs were filled by Aristotle vs hand) lives in
 Side conditions and refinements added during formalization that aren't
 literally in the paper but are *consistent* with it (i.e., paper claims
 hold under these). Reported here so a reader can spot them.
+
+### Omitted paper structure (out of scope, no theorem affected)
+
+- **`signature` field on `Block`** (paper §2.1). The paper's block
+  carries six fields `(r, d, author, parents, payload, signature)`;
+  our [`Block.lean :: Block`](BlockSynchroniser/Block.lean) carries
+  the first five. Signature semantics are not invoked by any theorem
+  in the scope we formalize — the abstract block synchronizer (and
+  every paper theorem we target) treats Byzantine behavior
+  adversarially via the honest/Byzantine partition rather than via
+  signature-based attribution. Adding `signature` would only add
+  data fields and a `verify` predicate that no proof references.
 
 ### Added side conditions (don't invalidate paper claims)
 
