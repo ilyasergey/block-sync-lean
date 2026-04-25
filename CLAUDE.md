@@ -142,10 +142,32 @@ arg-limit. Don't widen back to `import Mathlib`.
 - One commit per logical step (Phase, sub-phase, integration round).
 - Commit messages explain what changed and *why*, not just what files
   were touched.
-- After every successful stage, add a changelog entry under
-  `changelogs/YYYY-MM-DD-<topic>.md`.
 - Commit Aristotle integrations separately from manual work, with the
   project ID in the message.
+
+## Always update the changelog
+
+**Every commit that lands a phase / sub-phase / Aristotle integration /
+iteration / definition repair / discovery should be paired with a
+changelog entry.** Changelogs are how the project's history is
+reconstructable — without them, six months from now nobody will know
+why a definition has its current shape.
+
+Conventions:
+- File path: `changelogs/YYYY-MM-DD-<topic>.md`. Topic is short and
+  scope-specific, e.g. `phase-4-protocol-modules`,
+  `aristotle-round1-integration`, `iterate-on-r3f-paper-consistency`.
+- Each entry covers: what changed (technical), why (decision /
+  diagnosis), build state (jobs, sorries), Aristotle attributions
+  (project IDs of any work integrated), what's next.
+- For decisions that span multiple commits, also append to
+  `changelogs/2026-04-25-session-narrative.md` (the cross-phase
+  thread doc).
+- See [`changelogs/README.md`](changelogs/README.md) for the
+  long-form conventions.
+
+If you skip a changelog entry, the next session won't have the
+context to continue. **Don't.**
 
 ## Default working pattern
 
