@@ -232,6 +232,8 @@ implicit invariants) are recorded in
 | | |
 |---|---|
 | Phased plan & scope decisions | [docs/formalization-plan.md](docs/formalization-plan.md) |
+| Plan: derive `SchedulerFairness` from paper primitives (network model refinement; phases A–F) | [docs/plan-derive-fairness-from-primitives.md](docs/plan-derive-fairness-from-primitives.md) |
+| Why `SchedulerFairness` is needed and ImPoA does not substitute | [docs/paper-feedback-impoa-vs-fairness.md](docs/paper-feedback-impoa-vs-fairness.md) |
 | Mechanization findings (paper-side log) | [docs/mechanization-findings.md](docs/mechanization-findings.md) |
 | Aristotle delegation workflow | [docs/aristotle-workflow.md](docs/aristotle-workflow.md) |
 | Aristotle project tracker (active / queued / completed submissions) | [docs/aristotle-projects.md](docs/aristotle-projects.md) |
