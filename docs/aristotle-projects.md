@@ -10,7 +10,7 @@ Status legend: 🟡 IN_PROGRESS · ✅ COMPLETE (integrated) · ⚠️ COMPLETE_
 
 | Project ID | Round | Submitted | Status | Target file(s) | Theorem(s) | Result |
 |---|---|---|---|---|---|---|
-| `58873be7-0f63-412c-8029-873bbd930abe` | 3a-followup | 2026-04-26 ~01:50 SGT | 🟡 IN_PROGRESS | [`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) | L1, L2, T1, T2, T3, T4 (under new `SchedulerFairness` hypothesis) + helpers `step_preserves_validator_ids`, `step_round_monotone` | pending |
+| `b544affb-b9a9-4f8c-965f-2a31051ef75f` | theorems-helpers | 2026-04-26 ~09:05 SGT | 🟡 IN_PROGRESS | [`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) | `step_preserves_validator_ids`, `step_round_monotone` (focused; replaces canceled `58873be7` whose 8-target scope stalled at ~13% for >7h) | pending |
 | `3f6cf619-5a7f-4142-9114-c46caafa025f` | 4-followup | 2026-04-26 ~02:30 SGT | 🟡 IN_PROGRESS | [`Beluga/Protocol.lean`](../BlockSynchroniser/Beluga/Protocol.lean) | `causal_history_of_find_none` (trace-level invariant; prompt suggests strengthening to `CausallyClosed` carrier + monotonicity lemmas) | pending |
 **2 projects in flight in parallel.** Aristotle accepts concurrent
 submissions; they will process as capacity allows.
@@ -51,6 +51,7 @@ all Beluga supporting modules (`State`/`Reputation`/`AdmissionControl`/`Pull`/`B
 | `a8889396-b34e-40f2-b10b-388f960c088e` | 2026-04-26 00:46 SGT | 2026-04-26 ~02:20 SGT | ⚠️ COMPLETE_WITH_ERRORS (`step_refines_HonestStep` proved sorry-free; one new sorry on trace-level invariant `causal_history_of_find_none`, deferred to a future trace-invariant module) | [`Beluga/Protocol.lean`](../BlockSynchroniser/Beluga/Protocol.lean) | `step_refines_HonestStep` (+7 helper lemmas) | (TBD) |
 | `d32908b4-d387-4d77-ac37-87e03a6f6699` | 2026-04-26 00:46 SGT | 2026-04-26 ~05:30 SGT | ⚠️ COMPLETE_WITH_ERRORS (11 helpers got structured proofs composing other lemmas + paper §D.2 arguments; 14 inline sorries remain on protocol-invariant sub-steps — step semantics, BFT-bound, parent selection, ImPoA-availability, TransactionOrder axioms; 2 fully-proved auxiliaries `belugaTrace_blocks_monotone` + `mem_of_mem_eraseDups`) | [`Mysticeti/Liveness.lean`](../BlockSynchroniser/Mysticeti/Liveness.lean) | 11 helpers underlying lemma8/9/11/12/T6 (round 3d chain) | (TBD) |
 | `9f17cf80-caba-4369-90b2-0a99a175e394` | 2026-04-26 03:00 SGT | 2026-04-26 ~07:30 SGT | ⚠️ COMPLETE_WITH_ERRORS (both target sorries closed cleanly via a compound `TraceInv` for the admission invariant + strong induction with `Quorum.quorumIntersection` for L13; one new hypothesis `h_honest_unique` added to L13; standard axioms only) | [`Beluga/AdmissionInvariant.lean`](../BlockSynchroniser/Beluga/AdmissionInvariant.lean) (new), [`Mysticeti/Safety.lean`](../BlockSynchroniser/Mysticeti/Safety.lean) | `belugaTrace_admissionWellFormed`, revised `lemma13_cert_persistence` | (TBD) |
+| `58873be7-0f63-412c-8029-873bbd930abe` | 2026-04-26 01:50 SGT | (canceled 2026-04-26 ~09:05 SGT) | 🚫 CANCELED — stalled at 13% progress for >7h. Replaced by `b544affb-...` with a tighter 2-helper scope. | [`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) | (was) L1, L2, T1, T2, T3, T4 + 2 helpers under SchedulerFairness | — |
 
 Full attribution detail in [aristotle-attributions.md](aristotle-attributions.md).
 
