@@ -568,6 +568,170 @@ theorem networkTryActFor_preserves_roundEntry_bound
             exact h_inv vid bv h_get
         · contradiction
 
+/-! ## Round-monotonicity helpers (Phase 1 of `networkTrace` §5 migration)
+
+These mirror `step_round_monotone` / `step_round_at_most_one` from
+`Beluga/Theorems.lean` but adapted for `networkStep`. The proof
+structure is the same case-split on `networkTryActFor`'s four
+branches; only the propose branch's bookkeeping (inflight) and
+the advance branch's gate (`allProposedFor ∨ timeoutFired`) differ
+from the `step` version. -/
+
+/-- One `networkTryActFor` step never decreases `currentRound`. -/
+theorem networkTryActFor_round_monotone
+    (system : BlockSynchroniserSystem) (s : NetworkState)
+    (vid_a : ValidatorId) (bv_a : BelugaValidator)
+    (h_a_get : s.base.getValidator vid_a = some bv_a)
+    (s' : NetworkState)
+    (h_act : networkTryActFor system s vid_a bv_a = some s')
+    (vid : ValidatorId) (bv bv' : BelugaValidator)
+    (h : s.base.getValidator vid = some bv)
+    (h' : s'.base.getValidator vid = some bv') :
+    bv.currentRound ≤ bv'.currentRound := by
+  unfold networkTryActFor at h_act
+  simp only at h_act
+  split at h_act
+  · -- Propose branch: doPropose only updates blocks/emittedOperations.
+    injection h_act with h_eq
+    have h_base : s'.base = doPropose system s.base vid_a bv_a.currentRound := by
+      rw [← h_eq]
+    rw [h_base] at h'
+    rw [doPropose_getValidator'] at h'
+    rw [h] at h'; injection h' with h_eq'; rw [h_eq']
+  · split at h_act
+    · -- Accept branch.
+      rename_i B_acc _
+      injection h_act with h_eq
+      have h_base : s'.base = doAccept s.base vid_a B_acc := by rw [← h_eq]
+      rw [h_base] at h'
+      unfold doAccept at h'
+      by_cases h_eq_vid : vid = vid_a
+      · subst h_eq_vid
+        have h_a_eq : bv = bv_a := by rw [h] at h_a_get; injection h_a_get
+        rw [updateValidator_getValidator_eq'
+              (s := { s.base with emittedOperations := _ })
+              (bv := bv_a)
+              (h := by rw [getValidator_emittedOperations_irrelevant']; exact h_a_get)] at h'
+        injection h' with h_eq'; rw [h_a_eq]; rw [← h_eq']
+      · rw [updateValidator_getValidator_ne'
+              _ vid vid_a (fun bv => { bv with acceptedBlocks := B_acc.d :: bv.acceptedBlocks })
+              h_eq_vid] at h'
+        rw [getValidator_emittedOperations_irrelevant'] at h'
+        rw [h] at h'; injection h' with h_eq'; rw [h_eq']
+    · split at h_act
+      · -- Store branch.
+        rename_i _ B_sto _
+        injection h_act with h_eq
+        have h_base : s'.base = doStore s.base vid_a B_sto := by rw [← h_eq]
+        rw [h_base] at h'
+        unfold doStore at h'
+        by_cases h_eq_vid : vid = vid_a
+        · subst h_eq_vid
+          have h_a_eq : bv = bv_a := by rw [h] at h_a_get; injection h_a_get
+          rw [updateValidator_getValidator_eq'
+                (s := { s.base with emittedOperations := _ })
+                (bv := bv_a)
+                (h := by rw [getValidator_emittedOperations_irrelevant']; exact h_a_get)] at h'
+          injection h' with h_eq'; rw [h_a_eq]; rw [← h_eq']
+        · rw [updateValidator_getValidator_ne'
+                _ vid vid_a (fun bv => { bv with storedBlocks := B_sto.d :: bv.storedBlocks })
+                h_eq_vid] at h'
+          rw [getValidator_emittedOperations_irrelevant'] at h'
+          rw [h] at h'; injection h' with h_eq'; rw [h_eq']
+      · -- Advance branch: updateValidator with currentRound + 1.
+        split at h_act
+        · injection h_act with h_eq
+          have h_base : s'.base = updateValidator s.base vid_a (fun bv0 =>
+              { bv0 with currentRound := bv0.currentRound + 1,
+                         roundEntryTime := s.currentTime }) := by rw [← h_eq]
+          rw [h_base] at h'
+          by_cases h_eq_vid : vid = vid_a
+          · subst h_eq_vid
+            have h_a_eq : bv = bv_a := by rw [h] at h_a_get; injection h_a_get
+            rw [updateValidator_getValidator_eq' (bv := bv_a) (h := h_a_get)] at h'
+            injection h' with h_eq'
+            rw [h_a_eq, ← h_eq']
+            simp only; exact Nat.le_succ _
+          · rw [updateValidator_getValidator_ne' _ _ _ _ h_eq_vid] at h'
+            rw [h] at h'; injection h' with h_eq'; rw [h_eq']
+        · contradiction
+
+/-- One `networkTryActFor` step increases `currentRound` by at most 1. -/
+theorem networkTryActFor_round_at_most_one
+    (system : BlockSynchroniserSystem) (s : NetworkState)
+    (vid_a : ValidatorId) (bv_a : BelugaValidator)
+    (h_a_get : s.base.getValidator vid_a = some bv_a)
+    (s' : NetworkState)
+    (h_act : networkTryActFor system s vid_a bv_a = some s')
+    (vid : ValidatorId) (bv bv' : BelugaValidator)
+    (h : s.base.getValidator vid = some bv)
+    (h' : s'.base.getValidator vid = some bv') :
+    bv'.currentRound ≤ bv.currentRound + 1 := by
+  unfold networkTryActFor at h_act
+  simp only at h_act
+  split at h_act
+  · -- Propose: round unchanged.
+    injection h_act with h_eq
+    have h_base : s'.base = doPropose system s.base vid_a bv_a.currentRound := by rw [← h_eq]
+    rw [h_base] at h'
+    rw [doPropose_getValidator'] at h'
+    rw [h] at h'; injection h' with h_eq'; rw [← h_eq']; exact Nat.le_succ _
+  · split at h_act
+    · -- Accept: round unchanged.
+      rename_i B_acc _
+      injection h_act with h_eq
+      have h_base : s'.base = doAccept s.base vid_a B_acc := by rw [← h_eq]
+      rw [h_base] at h'
+      unfold doAccept at h'
+      by_cases h_eq_vid : vid = vid_a
+      · subst h_eq_vid
+        have h_a_eq : bv = bv_a := by rw [h] at h_a_get; injection h_a_get
+        rw [updateValidator_getValidator_eq'
+              (s := { s.base with emittedOperations := _ })
+              (bv := bv_a)
+              (h := by rw [getValidator_emittedOperations_irrelevant']; exact h_a_get)] at h'
+        injection h' with h_eq'; rw [h_a_eq, ← h_eq']; exact Nat.le_succ _
+      · rw [updateValidator_getValidator_ne'
+              _ vid vid_a (fun bv => { bv with acceptedBlocks := B_acc.d :: bv.acceptedBlocks })
+              h_eq_vid] at h'
+        rw [getValidator_emittedOperations_irrelevant'] at h'
+        rw [h] at h'; injection h' with h_eq'; rw [← h_eq']; exact Nat.le_succ _
+    · split at h_act
+      · -- Store: round unchanged.
+        rename_i _ B_sto _
+        injection h_act with h_eq
+        have h_base : s'.base = doStore s.base vid_a B_sto := by rw [← h_eq]
+        rw [h_base] at h'
+        unfold doStore at h'
+        by_cases h_eq_vid : vid = vid_a
+        · subst h_eq_vid
+          have h_a_eq : bv = bv_a := by rw [h] at h_a_get; injection h_a_get
+          rw [updateValidator_getValidator_eq'
+                (s := { s.base with emittedOperations := _ })
+                (bv := bv_a)
+                (h := by rw [getValidator_emittedOperations_irrelevant']; exact h_a_get)] at h'
+          injection h' with h_eq'; rw [h_a_eq, ← h_eq']; exact Nat.le_succ _
+        · rw [updateValidator_getValidator_ne'
+                _ vid vid_a (fun bv => { bv with storedBlocks := B_sto.d :: bv.storedBlocks })
+                h_eq_vid] at h'
+          rw [getValidator_emittedOperations_irrelevant'] at h'
+          rw [h] at h'; injection h' with h_eq'; rw [← h_eq']; exact Nat.le_succ _
+      · -- Advance: round goes up by exactly 1 for vid_a.
+        split at h_act
+        · injection h_act with h_eq
+          have h_base : s'.base = updateValidator s.base vid_a (fun bv0 =>
+              { bv0 with currentRound := bv0.currentRound + 1,
+                         roundEntryTime := s.currentTime }) := by rw [← h_eq]
+          rw [h_base] at h'
+          by_cases h_eq_vid : vid = vid_a
+          · subst h_eq_vid
+            have h_a_eq : bv = bv_a := by rw [h] at h_a_get; injection h_a_get
+            rw [updateValidator_getValidator_eq' (bv := bv_a) (h := h_a_get)] at h'
+            injection h' with h_eq'; rw [h_a_eq, ← h_eq']
+          · rw [updateValidator_getValidator_ne' _ _ _ _ h_eq_vid] at h'
+            rw [h] at h'; injection h' with h_eq'; rw [← h_eq']; exact Nat.le_succ _
+        · contradiction
+
 /-- The trace invariant: at every step of `networkTrace`, every
 validator's `roundEntryTime` is bounded by the state's
 `currentTime`. -/
