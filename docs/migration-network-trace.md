@@ -119,34 +119,46 @@ phase builds cleanly with zero sorries.
 
 ## Session log
 
-### Session 2026-04-27 (start)
+### Session 2026-04-27
 
-Phase 1: 4 of ~10 foundational lemmas closed (commits `d65b2a5`,
-`fea1f3b`, `aa8bb53`, `be42b5a`):
+**Phase 1 COMPLETE** (10 helpers, commits `d65b2a5` through `5d747da`):
 
 - `deliverPending_preserves_base`
-- `networkTryActFor_round_monotone`
-- `networkTryActFor_round_at_most_one`
-- `networkStep_round_monotone`
-- `networkStep_round_at_most_one`
+- `networkTryActFor_round_monotone`/`_at_most_one`
+- `networkStep_round_monotone`/`_at_most_one`
+- `network_round_monotone_trace`
+- `network_honest_validator_persistent_trace`
+- `network_round_intermediate_value`
+- `networkTryActFor_emittedOperations_monotone` + `networkStep_emittedOperations_monotone`
+- `networkStep_preserves_none`
 
-Each builds clean, zero sorries, in `Beluga/Network/Fairness.lean`.
+All in `Beluga/Network/Fairness.lean`, no sorries.
 
-Next session priorities:
+**Phase 5 partial** (L1, L2 done; commit `0c97a86`): new file
+`Beluga/Network/Theorems.lean` with:
 
-1. Finish Phase 1 — the trace-level monotonicity lemma
-   `network_round_monotone_trace` (induction over `Nat.le` with `bv₂`
-   generalized inside) and `network_honest_validator_persistent_trace`
-   (use `getValidator_init_some` from `Beluga/Theorems.lean` for the
-   init step, and `networkStep_preserves_ids` for the inductive step).
+- `network_lemma1_honest_round_entry` — direct from `schedulerFairness_holds`
+- `network_lemma2_round_latency` — composes L1 + `network_round_intermediate_value`
 
-2. Phase 2 — start the inversion family
-   (`networkStep_advance_inversion`). This is the largest single
-   lemma (~150 lines for the `step` version); follows the case-split
-   pattern from `Beluga/Theorems.lean` lines 735–894 but adds the
-   timeout case to the advance branch.
+**Phase 2 attempted but blocked**: `networkStep_advance_inversion`
+(~150 lines mirror of `step_advance_inversion`) was attempted but
+reverted due to several issues:
 
-3. Decide whether to make selected `private` helpers in
-   `Beluga/Theorems.lean` public so the migration file (when split
-   off) can use them, or keep migrating in
-   `Beluga/Network/Fairness.lean`.
+- The `set s_delivered := ...; unfold networkStep at h'` doesn't make
+  `s_delivered` match the unfolded form's local `have` binding —
+  the rewrites fail.
+- Use the `split at h'` pattern (as in `networkStep_currentTime`)
+  instead of `rcases h_fs : List.findSome? ...` to keep terms aligned.
+- The conclusions need adjustment: accept-disabled becomes about
+  `canAcceptBlock = false` (not the `parents.all hasAcceptedDigest`
+  form); advance-gate becomes `allProposedFor ∨ timeoutFired`.
+
+Next session: complete `networkStep_advance_inversion` using the
+`split at h'` pattern. Once that lemma closes, the projection
+lemmas (`networkStep_advance_implies_*`) follow directly.
+
+After Phase 2: Phase 3 (block invariants) is the bulk of remaining
+work — `BlockInv` / `AcceptInv` / `CausallyClosed` for `networkTrace`
+require the `*_step` preservation proofs to be redone for
+`networkStep`, which adds the ImPoA-accept and timeout-advance
+branches to each preservation case-split.
