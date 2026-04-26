@@ -259,10 +259,30 @@ theorem roundEntryTime_le_currentTime
     -- At init, every validator was constructed with default fields including
     -- `roundEntryTime := 0`. So bv.roundEntryTime = 0 ≤ time 0.
     have h_rt_zero : bv.roundEntryTime = 0 := by
-      -- (networkTrace system time 0).base = BelugaState.init system.
-      -- The validators are mapped from system.validators via the default
-      -- BelugaValidator. So any bv in this list has the default roundEntryTime = 0.
-      sorry  -- bookkeeping on init's validator-list construction; structural.
+      -- (networkTrace system time 0).base.validators is constructed by
+      -- `system.validators.map (fun (vid, _) => (vid, default-bv))`. So bv
+      -- is the default BelugaValidator (only `reputation` non-default), and
+      -- in particular `bv.roundEntryTime = 0`.
+      change ({ NetworkState.init system with currentTime := time 0 } :
+        NetworkState).base.getValidator vid = some bv at h_get
+      unfold NetworkState.init BelugaState.init BelugaState.getValidator at h_get
+      simp only at h_get
+      rw [Option.map_eq_some_iff] at h_get
+      obtain ⟨⟨vid', bv'⟩, h_find, h_proj⟩ := h_get
+      simp at h_proj
+      rw [← h_proj]
+      -- h_find : find? on the .map shows (vid', bv') is the mapped pair.
+      have h_mem : (vid', bv') ∈
+          system.validators.map (fun p =>
+            (p.1, { reputation := ReputationTable.init system : BelugaValidator })) :=
+        List.mem_of_find?_eq_some h_find
+      rw [List.mem_map] at h_mem
+      obtain ⟨p, _, h_pair_eq⟩ := h_mem
+      have : bv' = ({ reputation := ReputationTable.init system : BelugaValidator }) := by
+        have := h_pair_eq
+        simp [Prod.ext_iff] at this
+        exact this.2.symm
+      rw [this]
     rw [h_rt_zero]
     exact Nat.zero_le _
   | succ k ih =>
