@@ -423,7 +423,7 @@ private lemma noDupDigests_of_blockInv (system : BlockSynchroniserSystem)
 
 /-! #### Monotonicity lemmas for `step` -/
 
-private lemma doPropose_blocks (system : BlockSynchroniserSystem) (s : BelugaState)
+lemma doPropose_blocks (system : BlockSynchroniserSystem) (s : BelugaState)
     (vid : ValidatorId) (r : Round) (B : Block) (hB : B ∈ s.blocks) :
     B ∈ (doPropose system s vid r).blocks := by
   simp [doPropose]; right; exact hB
@@ -502,15 +502,15 @@ private lemma step_ops_subset (system : BlockSynchroniserSystem)
   unfold step;
   grind +suggestions
 
-private lemma doStore_blocks_eq (s : BelugaState) (vid : ValidatorId) (B : Block) :
+lemma doStore_blocks_eq (s : BelugaState) (vid : ValidatorId) (B : Block) :
     (doStore s vid B).blocks = s.blocks := by
   simp [doStore, updateValidator]
 
-private lemma doAdvance_blocks_eq (s : BelugaState) (vid : ValidatorId) :
+lemma doAdvance_blocks_eq (s : BelugaState) (vid : ValidatorId) :
     (doAdvance s vid).blocks = s.blocks := by
   simp [doAdvance, updateValidator]
 
-private lemma doAccept_blocks_eq (s : BelugaState) (vid : ValidatorId) (B : Block) :
+lemma doAccept_blocks_eq (s : BelugaState) (vid : ValidatorId) (B : Block) :
     (doAccept s vid B).blocks = s.blocks := by
   simp [doAccept, updateValidator]
 

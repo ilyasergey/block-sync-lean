@@ -293,5 +293,18 @@ theorem belugaTrace_admissionWellFormed
   | zero => exact traceInv_init system
   | succ k ih => exact traceInv_step system _ ih
 
+/-- Every `block_propose` op in the trace's emittedOperations
+corresponds to a block in the pool (with matching author and round).
+Extracted from the second `TraceInv` conjunct. -/
+theorem belugaTrace_proposeOp_in_pool
+    (system : BlockSynchroniserSystem) (k : Nat) :
+    ∀ vid B r,
+      ValidatorOperation.block_propose vid B r ∈ (belugaTrace system k).emittedOperations →
+      B ∈ (belugaTrace system k).blocks ∧ B.author = vid ∧ B.r = r := by
+  suffices h : TraceInv system (belugaTrace system k) from h.2.1
+  induction k with
+  | zero => exact traceInv_init system
+  | succ k ih => exact traceInv_step system _ ih
+
 end Beluga
 end BlockSynchroniser

@@ -19,6 +19,7 @@ import BlockSynchroniser.System
 import BlockSynchroniser.Properties
 import BlockSynchroniser.Timing
 import BlockSynchroniser.Beluga.Protocol
+import BlockSynchroniser.Beluga.AdmissionInvariant
 
 namespace BlockSynchroniser
 namespace Beluga
@@ -431,10 +432,10 @@ T3 (every round eventually has 2f+1 proposers); similar
 structural arguments handle T1 and T4 once we add invariants
 for accept-before-advance and store-before-advance.
 
-L1 (`honest_round_sync`) cannot be derived from these invariants
-+ the current bundle hypotheses — see the long comment at
-the L1 sorry below for the obstruction (gap-1 transient states
-between adjacent round advances). -/
+L1 (`honest_round_sync`) is weakened from the paper's strict
+same-round form to the lockstep-progress form; finding **F-1b**
+records the gap-1 transient states between adjacent round advances
+that block the strict form. -/
 
 /-! ### Side conditions threaded through the bundle
 
@@ -669,21 +670,34 @@ private lemma validator_value_unique
   exact Option.some.inj h_get'
 
 /-
-If `vid`'s `currentRound` advances by 1 in a single `step` (from `bv`
-at `s` to `bv'` at `step system s`), then `hasProposedFor s vid
-bv.currentRound = true` — the propose-before-advance gate of
-`tryActFor`. Requires nodup-by-id of `s.validators` to identify the
-`findSome?` actor with the `find?`-target.
+Inversion lemma for an advance step. If `vid`'s `currentRound`
+advances by 1 in a single `step` (from `bv` at `s` to `bv'` at
+`step system s`), then four things hold at `s`:
+1. **propose-before-advance**: vid has proposed for its current round.
+2. **accept-disabled**: every block in `s.blocks` is either accepted
+   by vid, or has at least one parent vid hasn't accepted.
+3. **store-disabled**: every block in `s.blocks` whose digest vid has
+   accepted has been stored by vid.
+4. **allProposedFor**: every registered validator has proposed for
+   vid's current round.
+Requires nodup-by-id of `s.validators` to identify the `findSome?`
+actor with the `find?`-target.
 -/
 set_option maxHeartbeats 800000 in
-private lemma step_advance_implies_hasProposedFor
+private lemma step_advance_inversion
     (system : BlockSynchroniserSystem) (s : BelugaState) (vid : ValidatorId)
     (bv bv' : BelugaValidator)
     (h_nodup : (s.validators.map Prod.fst).Nodup)
     (h : s.getValidator vid = some bv)
     (h' : (step system s).getValidator vid = some bv')
     (h_advance : bv'.currentRound = bv.currentRound + 1) :
-    hasProposedFor s vid bv.currentRound = true := by
+    hasProposedFor s vid bv.currentRound = true ∧
+    (∀ B ∈ s.blocks,
+      hasAcceptedDigest s vid B.d = true ∨
+      ∃ pd ∈ B.parents, hasAcceptedDigest s vid pd = false) ∧
+    (∀ B ∈ s.blocks,
+      hasAcceptedDigest s vid B.d = true → hasStoredDigest s vid B.d = true) ∧
+    allProposedFor system s bv.currentRound = true := by
   unfold step at h'
   rcases h_fs : List.findSome? (fun x => tryActFor system s x.1 x.2) s.validators
     with _ | s_post
@@ -738,13 +752,49 @@ private lemma step_advance_implies_hasProposedFor
             -- two sub-cases on vid = a.1
             by_cases h_eq_vid : vid = a.1
             · -- vid is the actor. Need bv = a.2 (via nodup).
-              rw [h_eq_vid]
               have h_a_pair_mem : (vid, a.2) ∈ s.validators := by
-                have : a = (a.1, a.2) := by rfl
+                have h_a_eq : a = (a.1, a.2) := by rfl
                 grind
               have h_bv_eq_a2 : bv = a.2 :=
                 validator_value_unique s vid bv a.2 h_nodup h h_a_pair_mem
-              rw [h_bv_eq_a2]; exact h_hpr
+              refine ⟨?_, ?_, ?_, ?_⟩
+              · rw [h_eq_vid, h_bv_eq_a2]; exact h_hpr
+              · intro B hB
+                rw [List.find?_eq_none] at h_findAcc
+                have h_no := h_findAcc B hB
+                rw [h_eq_vid]
+                by_cases h_acc : hasAcceptedDigest s a.1 B.d = true
+                · left; exact h_acc
+                · right
+                  have h_acc_false : hasAcceptedDigest s a.1 B.d = false := by
+                    cases h_b : hasAcceptedDigest s a.1 B.d
+                    · rfl
+                    · exact absurd h_b h_acc
+                  have h_parents_false :
+                      (B.parents.all (fun pd => hasAcceptedDigest s a.1 pd)) = false := by
+                    rw [h_acc_false] at h_no
+                    simpa using h_no
+                  rw [List.all_eq_false] at h_parents_false
+                  obtain ⟨pd, h_pd_mem, h_pd_neq⟩ := h_parents_false
+                  refine ⟨pd, h_pd_mem, ?_⟩
+                  cases h_b : hasAcceptedDigest s a.1 pd
+                  · rfl
+                  · exact absurd h_b h_pd_neq
+              · intro B hB h_acc
+                rw [h_eq_vid] at h_acc
+                rw [List.find?_eq_none] at h_findSto
+                have h_no := h_findSto B hB
+                rw [h_eq_vid]
+                by_cases h_sto : hasStoredDigest s a.1 B.d = true
+                · exact h_sto
+                · exfalso
+                  have h_sto_false : hasStoredDigest s a.1 B.d = false := by
+                    cases h_b : hasStoredDigest s a.1 B.d
+                    · rfl
+                    · exact absurd h_b h_sto
+                  rw [h_acc, h_sto_false] at h_no
+                  simp at h_no
+              · rw [h_bv_eq_a2]; exact h_all
             · -- vid ≠ a.1: doAdvance preserves vid's state.
               rw [doAdvance] at h'
               rw [updateValidator_getValidator_ne s vid a.1 _ h_eq_vid] at h'
@@ -798,134 +848,52 @@ private lemma step_advance_implies_hasProposedFor
         subst h_eq
         grind
 
-/-
-If `vid`'s `currentRound` advances by 1 in a single `step` (from `bv`
-at `s` to `bv'` at `step system s`), then for every block `B ∈ s.blocks`,
-`hasAcceptedDigest s vid B.d → hasStoredDigest s vid B.d` — the
-store-before-advance gate of `tryActFor` (action 3 has higher priority
-than action 4). Mirror of `step_advance_implies_hasProposedFor` for
-the store gate.
--/
-set_option maxHeartbeats 800000 in
+/- Projection of `step_advance_inversion`: propose-before-advance. -/
+private lemma step_advance_implies_hasProposedFor
+    (system : BlockSynchroniserSystem) (s : BelugaState) (vid : ValidatorId)
+    (bv bv' : BelugaValidator)
+    (h_nodup : (s.validators.map Prod.fst).Nodup)
+    (h : s.getValidator vid = some bv)
+    (h' : (step system s).getValidator vid = some bv')
+    (h_advance : bv'.currentRound = bv.currentRound + 1) :
+    hasProposedFor s vid bv.currentRound = true :=
+  (step_advance_inversion system s vid bv bv' h_nodup h h' h_advance).1
+
+/- Projection of `step_advance_inversion`: store-disabled. -/
 private lemma step_advance_implies_stored
     (system : BlockSynchroniserSystem) (s : BelugaState) (vid : ValidatorId)
     (bv bv' : BelugaValidator)
-    (_h_nodup : (s.validators.map Prod.fst).Nodup)
+    (h_nodup : (s.validators.map Prod.fst).Nodup)
     (h : s.getValidator vid = some bv)
     (h' : (step system s).getValidator vid = some bv')
     (h_advance : bv'.currentRound = bv.currentRound + 1) :
     ∀ B ∈ s.blocks,
-      hasAcceptedDigest s vid B.d = true → hasStoredDigest s vid B.d = true := by
-  unfold step at h'
-  rcases h_fs : List.findSome? (fun x => tryActFor system s x.1 x.2) s.validators
-    with _ | s_post
-  · rw [h_fs] at h'
-    simp only at h'
-    rw [h] at h'
-    have h_eq : bv = bv' := Option.some.inj h'
-    exfalso
-    have : bv.currentRound = bv'.currentRound := by rw [h_eq]
-    grind
-  · rw [h_fs] at h'
-    simp only at h'
-    rw [List.findSome?_eq_some_iff] at h_fs
-    obtain ⟨_, a, _, h_split, h_act, _⟩ := h_fs
-    have h_a_mem : a ∈ s.validators := by rw [h_split]; simp +decide
-    unfold tryActFor at h_act
-    simp only at h_act
-    rcases h_findAcc : List.find?
-        (fun B => !hasAcceptedDigest s a.1 B.d &&
-          B.parents.all fun pd => hasAcceptedDigest s a.1 pd) s.blocks
-      with _ | B_acc
-    · rw [h_findAcc] at h_act
-      simp only at h_act
-      rcases h_findSto : List.find?
-          (fun B => hasAcceptedDigest s a.1 B.d &&
-            !hasStoredDigest s a.1 B.d) s.blocks
-        with _ | B_sto
-      · rw [h_findSto] at h_act
-        simp only at h_act
-        by_cases h_prop_gate : (!hasProposedFor s a.1 a.2.currentRound) = true
-        · rw [if_pos h_prop_gate] at h_act
-          have h_post_eq : s_post = doPropose system s a.1 a.2.currentRound :=
-            (Option.some.inj h_act).symm
-          rw [h_post_eq] at h'
-          rw [doPropose_getValidator system s vid a.1 a.2.currentRound] at h'
-          rw [h] at h'
-          have h_eq : bv = bv' := Option.some.inj h'
-          exfalso
-          have : bv.currentRound = bv'.currentRound := by rw [h_eq]
-          grind
-        · rw [if_neg h_prop_gate] at h_act
-          by_cases h_all : allProposedFor system s a.2.currentRound = true
-          · rw [if_pos h_all] at h_act
-            have h_post_eq : s_post = doAdvance s a.1 :=
-              (Option.some.inj h_act).symm
-            rw [h_post_eq] at h'
-            -- vid = a.1 (else doAdvance preserves vid's round → contradicts advance).
-            by_cases h_eq_vid : vid = a.1
-            · -- vid is the actor. h_findSto = none gives the conclusion for vid.
-              intro B hB h_acc
-              rw [List.find?_eq_none] at h_findSto
-              have h_no := h_findSto B hB
-              -- h_no : ¬(hasAcceptedDigest s a.1 B.d && !hasStoredDigest s a.1 B.d)
-              rw [h_eq_vid] at h_acc
-              by_cases h_sto : hasStoredDigest s a.1 B.d = true
-              · rw [h_eq_vid]; exact h_sto
-              · exfalso; apply h_no
-                simp [h_acc, h_sto]
-            · -- vid ≠ a.1: doAdvance preserves vid's state → no advance.
-              rw [doAdvance] at h'
-              rw [updateValidator_getValidator_ne s vid a.1 _ h_eq_vid] at h'
-              rw [h] at h'
-              have h_eq : bv = bv' := Option.some.inj h'
-              exfalso
-              have : bv.currentRound = bv'.currentRound := by rw [h_eq]
-              grind
-          · rw [if_neg h_all] at h_act
-            simp at h_act
-      · rw [h_findSto] at h_act
-        simp only at h_act
-        by_cases h_prop_gate : (!hasProposedFor s a.1 a.2.currentRound) = true
-        · rw [if_pos h_prop_gate] at h_act
-          have h_post_eq : s_post = doPropose system s a.1 a.2.currentRound :=
-            (Option.some.inj h_act).symm
-          rw [h_post_eq] at h'
-          rw [doPropose_getValidator system s vid a.1 a.2.currentRound] at h'
-          rw [h] at h'
-          have h_eq : bv = bv' := Option.some.inj h'
-          exfalso
-          have : bv.currentRound = bv'.currentRound := by rw [h_eq]
-          grind
-        · rw [if_neg h_prop_gate] at h_act
-          have h_post_eq : s_post = doStore s a.1 B_sto :=
-            (Option.some.inj h_act).symm
-          rw [h_post_eq] at h'
-          obtain ⟨bv_post, h_post_get, h_eq_round⟩ := doStore_round s vid a.1 B_sto bv h
-          have h_eq : bv_post = bv' := Option.some.inj (h_post_get.symm.trans h')
-          subst h_eq
-          grind
-    · rw [h_findAcc] at h_act
-      simp only at h_act
-      by_cases h_prop_gate : (!hasProposedFor s a.1 a.2.currentRound) = true
-      · rw [if_pos h_prop_gate] at h_act
-        have h_post_eq : s_post = doPropose system s a.1 a.2.currentRound :=
-          (Option.some.inj h_act).symm
-        rw [h_post_eq] at h'
-        rw [doPropose_getValidator system s vid a.1 a.2.currentRound] at h'
-        rw [h] at h'
-        have h_eq : bv = bv' := Option.some.inj h'
-        exfalso
-        have : bv.currentRound = bv'.currentRound := by rw [h_eq]
-        grind
-      · rw [if_neg h_prop_gate] at h_act
-        have h_post_eq : s_post = doAccept s a.1 B_acc :=
-          (Option.some.inj h_act).symm
-        rw [h_post_eq] at h'
-        obtain ⟨bv_post, h_post_get, h_eq_round⟩ := doAccept_round s vid a.1 B_acc bv h
-        have h_eq : bv_post = bv' := Option.some.inj (h_post_get.symm.trans h')
-        subst h_eq
-        grind
+      hasAcceptedDigest s vid B.d = true → hasStoredDigest s vid B.d = true :=
+  (step_advance_inversion system s vid bv bv' h_nodup h h' h_advance).2.2.1
+
+/- Projection of `step_advance_inversion`: accept-disabled. -/
+private lemma step_advance_implies_acceptComplete
+    (system : BlockSynchroniserSystem) (s : BelugaState) (vid : ValidatorId)
+    (bv bv' : BelugaValidator)
+    (h_nodup : (s.validators.map Prod.fst).Nodup)
+    (h : s.getValidator vid = some bv)
+    (h' : (step system s).getValidator vid = some bv')
+    (h_advance : bv'.currentRound = bv.currentRound + 1) :
+    ∀ B ∈ s.blocks,
+      hasAcceptedDigest s vid B.d = true ∨
+      ∃ pd ∈ B.parents, hasAcceptedDigest s vid pd = false :=
+  (step_advance_inversion system s vid bv bv' h_nodup h h' h_advance).2.1
+
+/- Projection of `step_advance_inversion`: allProposedFor gate. -/
+private lemma step_advance_implies_allProposedFor
+    (system : BlockSynchroniserSystem) (s : BelugaState) (vid : ValidatorId)
+    (bv bv' : BelugaValidator)
+    (h_nodup : (s.validators.map Prod.fst).Nodup)
+    (h : s.getValidator vid = some bv)
+    (h' : (step system s).getValidator vid = some bv')
+    (h_advance : bv'.currentRound = bv.currentRound + 1) :
+    allProposedFor system s bv.currentRound = true :=
+  (step_advance_inversion system s vid bv bv' h_nodup h h' h_advance).2.2.2
 
 /- `step` preserves "absent": if vid isn't in `s.validators`, it isn't
 in `(step system s).validators` either. -/
@@ -1058,6 +1026,254 @@ private lemma find_advance_step
         have h1 : bv_t.currentRound ≤ r + 1 := by rw [← hbp_eq] at hr_t ⊢; exact h_step_at_most
         exact le_antisymm h1 hr_t
       exact ⟨k_target', bv_prev, bv_t, h, Nat.lt_succ_self _, h_prev, h_t, hbp_eq, hbt_eq⟩
+
+/- Trace invariant: every block in the pool has all its parent digests
+corresponding to round-`(B.r - 1)` blocks in the pool. (For round-0
+blocks, this implicitly forces `B.parents = []` since no block has
+round `-1`.) By construction: `doPropose` constructs parents as
+digests of all round-`(r-1)` blocks in `s.blocks` at propose time
+(empty for `r = 0`), and other actions preserve `s.blocks`. -/
+set_option maxHeartbeats 800000 in
+private lemma block_parents_in_pool
+    (system : BlockSynchroniserSystem) (k : Nat) :
+    ∀ B ∈ (belugaTrace system k).blocks, ∀ pd ∈ B.parents,
+      ∃ B_p ∈ (belugaTrace system k).blocks, B_p.d = pd ∧ B_p.r + 1 = B.r := by
+  induction k with
+  | zero =>
+    intro B hB
+    cases hB
+  | succ k ih =>
+    intro B hB pd hpd
+    show ∃ B_p ∈ (step system (belugaTrace system k)).blocks, B_p.d = pd ∧ B_p.r + 1 = B.r
+    -- Set up case analysis on step.
+    set s := belugaTrace system k with h_s_def
+    show ∃ B_p ∈ (step system s).blocks, B_p.d = pd ∧ B_p.r + 1 = B.r
+    -- Reduce: every B ∈ s.blocks is in (step system s).blocks (monotone).
+    have h_blocks_mono : ∀ B', B' ∈ s.blocks → B' ∈ (step system s).blocks := by
+      intro B' hB'
+      unfold step
+      cases h_fs : List.findSome? (fun x => tryActFor system s x.1 x.2) s.validators with
+      | none => simp; exact hB'
+      | some s_post =>
+        simp only
+        rw [List.findSome?_eq_some_iff] at h_fs
+        obtain ⟨_, a, _, _, h_act, _⟩ := h_fs
+        unfold tryActFor at h_act
+        simp only at h_act
+        rcases h_findAcc : List.find?
+            (fun B => !hasAcceptedDigest s a.1 B.d &&
+              B.parents.all fun pd => hasAcceptedDigest s a.1 pd) s.blocks
+          with _ | B_acc
+        · rw [h_findAcc] at h_act
+          simp only at h_act
+          rcases h_findSto : List.find?
+              (fun B => hasAcceptedDigest s a.1 B.d &&
+                !hasStoredDigest s a.1 B.d) s.blocks
+            with _ | B_sto
+          · rw [h_findSto] at h_act
+            simp only at h_act
+            by_cases h_p : (!hasProposedFor s a.1 a.2.currentRound) = true
+            · rw [if_pos h_p] at h_act
+              have : s_post = doPropose system s a.1 a.2.currentRound :=
+                (Option.some.inj h_act).symm
+              rw [this]; exact doPropose_blocks system s _ _ _ hB'
+            · rw [if_neg h_p] at h_act
+              by_cases h_a : allProposedFor system s a.2.currentRound = true
+              · rw [if_pos h_a] at h_act
+                have : s_post = doAdvance s a.1 := (Option.some.inj h_act).symm
+                rw [this, doAdvance_blocks_eq]; exact hB'
+              · rw [if_neg h_a] at h_act; simp at h_act
+          · rw [h_findSto] at h_act
+            simp only at h_act
+            by_cases h_p : (!hasProposedFor s a.1 a.2.currentRound) = true
+            · rw [if_pos h_p] at h_act
+              have : s_post = doPropose system s a.1 a.2.currentRound :=
+                (Option.some.inj h_act).symm
+              rw [this]; exact doPropose_blocks system s _ _ _ hB'
+            · rw [if_neg h_p] at h_act
+              have : s_post = doStore s a.1 B_sto := (Option.some.inj h_act).symm
+              rw [this, doStore_blocks_eq]; exact hB'
+        · rw [h_findAcc] at h_act
+          simp only at h_act
+          by_cases h_p : (!hasProposedFor s a.1 a.2.currentRound) = true
+          · rw [if_pos h_p] at h_act
+            have : s_post = doPropose system s a.1 a.2.currentRound :=
+              (Option.some.inj h_act).symm
+            rw [this]; exact doPropose_blocks system s _ _ _ hB'
+          · rw [if_neg h_p] at h_act
+            have : s_post = doAccept s a.1 B_acc := (Option.some.inj h_act).symm
+            rw [this, doAccept_blocks_eq]; exact hB'
+    -- Now case on whether B is in s.blocks (old) or new (added by doPropose).
+    show ∃ B_p ∈ (step system s).blocks, B_p.d = pd ∧ B_p.r + 1 = B.r
+    change B ∈ (step system s).blocks at hB
+    unfold step at hB
+    cases h_fs : List.findSome? (fun x => tryActFor system s x.1 x.2) s.validators with
+    | none =>
+      rw [h_fs] at hB; simp only at hB
+      obtain ⟨B_p, hB_p, hd, hr_p⟩ := ih B hB pd hpd
+      exact ⟨B_p, h_blocks_mono B_p hB_p, hd, hr_p⟩
+    | some s_post =>
+      rw [h_fs] at hB
+      simp only at hB
+      rw [List.findSome?_eq_some_iff] at h_fs
+      obtain ⟨_, a, _, _, h_act, _⟩ := h_fs
+      unfold tryActFor at h_act
+      simp only at h_act
+      rcases h_findAcc : List.find?
+          (fun B => !hasAcceptedDigest s a.1 B.d &&
+            B.parents.all fun pd => hasAcceptedDigest s a.1 pd) s.blocks
+        with _ | B_acc
+      · rw [h_findAcc] at h_act
+        simp only at h_act
+        rcases h_findSto : List.find?
+            (fun B => hasAcceptedDigest s a.1 B.d &&
+              !hasStoredDigest s a.1 B.d) s.blocks
+          with _ | B_sto
+        · rw [h_findSto] at h_act
+          simp only at h_act
+          by_cases h_p : (!hasProposedFor s a.1 a.2.currentRound) = true
+          · -- doPropose case: B is either old or = newB.
+            rw [if_pos h_p] at h_act
+            have h_post : s_post = doPropose system s a.1 a.2.currentRound :=
+              (Option.some.inj h_act).symm
+            rw [h_post] at hB
+            unfold doPropose at hB
+            simp only at hB
+            rw [List.mem_cons] at hB
+            rcases hB with h_eq | hB_old
+            · subst h_eq
+              by_cases hzero : a.2.currentRound = 0
+              · rw [hzero] at hpd; simp at hpd
+              · simp only [if_neg hzero] at hpd
+                rw [List.mem_map] at hpd
+                obtain ⟨B_p, hB_p_mem, hB_p_d⟩ := hpd
+                rw [List.mem_filter] at hB_p_mem
+                obtain ⟨hB_p_in, hB_p_round⟩ := hB_p_mem
+                refine ⟨B_p, h_blocks_mono B_p hB_p_in, hB_p_d, ?_⟩
+                show B_p.r + 1 = a.2.currentRound
+                have h1 : B_p.r = a.2.currentRound - 1 := by simpa using hB_p_round
+                have h_ne : a.2.currentRound ≠ 0 := hzero
+                rw [h1]
+                exact Nat.sub_add_cancel (Nat.one_le_iff_ne_zero.mpr h_ne)
+            · -- B is old.
+              obtain ⟨B_p, hB_p_mem, hd_eq, hr_eq⟩ := ih B hB_old pd hpd
+              refine ⟨B_p, h_blocks_mono B_p hB_p_mem, hd_eq, hr_eq⟩
+          · -- doAdvance case: blocks unchanged.
+            rw [if_neg h_p] at h_act
+            by_cases h_a : allProposedFor system s a.2.currentRound = true
+            · rw [if_pos h_a] at h_act
+              have h_post : s_post = doAdvance s a.1 := (Option.some.inj h_act).symm
+              rw [h_post, doAdvance_blocks_eq] at hB
+              obtain ⟨B_p, hB_p, hd, hr_p⟩ := ih B hB pd hpd
+              exact ⟨B_p, h_blocks_mono B_p hB_p, hd, hr_p⟩
+            · rw [if_neg h_a] at h_act; simp at h_act
+        · rw [h_findSto] at h_act
+          simp only at h_act
+          by_cases h_p : (!hasProposedFor s a.1 a.2.currentRound) = true
+          · rw [if_pos h_p] at h_act
+            have h_post : s_post = doPropose system s a.1 a.2.currentRound :=
+              (Option.some.inj h_act).symm
+            rw [h_post] at hB
+            unfold doPropose at hB
+            simp only at hB
+            rw [List.mem_cons] at hB
+            rcases hB with h_eq | hB_old
+            · subst h_eq
+              by_cases hzero : a.2.currentRound = 0
+              · rw [hzero] at hpd; simp at hpd
+              · simp only [if_neg hzero] at hpd
+                rw [List.mem_map] at hpd
+                obtain ⟨B_p, hB_p_mem, hB_p_d⟩ := hpd
+                rw [List.mem_filter] at hB_p_mem
+                obtain ⟨hB_p_in, hB_p_round⟩ := hB_p_mem
+                refine ⟨B_p, h_blocks_mono B_p hB_p_in, hB_p_d, ?_⟩
+                show B_p.r + 1 = a.2.currentRound
+                have h1 : B_p.r = a.2.currentRound - 1 := by simpa using hB_p_round
+                have h_ne : a.2.currentRound ≠ 0 := hzero
+                rw [h1]
+                exact Nat.sub_add_cancel (Nat.one_le_iff_ne_zero.mpr h_ne)
+            · obtain ⟨B_p, hB_p_mem, hd_eq, hr_eq⟩ := ih B hB_old pd hpd
+              refine ⟨B_p, h_blocks_mono B_p hB_p_mem, hd_eq, hr_eq⟩
+          · rw [if_neg h_p] at h_act
+            have h_post : s_post = doStore s a.1 B_sto := (Option.some.inj h_act).symm
+            rw [h_post, doStore_blocks_eq] at hB
+            obtain ⟨B_p, hB_p, hd, hr_p⟩ := ih B hB pd hpd
+            exact ⟨B_p, h_blocks_mono B_p hB_p, hd, hr_p⟩
+      · rw [h_findAcc] at h_act
+        simp only at h_act
+        by_cases h_p : (!hasProposedFor s a.1 a.2.currentRound) = true
+        · rw [if_pos h_p] at h_act
+          have h_post : s_post = doPropose system s a.1 a.2.currentRound :=
+            (Option.some.inj h_act).symm
+          rw [h_post] at hB
+          unfold doPropose at hB
+          simp only at hB
+          rw [List.mem_cons] at hB
+          rcases hB with h_eq | hB_old
+          · subst h_eq
+            by_cases hzero : a.2.currentRound = 0
+            · rw [hzero] at hpd; simp at hpd
+            · simp only [if_neg hzero] at hpd
+              rw [List.mem_map] at hpd
+              obtain ⟨B_p, hB_p_mem, hB_p_d⟩ := hpd
+              rw [List.mem_filter] at hB_p_mem
+              obtain ⟨hB_p_in, hB_p_round⟩ := hB_p_mem
+              refine ⟨B_p, h_blocks_mono B_p hB_p_in, hB_p_d, ?_⟩
+              show B_p.r + 1 = a.2.currentRound
+              have h1 : B_p.r = a.2.currentRound - 1 := by simpa using hB_p_round
+              have h_ne : a.2.currentRound ≠ 0 := hzero
+              rw [h1]
+              exact Nat.sub_add_cancel (Nat.one_le_iff_ne_zero.mpr h_ne)
+          · obtain ⟨B_p, hB_p_mem, hd_eq, hr_eq⟩ := ih B hB_old pd hpd
+            refine ⟨B_p, h_blocks_mono B_p hB_p_mem, hd_eq, hr_eq⟩
+        · rw [if_neg h_p] at h_act
+          have h_post : s_post = doAccept s a.1 B_acc := (Option.some.inj h_act).symm
+          rw [h_post, doAccept_blocks_eq] at hB
+          obtain ⟨B_p, hB_p, hd, hr_p⟩ := ih B hB pd hpd
+          exact ⟨B_p, h_blocks_mono B_p hB_p, hd, hr_p⟩
+
+/- At an advance step (vid at round `R` at trace `k_a`, at round
+`R + 1` at trace `(k_a + 1)`), vid has accepted every block in
+`(trace k_a).blocks` of round ≤ `R`. Proof by strong induction on
+`B.r`: accept-disabled at the advance step gives "accepted ∨ ∃
+unaccepted parent"; `block_parents_in_pool` produces a round-`(B.r-1)`
+block in pool for each parent digest, and the IH gives vid has
+accepted that block's digest. -/
+private lemma accepted_at_advance
+    (system : BlockSynchroniserSystem)
+    (h_sys_nodup : ValidatorsNodup system)
+    (k_a R : Nat) (vid : ValidatorId) (bv bv' : BelugaValidator)
+    (h_a : (belugaTrace system k_a).getValidator vid = some bv)
+    (h_a' : (belugaTrace system (k_a + 1)).getValidator vid = some bv')
+    (h_R : bv.currentRound = R)
+    (h_advance : bv'.currentRound = R + 1) :
+    ∀ B ∈ (belugaTrace system k_a).blocks, B.r ≤ R →
+      hasAcceptedDigest (belugaTrace system k_a) vid B.d = true := by
+  have h_advance' : bv'.currentRound = bv.currentRound + 1 := by rw [h_R]; exact h_advance
+  have h_nodup_a := belugaTrace_validators_nodup system h_sys_nodup k_a
+  have h_acc_complete :=
+    step_advance_implies_acceptComplete system _ vid bv bv' h_nodup_a h_a h_a' h_advance'
+  suffices h : ∀ r, ∀ B ∈ (belugaTrace system k_a).blocks, B.r = r → r ≤ R →
+      hasAcceptedDigest (belugaTrace system k_a) vid B.d = true by
+    intro B hB hBR
+    exact h B.r B hB rfl hBR
+  intro r
+  induction r using Nat.strong_induction_on with
+  | _ r ih =>
+    intro B hB hBeq hBR
+    rcases h_acc_complete B hB with h_acc | ⟨pd, h_pd_mem, h_pd_unacc⟩
+    · exact h_acc
+    · exfalso
+      obtain ⟨B_p, hB_p, hB_p_d, hB_p_r⟩ := block_parents_in_pool system k_a B hB pd h_pd_mem
+      have h_lt : B_p.r < r := by
+        rw [← hBeq, ← hB_p_r]
+        exact Nat.lt_succ_self _
+      have h_pR : B_p.r ≤ R := le_trans (Nat.le_of_lt h_lt) hBR
+      have h_p_acc : hasAcceptedDigest (belugaTrace system k_a) vid B_p.d = true :=
+        ih B_p.r h_lt B_p hB_p rfl h_pR
+      rw [hB_p_d] at h_p_acc
+      rw [h_p_acc] at h_pd_unacc
+      cases h_pd_unacc
 
 /-
 Iterated `SchedulerFairness`: starting from a post-GST step, every
@@ -1262,6 +1478,163 @@ private lemma round_progression_aux
     h_eraseDups_ge_toFinset proposers_raw
   omega
 
+/- T4 (paper §5): post-GST round-termination. For every round and
+every honest validator, there is a step at which vid has accepted
+≥ 2f+1 distinct authors' round-`round` blocks. Uses the
+accept-before-advance gate: at vid's first advance from `round`
+to `round+1`, accept is disabled, so vid has accepted every
+round-≤-`round` block in the pool (`accepted_at_advance`); the
+`allProposedFor` gate ensures all `system.validators.length` ≥ 2f+1
+registered validators proposed for `round`, giving that many
+distinct-author round-`round` blocks (via `proposeOp_in_pool`). -/
+lemma round_termination_aux
+    (system : BlockSynchroniserSystem)
+    (hids : ValidIds system)
+    (time : TimeMap) (h_time : time.WellFormed)
+    (h_fair : SchedulerFairness system time)
+    (hHonest : HonestBFTBound system)
+    (h_sys_nodup : ValidatorsNodup system) :
+    RoundTermination system (belugaTrace system) := by
+  intro round vid h_honest
+  unfold HonestBFTBound at hHonest
+  obtain ⟨k₀, hk₀_gst⟩ := h_time.2 system.GST
+  obtain ⟨bv₀, h_bv₀⟩ := honest_validator_persistent_trace system vid h_honest 0
+  have h_bv₀_round : bv₀.currentRound = 0 :=
+    getValidator_init_round_zero system vid bv₀ h_bv₀
+  obtain ⟨k_target, _, _, h_target_all⟩ :=
+    all_honest_eventually_at_round system time h_time h_fair vid h_honest k₀ hk₀_gst (round + 1)
+  obtain ⟨bv_target, h_bv_target, h_bv_target_round⟩ := h_target_all vid h_honest
+  obtain ⟨k_pre, _, hk_pre_le_t, bv_pre, h_bv_pre, h_bv_pre_round⟩ :=
+    round_intermediate_value system vid 0 k_target round
+      (Nat.zero_le _) bv₀ bv_target h_bv₀ h_bv_target
+      (by rw [h_bv₀_round]; exact Nat.zero_le _)
+      (le_trans (Nat.le_succ _) h_bv_target_round)
+  obtain ⟨k_a, bv_a, bv_a', _, _, h_a, h_a', h_a_eq, h_a'_eq⟩ :=
+    find_advance_step system vid round hk_pre_le_t bv_pre bv_target h_bv_pre h_bv_target
+      h_bv_pre_round h_bv_target_round
+  refine ⟨k_a, ?_⟩
+  have h_nodup_a := belugaTrace_validators_nodup system h_sys_nodup k_a
+  have h_advance' : bv_a'.currentRound = bv_a.currentRound + 1 := by rw [h_a_eq, h_a'_eq]
+  have h_all_propose :=
+    step_advance_implies_allProposedFor system _ vid bv_a bv_a' h_nodup_a h_a h_a' h_advance'
+  rw [h_a_eq] at h_all_propose
+  have h_blockInv := blockInv_trace system hids k_a
+  set acceptedAuthors_raw := (opsAt (belugaTrace system) k_a).filterMap (fun op =>
+    match op with
+    | .block_accept vid' d =>
+        if vid' = vid then authorOfDigest (opsAt (belugaTrace system) k_a) round d else none
+    | _ => none) with h_aA_def
+  have h_subset : ∀ vid_a, (∃ p ∈ system.validators, p.1 = vid_a) →
+      vid_a ∈ acceptedAuthors_raw := by
+    intro vid_a ⟨p, h_p_mem, h_p_fst⟩
+    have h_prop : hasProposedFor (belugaTrace system k_a) vid_a round = true := by
+      unfold allProposedFor at h_all_propose
+      rw [List.all_eq_true] at h_all_propose
+      have h_pp := h_all_propose p h_p_mem
+      simp at h_pp
+      rw [h_p_fst] at h_pp
+      exact h_pp
+    obtain ⟨B, hB_mem⟩ := (hasProposedFor_iff_mem _ vid_a round).mp h_prop
+    obtain ⟨hB_in, hB_auth, hB_round⟩ :=
+      belugaTrace_proposeOp_in_pool system k_a vid_a B round hB_mem
+    have h_R : bv_a.currentRound = round := h_a_eq
+    have h_B_le : B.r ≤ round := by rw [hB_round]
+    have h_acc_B : hasAcceptedDigest (belugaTrace system k_a) vid B.d = true :=
+      accepted_at_advance system h_sys_nodup k_a round vid bv_a bv_a' h_a h_a'
+        h_R h_a'_eq B hB_in h_B_le
+    have h_acc_op :
+        ValidatorOperation.block_accept vid B.d ∈ (belugaTrace system k_a).emittedOperations := by
+      unfold hasAcceptedDigest at h_acc_B
+      rw [List.any_eq_true] at h_acc_B
+      obtain ⟨op, hop_mem, hop_match⟩ := h_acc_B
+      cases op with
+      | block_accept v d =>
+        simp at hop_match
+        obtain ⟨h_v, h_d⟩ := hop_match
+        rw [h_v, h_d] at hop_mem
+        exact hop_mem
+      | _ => simp at hop_match
+    have h_author : authorOfDigest (belugaTrace system k_a).emittedOperations round B.d
+        = some vid_a := by
+      unfold authorOfDigest
+      have h_pred_B : (match (ValidatorOperation.block_propose vid_a B round) with
+            | .block_propose _ block r => block.d == B.d && r == round
+            | _ => false) = true := by simp +decide
+      rcases h_find : (belugaTrace system k_a).emittedOperations.find?
+          (fun op => match op with
+            | .block_propose _ block r => block.d == B.d && r == round
+            | _ => false) with _ | op_found
+      · exfalso
+        rw [List.find?_eq_none] at h_find
+        exact absurd h_pred_B (by have := h_find _ hB_mem; simp_all)
+      · cases op_found with
+        | block_propose v block r =>
+          have h_pred := List.find?_some h_find
+          have h_mem_found := List.mem_of_find?_eq_some h_find
+          simp at h_pred
+          obtain ⟨h_block_d, h_r⟩ := h_pred
+          obtain ⟨h_block_in, h_block_auth, h_block_r⟩ :=
+            belugaTrace_proposeOp_in_pool system k_a v block r h_mem_found
+          have h_v_bound : v < system.n + 1 := by
+            rw [← h_block_auth]
+            exact h_blockInv.authorBounded block h_block_in
+          have h_p_bound : p.1 < system.n + 1 := hids p h_p_mem
+          have h_vid_a_bound : vid_a < system.n + 1 := h_p_fst ▸ h_p_bound
+          have h_block_d_canon : block.d = digest system block.r block.author :=
+            h_blockInv.canonical block h_block_in
+          have h_B_d_canon : B.d = digest system B.r B.author :=
+            h_blockInv.canonical B hB_in
+          have h_digest_eq : digest system block.r block.author = digest system B.r B.author := by
+            rw [← h_block_d_canon, ← h_B_d_canon]; exact h_block_d
+          have h_block_v_eq : block.author = v := h_block_auth
+          have ⟨_, h_v_eq⟩ : block.r = B.r ∧ block.author = B.author := by
+            apply digest_injective system block.r B.r block.author B.author
+            · rw [h_block_v_eq]; exact h_v_bound
+            · rw [hB_auth]; exact h_vid_a_bound
+            · exact h_digest_eq
+          have h_v_final : v = vid_a := by
+            rw [← h_block_v_eq, h_v_eq, hB_auth]
+          grind
+        | block_accept v d =>
+          have h_pred := List.find?_some h_find
+          simp at h_pred
+        | block_store v B' =>
+          have h_pred := List.find?_some h_find
+          simp at h_pred
+    rw [h_aA_def]
+    apply List.mem_filterMap.mpr
+    refine ⟨ValidatorOperation.block_accept vid B.d, h_acc_op, ?_⟩
+    simp; exact h_author
+  show acceptedAuthors_raw.eraseDups.length ≥ 2 * system.f + 1
+  set system_vids := system.validators.map Prod.fst with h_sv_def
+  have h_sv_subset : ∀ vid_a ∈ system_vids, vid_a ∈ acceptedAuthors_raw := by
+    intro vid_a h_vid_a_mem
+    rw [h_sv_def, List.mem_map] at h_vid_a_mem
+    exact h_subset vid_a h_vid_a_mem
+  have h_fin_subset : system_vids.toFinset ⊆ acceptedAuthors_raw.toFinset := by
+    intro x hx; rw [List.mem_toFinset] at hx ⊢; exact h_sv_subset x hx
+  have h_card_le : system_vids.toFinset.card ≤ acceptedAuthors_raw.toFinset.card :=
+    Finset.card_le_card h_fin_subset
+  have h_sv_card : system_vids.toFinset.card = system_vids.length :=
+    List.toFinset_card_of_nodup h_sys_nodup
+  have h_sv_len : system_vids.length ≥ 2 * system.f + 1 := by
+    rw [h_sv_def, List.length_map]
+    have h_honest_le :
+        (system.validators.filter (fun p => p.2 = true)).length ≤ system.validators.length :=
+      List.length_filter_le _ _
+    omega
+  have h_eraseDups_ge_toFinset : ∀ (l : List ValidatorId),
+      l.eraseDups.length ≥ l.toFinset.card := by
+    intro l
+    induction' l using List.reverseRecOn with l a ih
+    · rfl
+    · simp +decide [ List.eraseDups_append ]
+      by_cases h : a ∈ l.toFinset <;> simp_all +decide [ List.removeAll ]
+      exact Nat.lt_succ_of_le ‹_›
+  have h_aa_ge : acceptedAuthors_raw.eraseDups.length ≥ acceptedAuthors_raw.toFinset.card :=
+    h_eraseDups_ge_toFinset acceptedAuthors_raw
+  omega
+
 
 
 /-! ## The Beluga §5 post-GST liveness invariant
@@ -1446,8 +1819,7 @@ theorem belugaTrace_satisfies_post_gst_liveness
       · rw [h_d]; exact hB_d
     | _ => simp at hop_match
   · exact round_progression_aux system time h_time h_fair hHonest h_sys_nodup
-  · -- T4 (round_termination) — queued for delegation.
-    sorry
+  · exact round_termination_aux system hids time h_time h_fair hHonest h_sys_nodup
 
 /-! ## Lemmas 1, 2 and Theorems 1–4 (local derivations from the bundle)
 
