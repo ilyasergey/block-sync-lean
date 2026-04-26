@@ -442,6 +442,23 @@ theorem NetworkState.deliverPending_preserves_base_validators (s : NetworkState)
     intro s' h
     apply ih; simp [NetworkState.appendToInbox, h]
 
+/-- `deliverPending` preserves the entire `base` field — it only touches
+`inboxes` (via `appendToInbox`) and `inflight` (via partition). -/
+theorem NetworkState.deliverPending_preserves_base (s : NetworkState) :
+    s.deliverPending.base = s.base := by
+  unfold NetworkState.deliverPending
+  generalize s.inflight.partition _ = p
+  suffices h : ∀ (l : List DeliveryEvent) (s' : NetworkState),
+      s'.base = s.base →
+      (l.foldl (fun acc e => acc.appendToInbox e.recipient e.op) s').base = s.base by
+    apply h; rfl
+  intro l
+  induction l with
+  | nil => intro s' h; exact h
+  | cons hd tl ih =>
+    intro s' h
+    apply ih; simp [NetworkState.appendToInbox, h]
+
 /-- Generic helper: for any `f` that preserves `roundEntryTime`,
 `updateValidator s vid_a f` preserves the "`roundEntryTime ≤ T`"
 invariant — given the actor's original bv. -/
