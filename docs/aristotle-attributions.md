@@ -782,7 +782,7 @@ that's enough to discharge the `doPropose` block-addition case
 
 ### Side effects
 
-- **`MysticetiSafetyInv` bundle is now fully sorry-free.** `Beluga/MysticetiSafetyInvariant.lean`
+- **`MysticetiSafetyInv` bundle is now fully sorry-free.** `Mysticeti/SafetyInvariant.lean`
   contains 0 sorries.
 - `Mysticeti/Safety.lean`'s belugaTrace-specialised wrappers
   `lemma13_cert_persistence_belugaTrace` and

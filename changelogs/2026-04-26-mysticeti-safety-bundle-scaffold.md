@@ -2,7 +2,7 @@
 
 ## What changed
 
-Set up `Beluga/MysticetiSafetyInvariant.lean` (new file), which bundles
+Set up `Mysticeti/SafetyInvariant.lean` (new file), which bundles
 the four protocol-invariant hypotheses currently borne separately by
 `Mysticeti/Safety.lean`'s L13 / L15:
 
@@ -62,7 +62,7 @@ delegable as a single self-contained Aristotle round.
 ## Build state
 
 `lake build` passes (6250 jobs). Sorries:
-- `Beluga/MysticetiSafetyInvariant.lean`: 1 (`authorsValid`, queued).
+- `Mysticeti/SafetyInvariant.lean`: 1 (`authorsValid`, queued).
 - `Beluga/Theorems.lean`: 4 (L1/T1/T3/T4 conjuncts of bundle, in
   flight as `e8212038`).
 - `Mysticeti/Liveness.lean`: 1 (Mysticeti bundle, in flight as
@@ -72,7 +72,7 @@ delegable as a single self-contained Aristotle round.
 
 1. Submit small focused Aristotle round for `authorsValid` in
    `belugaTrace_satisfies_mysticetiSafetyInv`. Frozen file:
-   `Beluga/MysticetiSafetyInvariant.lean`.
+   `Mysticeti/SafetyInvariant.lean`.
 2. Wait for `e8212038` (Beluga §5 noncircular bundle) and
    `03f5fe3f` (Mysticeti liveness bundle) — examine for the same
    trivialisation failure mode as `4f618efb`.

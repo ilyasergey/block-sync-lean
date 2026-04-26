@@ -13,7 +13,7 @@ import BlockSynchroniser.Causal
 import BlockSynchroniser.Quorum
 import BlockSynchroniser.Beluga.Patterns
 import BlockSynchroniser.Beluga.AdmissionInvariant
-import BlockSynchroniser.Beluga.MysticetiSafetyInvariant
+import BlockSynchroniser.Mysticeti.SafetyInvariant
 import BlockSynchroniser.Mysticeti.Consensus
 
 set_option linter.unusedSimpArgs false
@@ -563,8 +563,8 @@ protocol-invariant hypotheses on L13 / L15
 (`AdmissionWellFormed`, `NoEquivocationInParents`, the
 honest-author uniqueness assumption, the authors-are-registered side
 condition) are not assumptions: they are bundled in
-`Beluga.MysticetiSafetyInv` and proved sorry-free by
-`Beluga.belugaTrace_satisfies_mysticetiSafetyInv` (modulo the
+`Mysticeti.MysticetiSafetyInv` and proved by
+`belugaTrace_satisfies_mysticetiSafetyInv` (modulo the
 `authorsValid` conjunct, queued for delegation).
 
 These wrappers consume the bundle and re-state L13 / L15 against
@@ -577,7 +577,7 @@ from the executable trace. -/
 belugaTrace specialisation of `lemma13_cert_persistence`. The four
 protocol-invariant hypotheses (`h_no_eq`, `h_admission`,
 `h_authors_valid`, `h_honest_unique`) are discharged from
-[`Beluga.belugaTrace_satisfies_mysticetiSafetyInv`](../Beluga/MysticetiSafetyInvariant.lean). -/
+[`belugaTrace_satisfies_mysticetiSafetyInv`](SafetyInvariant.lean). -/
 theorem lemma13_cert_persistence_belugaTrace
     (system : BlockSynchroniserSystem)
     (hids : ValidIds system)
@@ -595,7 +595,7 @@ theorem lemma13_cert_persistence_belugaTrace
     (h_later : B'.r > B.r + 1) :
     ∃ C, isCertificateFor (Beluga.belugaTrace system k) C B ∧
          Reaches (Beluga.belugaTrace system k) B' C := by
-  have h_inv := Beluga.belugaTrace_satisfies_mysticetiSafetyInv system hids k
+  have h_inv := belugaTrace_satisfies_mysticetiSafetyInv system hids k
   exact lemma13_cert_persistence system (Beluga.belugaTrace system k)
     h_inv.noEquivocation h_inv.admission hN h_inv.authorsValid h_byz_bound
     (fun B₁ hB₁ B₂ hB₂ _ => h_inv.uniqueByAuthorRound B₁ hB₁ B₂ hB₂)
@@ -607,7 +607,7 @@ belugaTrace specialisation of `lemma15_unique_cert`. The four
 protocol-invariant hypotheses (`h_no_eq`, `h_authors_valid`,
 `h_byz_bound` is kept since it is a system-wide BFT side condition)
 are discharged from
-[`Beluga.belugaTrace_satisfies_mysticetiSafetyInv`](../Beluga/MysticetiSafetyInvariant.lean). -/
+[`belugaTrace_satisfies_mysticetiSafetyInv`](SafetyInvariant.lean). -/
 theorem lemma15_unique_cert_belugaTrace
     (system : BlockSynchroniserSystem)
     (hids : ValidIds system)
@@ -623,7 +623,7 @@ theorem lemma15_unique_cert_belugaTrace
     (h_B₁_in : B₁ ∈ (Beluga.belugaTrace system k).blocks)
     (h_B₂_in : B₂ ∈ (Beluga.belugaTrace system k).blocks) :
     B₁ = B₂ := by
-  have h_inv := Beluga.belugaTrace_satisfies_mysticetiSafetyInv system hids k
+  have h_inv := belugaTrace_satisfies_mysticetiSafetyInv system hids k
   exact lemma15_unique_cert system (Beluga.belugaTrace system k)
     h_inv.noEquivocation B₁ B₂ h_lead₁ h_lead₂ h_same_round
     h_cert₁ h_cert₂ hN h_B₁_in h_B₂_in h_inv.authorsValid h_byz_bound

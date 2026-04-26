@@ -21,11 +21,11 @@ import BlockSynchroniser.Beluga.Pull
 import BlockSynchroniser.Beluga.Protocol
 import BlockSynchroniser.Beluga.StepPreservation
 import BlockSynchroniser.Beluga.AdmissionInvariant
-import BlockSynchroniser.Beluga.MysticetiSafetyInvariant
 import BlockSynchroniser.Beluga.Order
 import BlockSynchroniser.Beluga.Examples
 import BlockSynchroniser.Beluga.Theorems
 import BlockSynchroniser.Beluga.PerformanceLemmas
 import BlockSynchroniser.Mysticeti.Consensus
+import BlockSynchroniser.Mysticeti.SafetyInvariant
 import BlockSynchroniser.Mysticeti.Safety
 import BlockSynchroniser.Mysticeti.Liveness

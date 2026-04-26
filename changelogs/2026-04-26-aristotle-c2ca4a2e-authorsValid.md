@@ -8,7 +8,7 @@ Integrated Aristotle project `c2ca4a2e-8323-448c-9c47-61bf28aa7f6e`
 
 The single sorry'd `authorsValid` conjunct of
 `belugaTrace_satisfies_mysticetiSafetyInv` is now closed.
-`Beluga/MysticetiSafetyInvariant.lean` is sorry-free.
+`Mysticeti/SafetyInvariant.lean` is sorry-free.
 
 ### Inductive carrier strengthening — the right move
 
@@ -90,10 +90,5 @@ this morning). Remaining sorries:
 
 ## What's next
 
-1. (Per user request, separate commit) Move
-   `BlockSynchroniser/Beluga/MysticetiSafetyInvariant.lean` →
-   `BlockSynchroniser/Mysticeti/SafetyInvariant.lean` and
-   restate the namespace as `Mysticeti`. Updates all references
-   (root module, Safety.lean import, formalization.md links,
-   tracker docs).
-2. Wait for `e8212038` and `03f5fe3f` to return; integrate.
+1. Wait for `e8212038` (Beluga §5 noncircular bundle) and
+   `03f5fe3f` (Mysticeti liveness bundle) to return; integrate.

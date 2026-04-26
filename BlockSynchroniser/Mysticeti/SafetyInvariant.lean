@@ -28,7 +28,9 @@ import BlockSynchroniser.Beluga.AdmissionInvariant
 import BlockSynchroniser.Beluga.Protocol
 
 namespace BlockSynchroniser
-namespace Beluga
+namespace Mysticeti
+
+open Beluga
 
 /-- Trace invariants needed by Mysticeti-Beluga safety (Appendix D.3).
 
@@ -264,5 +266,5 @@ theorem belugaTrace_satisfies_mysticetiSafetyInv
       noEquivocation := noEquivocation_of_blockInv h_blockInv
       authorsValid := (authorsValid_trace system k).1 }
 
-end Beluga
+end Mysticeti
 end BlockSynchroniser

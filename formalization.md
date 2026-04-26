@@ -81,7 +81,7 @@ Status: ✅ done · ◐ in progress · ☐ planned · ⊘ out of scope · ⏸ de
 | **Lemma 16** — consistent leader-status decision across honest validators | [`Mysticeti/Safety.lean :: lemma16_consistent_status`](BlockSynchroniser/Mysticeti/Safety.lean#L445) | ✅ proved with `h_view_traceback` hypothesis; see finding F-5. |
 | **Theorem 6** — Mysticeti-Beluga consensus liveness | [`Mysticeti/Liveness.lean :: theorem6_consensus_liveness`](BlockSynchroniser/Mysticeti/Liveness.lean#L418) | ◐ Top-level proof closed; transitively depends on 11 helper lemmas still pending |
 | **Theorem 7** — Mysticeti-Beluga consensus safety | [`Mysticeti/Safety.lean :: theorem7_consensus_safety`](BlockSynchroniser/Mysticeti/Safety.lean#L517) | ⚠️ proved with `h_decision_complete` + `h_order_from_view` hypotheses but **finding F-7 flags both as unfaithful** to the paper (liveness ingredient + modeling artifact); restatement pending. |
-| **MysticetiSafetyInv bundle** for `belugaTrace` (folds `h_admission`, `h_honest_unique`, `h_no_eq`, `h_authors_valid`) | [`Beluga/MysticetiSafetyInvariant.lean :: belugaTrace_satisfies_mysticetiSafetyInv`](BlockSynchroniser/Beluga/MysticetiSafetyInvariant.lean#L243) | ✅ all four conjuncts proved (admission via `belugaTrace_admissionWellFormed`; uniqueByAuthorRound + noEquivocation from `BlockInv`; `authorsValid` closed in Aristotle round `c2ca4a2e` via a joint blocks-+-validator-IDs inductive carrier). The bundle is the foundation for `lemma13_cert_persistence_belugaTrace` and `lemma15_unique_cert_belugaTrace`. |
+| **MysticetiSafetyInv bundle** for `belugaTrace` (folds `h_admission`, `h_honest_unique`, `h_no_eq`, `h_authors_valid`) | [`Mysticeti/SafetyInvariant.lean :: belugaTrace_satisfies_mysticetiSafetyInv`](BlockSynchroniser/Mysticeti/SafetyInvariant.lean#L243) | ✅ all four conjuncts proved (admission via `belugaTrace_admissionWellFormed`; uniqueByAuthorRound + noEquivocation from `BlockInv`; `authorsValid` closed in Aristotle round `c2ca4a2e` via a joint blocks-+-validator-IDs inductive carrier). The bundle is the foundation for `lemma13_cert_persistence_belugaTrace` and `lemma15_unique_cert_belugaTrace`. |
 
 ## Not in the paper — internal validation
 
@@ -153,7 +153,7 @@ two other proofs that have no direct connection to refinement:
   by digest* — the helper lemma
   `block_unique_by_digest_in_trace` is one direct corollary of
   `BlockInv`.
-- [`Beluga/MysticetiSafetyInvariant.lean`](BlockSynchroniser/Beluga/MysticetiSafetyInvariant.lean)
+- [`Mysticeti/SafetyInvariant.lean`](BlockSynchroniser/Mysticeti/SafetyInvariant.lean)
   — three of four conjuncts of the new `MysticetiSafetyInv` bundle
   (`uniqueByAuthorRound` and `noEquivocation` directly,
   `admission` via `belugaTrace_admissionWellFormed`) are

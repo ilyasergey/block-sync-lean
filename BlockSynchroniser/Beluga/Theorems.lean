@@ -291,7 +291,7 @@ needed by the post-GST liveness bundle proof — in particular the
 *intermediate-value theorem* for rounds (`round_intermediate_value`),
 which underpins the L2 derivation from the lockstep `SchedulerFairness`.
 
-Sorry-free; depend only on the per-action helpers established above. -/
+-/
 
 /-
 `doAdvance` for `vid'` sets `currentRound` to `bv.currentRound + 1` for
