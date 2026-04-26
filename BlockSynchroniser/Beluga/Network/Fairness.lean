@@ -275,21 +275,28 @@ theorem networkTryActFor_preserves_roundEntry_bound
     (system : BlockSynchroniserSystem) (s : NetworkState)
     (h_inv : ∀ vid bv,
       s.base.getValidator vid = some bv → bv.roundEntryTime ≤ s.currentTime)
-    (vid_a : ValidatorId) (bv_a : BelugaValidator) (s' : NetworkState)
+    (vid_a : ValidatorId) (bv_a : BelugaValidator)
+    (h_a_get : s.base.getValidator vid_a = some bv_a)
+    (s' : NetworkState)
     (h_act : networkTryActFor system s vid_a bv_a = some s') :
     ∀ vid bv,
       s'.base.getValidator vid = some bv → bv.roundEntryTime ≤ s'.currentTime := by
-  -- Discharge plan (next session): branch-by-branch with the four
-  -- private helpers above (`updateValidator_getValidator_eq'`,
-  -- `updateValidator_getValidator_ne'`, `doPropose_getValidator'`,
-  -- `getValidator_emittedOperations_irrelevant'`). Propose: trivial via
-  -- `doPropose_getValidator'`. Accept/store: case on `vid = vid_a`; the
-  -- non-actor case uses `updateValidator_getValidator_ne'`; the actor
-  -- case uses `updateValidator_getValidator_eq'`. The advance branch
-  -- needs an additional helper showing the validator-list `.map` (which
-  -- preserves all non-actor entries) preserves `getValidator` modulo
-  -- the actor's `roundEntryTime := s.currentTime`. See the resumption
-  -- note in `docs/resumption-note-network-fairness.md`.
+  -- Branch-by-branch case analysis on `networkTryActFor` (4 cases:
+  -- propose / accept / store / advance). Propose: `doPropose` doesn't
+  -- touch validators, so getValidator is unchanged; `h_inv` gives the
+  -- bound. Accept/store: case on `vid = vid_a`; non-actor uses
+  -- `updateValidator_getValidator_ne'`; actor uses `_eq'`, with the
+  -- f-applied bv preserving `roundEntryTime`. Advance: actor's bv gets
+  -- `roundEntryTime := s.currentTime`; non-actor unchanged.
+  --
+  -- The bookkeeping for `find?` ∘ `.map` (especially in the advance
+  -- branch's outer rewrite of `validators := .map ...`) is finicky in
+  -- raw Lean tactics; the cleanest discharge requires two short
+  -- helper lemmas (`getValidator_map_replace_ne` /
+  -- `getValidator_map_replace_eq`) plus the four state-update
+  -- helpers above. The structural argument is sound; full
+  -- mechanization queued — see
+  -- `docs/resumption-note-network-fairness.md` §"Sorry 1".
   sorry
 
 /-- The trace invariant: at every step of `networkTrace`, every
