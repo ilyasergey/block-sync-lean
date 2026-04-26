@@ -37,7 +37,7 @@ Findings are grouped by status. Within each group, listed by severity.
 
 | ID | Severity | Category | Affected | Headline | Recommended action | Our address |
 |---|---|---|---|---|---|---|
-| **F-7** | High | Missing assumption (safety/liveness boundary) | §D.3 T7 | T7's prose proof equates "consistent views" (L16) with "identical views" (needs liveness) and treats `order` as separable from `view` (it isn't). Two non-paper ingredients hidden in one short paragraph. | Either weaken T7's conclusion to prefix-consistency on the *intersection* of decided positions, or import decision-completeness from §D.2 explicitly. | T7 currently passes via two non-paper hypotheses (`h_decision_complete`, `h_order_from_view`); the chosen restatement is open. |
+| **F-7** | High | Missing assumption (safety/liveness boundary) | §D.3 T7 (still); T6 (separate `order` axiom resolved) | T7's prose proof equates "consistent views" (L16) with "identical views" (needs liveness — F-7(a)) and treats `order` as separable from `view` (it isn't — F-7(b)). Two non-paper ingredients hidden in one short paragraph. | Either weaken T7's conclusion to prefix-consistency on the *intersection* of decided positions, or import decision-completeness from §D.2 explicitly. For F-7(b): define `order` as a function of state. | **F-7(b) closed for T6** via `Beluga.belugaTransactionOrder` + `accepted_implies_in_belugaTransactionOrder` (both sorry-free). T7 still has the abstract `order` parameter + `h_order_from_view` + `h_decision_complete` hypotheses (T7-specific F-7(a) liveness ingredient and T7's own F-7(b) instance unchanged); a similar refactor for T7 is the next step. |
 
 ### ◐ Pending
 
