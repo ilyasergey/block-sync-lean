@@ -57,14 +57,62 @@ is finding **F-1a** in `docs/mechanization-findings.md`.
 Discharging this from a more primitive scheduler model would require
 adding action-level enabledness predicates to our trace (future work).
 -/
+/-- **Lockstep round-progress assumption** (paper §5 Assumption 2,
+made explicit, lockstep form — finding **F-1a**).
+
+In plain English:
+
+> *After GST, whenever some honest validator is at round `r` at
+> some step `k`, then within `3Δ` wall-clock every honest
+> validator has reached round at least `r + 1`.*
+
+This is a **strong** assumption — it bundles three things into one:
+1. **Liveness** — rounds do advance (not just "may advance").
+2. **Lockstep** — every honest validator catches up to one ahead
+   of the witness validator's round.
+3. **Time bound** — the catch-up happens within `3Δ`.
+
+It is essentially the *conclusion* of paper Lemma 1 promoted to
+an axiom of the trace model. The paper derives this conclusion
+from a network-delivery bound (`Δ`-bounded message delay between
+honest validators) + the ImPoA-based pull protocol (§4.3) +
+the push protocol's parent-acceptance rules (§4.2). Our trace
+model abstracts the network layer, so we surface the conclusion
+directly as a hypothesis on `(belugaTrace, time)` rather than
+deriving it from a more primitive scheduler model.
+
+**What we use this for.** L1 (`lemma1_honest_round_entry`) is a
+direct invocation; L2 (`lemma2_round_latency`) follows from L1 +
+`round_intermediate_value`; T3 and T4's main proofs iterate
+`SchedulerFairness` to bring all honest validators past a target
+round. T1 (block availability) does *not* directly invoke
+`SchedulerFairness` — it uses the action-priority gate plus the
+existence of a post-GST advance step (which `SchedulerFairness`
+supplies via L2).
+
+**Discharging this from a more primitive model** would require
+adding action-level enabledness predicates and a network layer
+(in-flight messages, per-message delivery deadlines) to the trace.
+That is future work; with the current state-only trace,
+`SchedulerFairness` is the cleanest factoring that keeps the §5
+proofs tractable.
+
+See `docs/paper-feedback-l1-l2-fairness.md` for a paper-level
+counterexample motivating why the assumption is needed (without
+it, L1's `3Δ` bound fails) and `docs/mechanization-findings.md`
+finding F-1a for the project-side write-up. -/
 def SchedulerFairness
     (system : BlockSynchroniserSystem) (time : TimeMap) : Prop :=
   ∀ k r,
+    -- Post-GST step `k`...
     time k ≥ system.GST →
+    -- ...at which some honest validator is at round `r`...
     (∃ vid bv,
         isHonestValidator system vid = true ∧
         (belugaTrace system k).getValidator vid = some bv ∧
         bv.currentRound = r) →
+    -- ...implies a step `k'` within 3Δ at which every honest
+    -- validator has reached round ≥ r + 1.
     ∃ k', k ≤ k' ∧ time k' ≤ time k + 3 * system.Δ ∧
       ∀ vid, isHonestValidator system vid = true →
         ∃ bv, (belugaTrace system k').getValidator vid = some bv ∧
