@@ -148,10 +148,24 @@ property derivable as a *state invariant* rather than as an
 "eventually" claim — it does not depend on any fairness or
 liveness assumption.
 
-**Why:** This is a useful structural distinction for readers: T2
-is "free" (a structural invariant of Beluga's parent-acceptance
-rule), whereas T1/T3/T4 require additional assumptions to recover
-the paper's `3Δ` bounds.
+**Why.** Beluga's `block_accept_i(B.d)` action fires only when
+all of `B`'s parents have already been accepted by `v_i`
+(parent-acceptance precondition in §4). By induction on the
+parents relation, every block in `causal(B)` is *already*
+accepted by `v_i` at the moment `v_i` accepts `B` — not at some
+later step. The "eventually" in Definition 1.4 is therefore
+satisfied at the *current* step (witness `k' = k`), with no
+future action to wait for and hence no scheduler-fairness or
+timing hypothesis to invoke. The other three properties (T1,
+T3, T4) reference future actions (`block_store`, `doAdvance`)
+that have not yet happened at `k`, so their "eventually"
+quantifiers genuinely require fairness to bound the wait.
+
+This is also a Beluga-specific phenomenon: other synchronizers
+in §2.2 (e.g., the Multi-chain certified synchronizer) accept
+blocks before their causal ancestors arrive and rely on a pull
+protocol to catch up; for those designs, T2 *would* require
+liveness machinery to bound the catch-up.
 
 ---
 
