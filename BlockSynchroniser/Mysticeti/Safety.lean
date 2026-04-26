@@ -93,9 +93,20 @@ lemma consecutive_triple_exists (n f : Nat) (g : Nat → Bool)
       (Finset.sum_le_sum fun i hi => h_sum_ge i (Finset.mem_range.mp hi))
 
 /-- **Lemma 10 (paper Appendix D.3).**
-*The round-robin schedule of leader blocks in Mysticeti-Beluga ensures
-that in any window of `3f + 3` consecutive rounds, there are three
-consecutive rounds with honest leader blocks.* -/
+
+> *The round-robin schedule of leader blocks in Mysticeti-Beluga
+> ensures that in any window of `3f + 3` rounds, there are three
+> consecutive rounds with honest leader blocks.*
+
+Paper proof sketch: there are `3f + 1` groups of three consecutive
+rounds in any window of `3f + 3` rounds. Due to the round-robin
+schedule, each of the `2f + 1` honest validators is one of the
+leaders in exactly 3 such groups. Total honest-leader positions:
+`3 · (2f+1) = 6f+3` across `3f+1` groups; by pigeonhole some group
+contains `⌈(6f+3)/(3f+1)⌉ = 3` honest leader blocks.
+
+The Lean statement returns the explicit start round of the
+consecutive-honest triple. -/
 -- proof: aristotle (project 4cda6cb1) — round 2
 theorem lemma10_round_robin_pigeonhole
     (system : BlockSynchroniserSystem) (startRound : Round)
@@ -194,12 +205,33 @@ private lemma exists_honest_in_shared
   have := Finset.card_mono h_byzantine_count; simp_all +decide [ List.toFinset_card_of_nodup ] ;
   exact this.trans ( List.toFinset_card_le _ ) |> le_trans <| by simp +decide [ List.filter_eq ] ;
 
-/-
+/--
 **Lemma 13 (paper Appendix D.3).**
-*If `2f+1` round-`(r+1)` blocks from distinct validators reference a
-block `B` formed in round `r`, then every block in any round `r' > r+1`
-must (directly or transitively) reach a referencer of `B` via the
-causal-history relation.*
+
+> *In Mysticeti-Beluga, if `2f + 1` round `r` blocks from distinct
+> validators are certificates of a block `B`, then every block in
+> any round `r' > r` must (directly or transitively) reference a
+> certificate for `B` formed in round `r`.*
+
+**Note on indexing.** The paper writes "round `r` blocks ... are
+certificates of a block `B`", but a *certificate for `B`* is a
+block in round `B.r + 1` (it references `B` as a parent). So the
+paper's "round `r`" in this lemma refers to *the certificate's
+round*, i.e., `r = B.r + 1`. Our Lean statement makes this explicit:
+`B` is the block being certified, the certificates are at
+`C.r = B.r + 1`, and we conclude for every `B'` with
+`B'.r > B.r + 1` that `B'` `Reaches` some certificate for `B`.
+
+The two phrasings are equivalent — the paper's `r' > r` becomes our
+`B'.r > B.r + 1` after the index shift.
+
+Paper proof sketch: consider round `B.r + 2`. Every block in this
+round references `2f + 1` blocks from round `B.r + 1`. By quorum
+intersection, any such set intersects the `2f + 1` certificates of
+`B` in at least one honest validator. Since honest validators do
+not equivocate, every round `B.r + 2` block must reference a
+certificate for `B`. Induction on rounds propagates to all
+`r' > B.r + 1`.
 -/
 -- proof: aristotle (project 9f17cf80) — admission-invariant round
 theorem lemma13_cert_persistence
@@ -276,10 +308,30 @@ theorem lemma13_cert_persistence
       exact ⟨ C, hC₁, Reaches.step ( Reaches.refl _ ) ⟨ h_parents.2.2 P hP.1 |>.2.1, h_parents.2.2 P hP.1 |>.1, hB' ⟩ |> Reaches.trans <| hC₂ ⟩;
   exact h_ind ( B'.r - ( B.r + 2 ) ) ( Nat.zero_le _ ) B' h_in ( by rw [ add_tsub_cancel_of_le h_later ] )
 
-/-
+/--
 **Lemma 14 (paper Appendix D.3).**
-*If an honest validator directly commits leader block `B_L^r`, then no
-honest validator (directly or indirectly) decides to skip `B_L^r`.*
+
+> *In Mysticeti-Beluga, if an honest validator directly commits
+> `B_r^L`, then no honest validator (directly or indirectly)
+> decides to skip `B_r^L`.*
+
+Paper proof sketch (two cases):
+* *Direct skip.* A direct skip occurs only if at least `2f + 1`
+  blocks in round `r + 1` do not reference `B_r^L`. But if `B_r^L`
+  is committed, then by the decision rule, at least `2f + 1` round
+  `r + 1` blocks reference it. The two `2f + 1`-quorums intersect
+  in at least one honest validator, who would have to equivocate —
+  contradiction.
+* *Indirect skip.* An indirect skip occurs through a later leader
+  `B_{r'}^L` with `r' > r + 2` whose causal history does not
+  reference any certificate for `B_r^L`. But `B_r^L` is directly
+  committed, so it has `2f + 1` certificates; by Lemma 13, every
+  block in rounds `> r + 1` references one of them — contradiction.
+
+In our Lean statement the "no skip" claim is reduced to
+`view vid B.d ≠ Decision.ToSkip` for every honest `vid`, given
+`directDecide system state B = Decision.ToCommit` and the protocol
+fact that honest views agree with `directDecide` on this digest.
 -/
 theorem lemma14_no_skip
     (system : BlockSynchroniserSystem) {S} [SystemState S] (state : S)
@@ -296,19 +348,30 @@ theorem lemma14_no_skip
 
 /--
 **Lemma 15 (paper Appendix D.3).**
-*In Mysticeti-Beluga, at most one leader block can be certified for any
-round `r`.*
 
-This is a *specialization* of [`Beluga.certified_unique`](../Beluga/Patterns.lean):
-restrict to leader blocks (where `author = leaderOf system r`), and
-uniqueness follows.
+> *In Mysticeti-Beluga, at most one leader block can be certified
+> for any round `r`.*
 
-PROVIDED SOLUTION (paper Appendix D)
-Suppose two distinct leader blocks `B_{L1}^r` and `B_{L2}^r` both obtain
-`2f+1` references from round `r+1`. By quorum intersection, at least
-one honest validator must belong to both quorums, and thus would have
-referenced both blocks in round `r`. This contradicts protocol rule
-that a validator references at most one block per proposer round.
+This is a *specialization* of
+[`Beluga.certified_unique`](../Beluga/Patterns.lean): restrict to
+leader blocks (where `author = leaderOf system r`); uniqueness then
+follows from the existing quorum-intersection chain.
+
+Paper proof sketch:
+
+> *Suppose two distinct leader blocks `B_{r,L_1}` and `B_{r,L_2}`
+> both obtain `2f + 1` references from round `r + 1`. By quorum
+> intersection, at least one honest validator must belong to both
+> quorums, and thus would have referenced both blocks in round `r`.
+> This contradicts the protocol rule that a validator references
+> at most one block per proposer per round.*
+
+The paper notes immediately after L15:
+
+> **Corollary 1.** *No two honest validators commit distinct leader
+> blocks in the same round.*
+
+(Used in the base case of L16's backward induction below.)
 -/
 theorem lemma15_unique_cert
     (system : BlockSynchroniserSystem) {S} [SystemState S] (state : S)
@@ -336,33 +399,45 @@ theorem lemma15_unique_cert
 
 /--
 **Lemma 16 (paper Appendix D.3).**
-*All honest validators decide a consistent status for each round leader
-block.*
 
-PROVIDED SOLUTION (paper Appendix D)
-Consider two honest validators `v_i` and `v_j`, and let `n` be the
-highest round in which `v_i` commits a leader block. We prove by
-backward induction that for every round `x ≤ n`, both validators
-assign the same status to `B_L^x`.
+> *In Mysticeti-Beluga, all honest validators decide a consistent
+> status for each round leader block.*
 
-* Base case (x = n): validator `v_i` commits `B_L^n`. By Lemma 14,
-  `v_j` cannot skip it and must also commit it. By Corollary 1 (no two
-  honest validators commit distinct leader blocks in the same round),
-  both commit the same block.
-* Inductive step: assume the statement holds for all rounds in `(k, n]`.
-  Consider round `k`. If either validator directly commits or directly
-  skips `B_L^k`, the other must make the same decision by Lemma 11 and
-  Lemma 14. Otherwise, both decisions are indirect and derived from a
-  later committed leader. Let `k_i` and `k_j` be the rounds of the
-  first such commits for `v_i` and `v_j` respectively. By the induction
-  hypothesis, `k_i = k_j`, and both validators commit the same leader
-  block. Since indirect decisions depend only on the causal history of
-  that block, both validators derive the same decision for `B_L^k`.
+Paper proof (verbatim):
+
+> *Consider two honest validators `v_i` and `v_j`, and let `n` be
+> the highest round in which `v_i` commits a leader block. We prove
+> by backward induction that for every round `x ≤ n`, both
+> validators assign the same status to `B_x^L`.*
+>
+> *Base case (`x = n`).* Validator `v_i` commits `B_n^L`. By Lemma
+> 14, `v_j` cannot skip it and must also commit it. By Corollary 1
+> (no two honest validators commit distinct leader blocks in the
+> same round), both commit the same block.
+>
+> *Inductive step.* Assume the statement holds for all rounds in
+> `(k, n]`. Consider round `k`. If either validator directly commits
+> or directly skips `B_k^L`, the other must make the same decision
+> by Lemma 11 and Lemma 14. Otherwise, both decisions are indirect
+> and derived from a later committed leader. Let `k_i` and `k_j` be
+> the rounds of the first such commits for `v_i` and `v_j`,
+> respectively. By the induction hypothesis, `k_i = k_j`, and both
+> validators commit the same leader block. Since indirect decisions
+> depend only on the causal history of that block, both validators
+> derive the same decision for `B_k^L`.
+
+**Mechanization note.** Our `view.Consistent` only requires that
+two non-`Undecided` honest views agree (the safety claim), not the
+fuller "decide on the same set of leader blocks" claim used in the
+paper's induction. The two are bridged by **decision completeness**
+(see `h_decision_complete` on `theorem7_consensus_safety` below) —
+a liveness consequence the paper invokes silently. This is finding
+**F-7(a)** in `docs/mechanization-findings.md`.
 
 **Added protocol-invariant hypothesis (round 3c bridge closure):**
-- `h_view_traceback`: every non-`Undecided` honest view on a digest `d`
-  traces back to a leader block `B` with `B.d = d` in the state whose
-  `directDecide` is non-`Undecided`. This captures the protocol
+- `h_view_traceback` — every non-`Undecided` honest view on a digest
+  `d` traces back to a leader block `B` with `B.d = d` in the state
+  whose `directDecide` is non-`Undecided`. This captures the protocol
   invariant that all consensus decisions originate from direct
   DAG-pattern observations on leader blocks.
 -/
@@ -399,25 +474,44 @@ theorem lemma16_consistent_status
   rw [hv₁, hv₂]
 
 /--
-**Theorem 7 (paper Appendix D.3) — Mysticeti-Beluga consensus safety.**
-*All honest validators order transactions consistently.*
+**Theorem 7 (paper Appendix D.3) — Consensus safety.**
 
-PROVIDED SOLUTION (paper Appendix D)
-By Lemma 16, all honest validators decide a consistent status for each
-round leader block, meaning that all honest validators decide identical
-`ToCommit` leader blocks. According to the consensus logic employed by
-Mysticeti-Beluga, all honest validators will order `ToCommit` leader
-blocks and their causal history blocks consistently. Therefore, for
-transactions included in the ordered blocks, all honest validators
-order them consistently.
+> *In Mysticeti-Beluga, all honest validators order transactions
+> consistently.*
+
+Paper proof (verbatim):
+
+> *By Lemma 16, all honest validators decide a consistent status for
+> each round leader block, meaning that all honest validators
+> decide identical to-commit leader blocks. According to the
+> consensus logic employed by Mysticeti-Beluga, all honest
+> validators will order to-commit leader blocks and their causal
+> history block consistently. Therefore, for transactions included
+> in the ordered blocks, all honest validators order them
+> consistently.*
+
+**Mechanization notes** (findings F-7(a), F-7(b) in
+`docs/mechanization-findings.md`):
+
+- *F-7(a)* — the paper's "decide identical leader blocks" overstates
+  Lemma 16, which only gives *consistency* (no two honest validators
+  decide non-`Undecided` differently) — not full *equality* of
+  decided sets, which is a liveness property. We surface
+  `h_decision_complete` as an explicit hypothesis to bridge the gap.
+
+- *F-7(b)* — "transaction ordering respects view equality" is silently
+  relied on. We surface this as `h_order_from_view`. For the
+  `belugaTrace` instantiation a concrete realization is provided in
+  `Beluga/Order.lean` (`belugaTransactionOrder` +
+  `accepted_implies_in_belugaTransactionOrder`).
 
 **Added protocol-invariant hypothesis (round 3c bridge closure):**
-- `h_decision_complete`: decision completeness — if one honest
+- `h_decision_complete` — decision completeness: if one honest
   validator's view on a digest is `Undecided`, then all honest
   validators' views on that digest are `Undecided` (and vice versa).
   This is the liveness-derived property that honest validators
   eventually all decide the same way, upgrading `Consistent`
-  (no conflicting non-Undecided) to full view equality.
+  (no conflicting non-`Undecided`) to full view equality.
 -/
 -- proof: aristotle (project 9d7e8e08) — round 6
 theorem theorem7_consensus_safety
