@@ -580,13 +580,25 @@ theorem belugaTrace_satisfies_post_gst_liveness
     (_h_sync : PartiallySynchronous system (belugaTrace system) time)
     (h_fair : SchedulerFairness system time)
     -- BFT honest-count side condition (paper §2). T3 (round_progression)
-    -- and T4 (round_termination) both need to count 2f+1 distinct
-    -- honest validators that propose / accept; without this assumption
-    -- the system's `validators` list could have any honest fraction.
-    -- Same precedent as `Mysticeti/Liveness.lean`'s
-    -- `belugaTrace_satisfies_mysticeti_post_gst_liveness` bundle theorem.
+    -- and T4 (round_termination) both need to count `2f + 1` distinct
+    -- honest validators that propose / accept; the bundle is
+    -- vacuously satisfied otherwise (`SchedulerFairness` ranges over
+    -- honest validators but is trivial when the honest set is empty).
+    --
+    -- We take the **lower-bound form** `≥ 2 * f + 1` rather than the
+    -- exact `= 2 * f + 1` form the rest of the project tends to use:
+    --   - Paper §2 only commits to `f < n / 3` (Byzantine strictly
+    --     fewer than a third), from which honest count is
+    --     `n - f > 2f`, i.e., honest ≥ 2f + 1.
+    --   - The exact equality follows only under F-2's pinning of
+    --     `n = 3f + 1` (a notational tightening we recommend the
+    --     paper adopt, but not yet committed to globally in this
+    --     bundle).
+    --   - T3 / T4 only need the lower bound (counting argument).
+    -- Using `≥` keeps the bundle independent of F-2's pinning while
+    -- still being directly supported by the paper text.
     (hHonest : (system.validators.filter (fun p => p.2 = true)).length
-                = 2 * system.f + 1) :
+                ≥ 2 * system.f + 1) :
     BelugaPostGSTLiveness system time := by
   refine
     { honest_round_sync := ?_
@@ -643,7 +655,7 @@ theorem lemma1_honest_round_entry
     (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
     (h_fair : SchedulerFairness system time)
-    (hHonest : (system.validators.filter (fun p => p.2 = true)).length = 2 * system.f + 1) :
+    (hHonest : (system.validators.filter (fun p => p.2 = true)).length ≥ 2 * system.f + 1) :
     ∀ vid_ref r k₀, isHonestValidator system vid_ref = true →
       time k₀ ≥ system.GST →
       (∃ bv_ref, (belugaTrace system k₀).getValidator vid_ref = some bv_ref ∧
@@ -662,7 +674,7 @@ theorem lemma2_round_latency
     (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
     (h_fair : SchedulerFairness system time)
-    (hHonest : (system.validators.filter (fun p => p.2 = true)).length = 2 * system.f + 1) :
+    (hHonest : (system.validators.filter (fun p => p.2 = true)).length ≥ 2 * system.f + 1) :
     ∀ vid r k,
       isHonestValidator system vid = true →
       time k ≥ system.GST →
@@ -679,7 +691,7 @@ theorem theorem1_block_availability
     (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
     (h_fair : SchedulerFairness system time)
-    (hHonest : (system.validators.filter (fun p => p.2 = true)).length = 2 * system.f + 1) :
+    (hHonest : (system.validators.filter (fun p => p.2 = true)).length ≥ 2 * system.f + 1) :
     BlockAvailability system (belugaTrace system) :=
   (belugaTrace_satisfies_post_gst_liveness system time h_time h_sync h_fair hHonest).block_availability
 
@@ -719,7 +731,7 @@ theorem theorem3_round_progression
     (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
     (h_fair : SchedulerFairness system time)
-    (hHonest : (system.validators.filter (fun p => p.2 = true)).length = 2 * system.f + 1) :
+    (hHonest : (system.validators.filter (fun p => p.2 = true)).length ≥ 2 * system.f + 1) :
     RoundProgression system (belugaTrace system) :=
   (belugaTrace_satisfies_post_gst_liveness system time h_time h_sync h_fair hHonest).round_progression
 
@@ -730,7 +742,7 @@ theorem theorem4_round_termination
     (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
     (h_fair : SchedulerFairness system time)
-    (hHonest : (system.validators.filter (fun p => p.2 = true)).length = 2 * system.f + 1) :
+    (hHonest : (system.validators.filter (fun p => p.2 = true)).length ≥ 2 * system.f + 1) :
     RoundTermination system (belugaTrace system) :=
   (belugaTrace_satisfies_post_gst_liveness system time h_time h_sync h_fair hHonest).round_termination
 
@@ -747,7 +759,7 @@ theorem belugaTrace_isBlockSynchronizer
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
     (h_fair : SchedulerFairness system time)
     (hHonest : (system.validators.filter (fun p => p.2 = true)).length
-                = 2 * system.f + 1) :
+                ≥ 2 * system.f + 1) :
     BlockSynchronizer system (belugaTrace system) :=
   ⟨theorem3_round_progression system time h_time h_sync h_fair hHonest,
    theorem4_round_termination system time h_time h_sync h_fair hHonest,
