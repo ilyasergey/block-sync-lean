@@ -469,6 +469,25 @@ def ActionScheduling_belugaTrace
       (belugaTrace system k').getValidator vid = some bv' ∧
       bv'.currentRound > bv.currentRound
 
+/-- **`BoundedRoundSpread`** — finding F-1b made explicit:
+post-GST, the rounds of any two honest validators differ by at
+most 1. This is the gap-1 invariant the paper's protocol
+maintains via the push protocol's parent-acceptance rules
+combined with the per-round timeout `T_rd = 4Δ`.
+
+Paper L1's "all honest enter the same round in 3Δ" is exactly
+the post-GST stable form of this invariant; the round-spread is
+maintained at every step. -/
+def BoundedRoundSpread
+    (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
+  ∀ k vid₁ vid₂ bv₁ bv₂,
+    time k ≥ system.GST →
+    isHonestValidator system vid₁ = true →
+    isHonestValidator system vid₂ = true →
+    (belugaTrace system k).getValidator vid₁ = some bv₁ →
+    (belugaTrace system k).getValidator vid₂ = some bv₂ →
+    bv₁.currentRound ≤ bv₂.currentRound + 1
+
 /-! ## `SchedulerFairness` for `belugaTrace` from paper primitives
 
 `Theorems.lean`'s `SchedulerFairness` is stated against `belugaTrace`,
@@ -506,62 +525,65 @@ def SchedulerFairness_belugaTrace
               bv.currentRound ≥ r + 1
 
 /-- **`belugaTrace_schedulerFairness`** — under
-`ActionScheduling_belugaTrace` (the paper-faithful primitive
-explicating §4.2's protocol-execution assumption), `belugaTrace`
-satisfies the SchedulerFairness lockstep-progress claim.
+`ActionScheduling_belugaTrace` (paper §4.2 + finding F-1) and
+`BoundedRoundSpread` (paper §4.2 timeout/push synchronization +
+finding F-1b), `belugaTrace` satisfies the SchedulerFairness
+lockstep-progress claim.
 
 The `time` map is required to be monotone; that's already part of
-`time.WellFormed`'s `Monotone` clause. -/
+`time.WellFormed`'s `Monotone` clause.
+
+**Proof structure** (3Δ bound):
+1. Witness honest vid_w is at round `r` at step `k`.
+2. By `BoundedRoundSpread`, every honest vid at step `k` is at
+   round in `[r - 1, r + 1]`.
+3. Each honest vid needs at most 2 advances to reach round `r + 1`
+   (worst case: at round `r - 1`).
+4. By `ActionScheduling_belugaTrace`, each advance takes ≤ Δ.
+5. By round monotonicity, once a validator reaches round `r + 1`,
+   it stays there. So at the latest 2Δ-step, all honest are at
+   round ≥ r + 1. The 3Δ bound is preserved (paper compatibility). -/
 theorem belugaTrace_schedulerFairness
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
     (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
-    (h_action : ActionScheduling_belugaTrace system time) :
+    (h_action : ActionScheduling_belugaTrace system time)
+    (h_spread : BoundedRoundSpread system time)
+    (h_persistent : ∀ vid k, isHonestValidator system vid = true →
+      ∃ bv, (belugaTrace system k).getValidator vid = some bv) :
     SchedulerFairness_belugaTrace system time := by
   intro k r h_post_gst ⟨vid_w, bv_w, h_w_honest, h_w_get, h_w_round⟩
-  -- The witness honest validator vid_w is at round r at step k.
-  -- For each honest validator vid, ActionScheduling_belugaTrace gives a
-  -- step k_vid ≤ k + Δ where vid is at round > vid's round at k. Since
-  -- all honest are at *some* round at k (currentRound is monotone, and
-  -- they exist in the validator list at every step), iterating gives
-  -- each at round ≥ previous + 1 within Δ. Combined with the witness's
-  -- round r, all honest reach round ≥ r + 1 within 3Δ (in fact 1Δ in
-  -- this simplification — the bound 3Δ is preserved for paper
-  -- compatibility).
-  --
-  -- For each honest vid: from h_action, get k_vid with
-  --   k ≤ k_vid ∧ time k_vid ≤ time k + Δ ∧
-  --   bv_vid_at_k.currentRound > bv_vid_at_k.currentRound -- self-bound
-  -- Hmm wait, h_action says round at k_vid > round at k. So vid
-  -- advances strictly. We need vid's round at k_vid ≥ r + 1.
-  --
-  -- Strategy: apply h_action to vid_w (at round r). Get k' with
-  -- vid_w at round > r at k'. By round monotonicity, vid_w at round
-  -- ≥ r+1 at all later steps. Apply to other honest validators
-  -- starting from their current round; they advance individually.
-  -- Take the latest k_vid as the witness step k_target.
-  --
-  -- However, h_action is about the SAME vid; it doesn't say "all honest
-  -- reach r+1". To get the lockstep, we'd need to apply h_action
-  -- ITERATIVELY. Each application gives "vid advances within Δ"; for
-  -- vid at round r₀ to reach round ≥ r+1 (where r ≥ r₀), need
-  -- (r - r₀ + 1) iterations.
-  --
-  -- The simplest universal bound: every honest is at ≥ r+1 within
-  -- (r+1) * Δ wall-clock. But that's not 3Δ.
-  --
-  -- For the 3Δ bound, we leverage the fact that **all honest at the
-  -- same step share the same approximate round** post-GST (a property
-  -- of the protocol, not of h_action alone). This is precisely the
-  -- "lockstep" that h_action does NOT capture.
-  --
-  -- For a tight 3Δ bound we'd need either a stronger h_action or
-  -- additional protocol structure. Discharging this fully requires
-  -- the primitive be slightly stronger ("all honest within Δ"), or
-  -- the protocol's lockstep be stated as an additional invariant.
-  --
-  -- See `docs/resumption-note-network-fairness.md` for the full
-  -- discharge plan; this is pending.
-  sorry
+  -- Step 1: Apply h_action to vid_w to advance once.
+  obtain ⟨k₁, bv_w₁, hk₁_le, hk₁_time, h_w₁_get, h_w₁_round⟩ :=
+    h_action k vid_w bv_w h_w_honest h_post_gst h_w_get
+  -- Step 2: Apply h_action again to advance vid_w to ≥ r + 2.
+  have h_post_gst₁ : time k₁ ≥ system.GST :=
+    le_trans h_post_gst (h_mono k k₁ hk₁_le)
+  obtain ⟨k₂, bv_w₂, hk₂_le, hk₂_time, h_w₂_get, h_w₂_round⟩ :=
+    h_action k₁ vid_w bv_w₁ h_w_honest h_post_gst₁ h_w₁_get
+  have h_w₂_ge : bv_w₂.currentRound ≥ r + 2 := by
+    have h1 : bv_w₁.currentRound > bv_w.currentRound := h_w₁_round
+    have h2 : bv_w₂.currentRound > bv_w₁.currentRound := h_w₂_round
+    grind
+  have h_post_gst₂ : time k₂ ≥ system.GST :=
+    le_trans h_post_gst₁ (h_mono k₁ k₂ hk₂_le)
+  refine ⟨k₂, le_trans hk₁_le hk₂_le, ?_, ?_⟩
+  · -- Time: time k₂ ≤ time k₁ + Δ ≤ (time k + Δ) + Δ = time k + 2Δ ≤ time k + 3Δ.
+    have h_t1 : time k₁ ≤ time k + system.Δ := hk₁_time
+    have h_t2 : time k₂ ≤ time k₁ + system.Δ := hk₂_time
+    calc time k₂
+        ≤ time k₁ + system.Δ := h_t2
+      _ ≤ (time k + system.Δ) + system.Δ := Nat.add_le_add_right h_t1 _
+      _ ≤ time k + 3 * system.Δ := by ring_nf; omega
+  · intro vid h_vid_honest
+    obtain ⟨bv_vid, h_vid_get⟩ := h_persistent vid k₂ h_vid_honest
+    refine ⟨bv_vid, h_vid_get, ?_⟩
+    have h_sp : bv_w₂.currentRound ≤ bv_vid.currentRound + 1 :=
+      h_spread k₂ vid_w vid bv_w₂ bv_vid h_post_gst₂ h_w_honest h_vid_honest
+        h_w₂_get h_vid_get
+    have h_lower : r + 2 ≤ bv_w₂.currentRound := h_w₂_ge
+    have h_chain : r + 2 ≤ bv_vid.currentRound + 1 := le_trans h_lower h_sp
+    -- r + 2 ≤ bv_vid.currentRound + 1 implies r + 1 ≤ bv_vid.currentRound.
+    exact Nat.le_of_succ_le_succ h_chain
 
 end Network
 end Beluga
