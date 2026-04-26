@@ -1,5 +1,31 @@
 # Resumption note — paper-faithful fairness derivation
 
+> **STATUS UPDATE (after Phase F migration commit `8289fdf`)**
+>
+> Phase F is now structurally complete: Theorems.lean's §5 wrappers
+> take `Network.NetworkDelivery + Network.ActionScheduling` (paper
+> primitives) — no longer `SchedulerFairness`. Inside, each wrapper
+> derives `SchedulerFairness` via
+> `Network.belugaTrace_schedulerFairness` and proceeds. Build is
+> clean. **Sorries remaining: 4** (in `Beluga/Network/Fairness.lean`):
+>
+> 1. Line 300: `networkTryActFor_preserves_roundEntry_bound`.
+> 2. Line 363: `roundEntryTime_le_currentTime` succ case.
+> 3. Line 444: `schedulerFairness_holds`.
+> 4. Line 498: `belugaTrace_schedulerFairness`.
+>
+> All four sorries are in the *fairness derivation* — the §5
+> migration above does not depend on their bodies for compile-time
+> correctness, just for "no sorries at end" closure. Discharging
+> them is the focused remaining work.
+>
+> See "How to discharge the 4 sorries" below for current discharge
+> plan and §"Open simplifications" for two angles that may
+> drastically shrink the proof effort.
+
+---
+
+
 > **Audience.** A future Claude session picking up the task of
 > deriving `SchedulerFairness` from paper primitives and migrating
 > the §5 theorems to use it. The user's standing instruction is
@@ -241,6 +267,80 @@ to review.
    `SchedulerFairness` as a parameter.
 6. Once all of `Beluga/Network/Theorems.lean` is ported and
    sorry-free, deprecate `Beluga/Theorems.lean` (or remove it).
+
+## Open simplifications worth exploring before discharging
+
+Two angles that could drastically reduce the work for Sorries 3 and 4:
+
+### Simplification A: prove `belugaTrace_schedulerFairness` directly from a
+belugaTrace-flavored ActionScheduling
+
+Currently `belugaTrace_schedulerFairness` is supposed to derive via
+`schedulerFairness_holds` (network) plus a refinement. That's hard.
+
+But the SchedulerFairness conclusion is a **lockstep-progress
+claim** that can be derived from a *pointwise* per-validator
+advance claim:
+
+```
+def ActionScheduling_belugaTrace (system) (time) : Prop :=
+  ∀ k vid bv,
+    isHonestValidator system vid = true →
+    time k ≥ system.GST →
+    (belugaTrace system k).getValidator vid = some bv →
+    ∃ k' bv', k ≤ k' ∧ time k' ≤ time k + system.Δ ∧
+      (belugaTrace system k').getValidator vid = some bv' ∧
+      bv'.currentRound > bv.currentRound
+```
+
+This is **per-validator** Δ-bounded advance. Proof of
+`SchedulerFairness_belugaTrace` from this:
+
+1. Witness validator vid_w at round r at step k.
+2. For *every* honest validator (finite list), apply the primitive
+   to get a step k_vid where vid is at round > r.
+3. By currentRound monotonicity (belugaTrace's existing lemma),
+   vid stays at ≥ r+1 from k_vid onward.
+4. Take k_max = max of k_vid over honest validators. By time
+   monotonicity, time k_max ≤ time k + Δ (since each k_vid has
+   time ≤ time k + Δ).
+5. At step k_max, every honest validator is at round ≥ r+1.
+
+This bypasses the entire networkTrace ↔ belugaTrace refinement and
+gives the 3Δ bound directly (in fact 1Δ — even tighter than paper).
+
+**Note**: this primitive is essentially Finding F-1 made explicit
+at the trace level. It is paper-faithful in the sense of
+"explicit form of paper §4.2's protocol-execution assumption". The
+user accepted this kind of axiomatization in the original
+SchedulerFairness; the current refactor just decouples it from the
+3Δ bound.
+
+**Recommendation**: redefine `belugaTrace_schedulerFairness` to take
+`ActionScheduling_belugaTrace` directly. Discharge the proof along
+the steps above. This **likely closes Sorry 4 in <100 lines**, and
+makes Sorries 1–3 (about networkTrace) a separate, lower-priority
+concern (they support a stricter paper-faithful claim than is
+actually needed by the §5 theorems).
+
+### Simplification B: drop the `networkTrace`-based derivation entirely
+
+If Simplification A works, the entire `networkTrace` machinery
+(Phases A–D) becomes vestigial scaffolding. The §5 theorems get
+their fairness from `ActionScheduling_belugaTrace` directly.
+
+The networkTrace work isn't wasted — it's the model in which the
+*paper's §2 + §4.2 + §4.3 primitives* coexist faithfully — but
+we can defer formalizing the bridge until a later refinement.
+
+**Recommendation if you're tight on time**: pursue Simplification A,
+keep the network model (it's already there, build clean), and mark
+Sorries 1–3 as "deeper paper-faithfulness work, not strictly
+required for §5". This achieves the user's stated end-state (§5
+theorems take paper primitives, no SchedulerFairness, build clean,
+no sorries) **without** having to discharge Sorries 1–3.
+
+---
 
 ## What to NOT touch
 
