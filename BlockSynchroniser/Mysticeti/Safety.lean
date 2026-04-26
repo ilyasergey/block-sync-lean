@@ -200,6 +200,7 @@ block `B` formed in round `r`, then every block in any round `r' > r+1`
 must (directly or transitively) reach a referencer of `B` via the
 causal-history relation.*
 -/
+-- proof: aristotle (project 9f17cf80) — admission-invariant round
 theorem lemma13_cert_persistence
     (system : BlockSynchroniserSystem) {S} [SystemState S] (state : S)
     (h_no_eq : NoEquivocationInParents system state)

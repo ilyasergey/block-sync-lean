@@ -10,6 +10,36 @@ section**. Each entry records: project ID, target file, theorem(s)
 proved, helper lemmas added, what we asked for, what came back, and
 the integration commit.
 
+## Project 116385ce-5fc6-4f0c-8083-a2ed4c66d514 (round 3f)
+
+| Field | Value |
+|---|---|
+| Submitted | 2026-04-25 23:14 SGT |
+| Returned | 2026-04-26 ~00:24 SGT (status `COMPLETE_WITH_ERRORS`) |
+| Result tarball | (pre-session) |
+| Prompt | Prove `step_refines_HonestStep` in `Beluga/Protocol.lean` (initial framing). |
+| Integration commit | `d96ce2e` |
+
+### What landed (preserved through this session)
+
+This was the *first* round at `step_refines_HonestStep`. It returned
+a structural proof skeleton with 5 inline gaps. The skeleton was
+later replaced wholesale by round 4 (`a8889396`), but three helper
+lemmas Aristotle introduced **survived** and are still load-bearing:
+
+- `hasAcceptedDigest_false_imp` (`hasAcceptedDigest false ⇒ ¬HasAccepted`)
+- `hasAcceptedDigest_true_imp` (`hasAcceptedDigest true ⇒ HasAccepted`)
+- `not_honest_imp_byzantine` (registered + ¬honest ⇒ Byzantine)
+
+These three are still tagged `-- proof: aristotle (project 116385ce)`
+in `Beluga/Protocol.lean` (around line 315).
+
+### Notes
+
+This round is the precursor to round 4 (`a8889396`); the bulk of
+its proof body was superseded, but the small infrastructure lemmas
+remain, so a permanent attribution entry is warranted.
+
 ## Project be7c0245-cdb9-4cce-9c4a-fffecfd1a69c
 
 | Field | Value |

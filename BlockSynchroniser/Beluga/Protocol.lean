@@ -347,6 +347,11 @@ The proof proceeds in three stages:
 3. `CausallyClosed` follows from `AcceptInv` by induction on `Reaches`.
 -/
 
+-- proof: aristotle (project 3f6cf619) — round 4-followup
+-- The `ValidIds` / `CausallyClosed` / `BlockInv` / `AcceptInv` chain
+-- and all supporting lemmas through `causallyClosed_trace` were
+-- introduced and proved by this round.
+
 /-- All validator IDs in the system are bounded by `system.n + 1`.
 Ensures the `digest` function is injective across validators. -/
 def ValidIds (system : BlockSynchroniserSystem) : Prop :=
