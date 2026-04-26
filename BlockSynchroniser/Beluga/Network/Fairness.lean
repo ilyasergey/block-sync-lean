@@ -190,7 +190,36 @@ theorem currentTime_tracks_time (system : BlockSynchroniserSystem)
       time (k + 1)
     exact networkStep_currentTime system (networkTrace system time k) (time (k + 1))
 
-/-! ## The headline theorem (Phase E target — outline)
+/-! ## Phase E.2 onward: round-entry monotonicity, timeout firing,
+and the headline derivation are queued for follow-up sessions.
+
+Sketch of the proof of `RoundEntryTimeBounded` (next session,
+~80–120 lines): induction on the trace step `k`. At init,
+`bv.roundEntryTime = 0 ≤ currentTime` (default). At the step:
+
+1. Time monotonicity (`time k ≤ time (k+1)` from `h_time.1`)
+   preserves the bound when `currentTime` advances to `time(k+1)`.
+2. `deliverPending` doesn't touch `base.validators`.
+3. `networkTryActFor` preserves the bound: every branch except
+   `advance` leaves `roundEntryTime` alone and `currentTime`
+   unchanged; the `advance` branch sets `roundEntryTime :=
+   s.currentTime`, restoring the bound to equality on the
+   acting validator (and leaving other validators' bounds
+   intact).
+
+The bookkeeping for `find?` / `updateValidator` / `Option.map`
+unfolding under nodup is the bulk of the work; the structural
+argument itself is straightforward.
+
+`TimeoutFiresPast4Delta` then follows directly from
+`RoundEntryTimeBounded` + `currentTime_tracks_time` + the
+definition of `timeoutFired`.
+
+`schedulerFairness_holds` (the headline) requires an additional
+`ActionScheduling` axiom (paper §4.2 implicit, finding F-1) and
+combines all the above.
+
+## The headline theorem (Phase E target — outline)
 
 The full derivation of `schedulerFairness4Δ_holds` proceeds via:
 
