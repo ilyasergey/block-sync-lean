@@ -417,6 +417,73 @@ lemma round_intermediate_value (system : BlockSynchroniserSystem) (vid : Validat
       exact h₂;
     grind +splitImp
 
+/-! ## Structural invariants for the §5 bundle proof
+
+The post-GST liveness conjuncts (T1, T3, T4) rely on a key
+structural fact about `tryActFor`'s priority order: validator `vid`
+can only advance from round `r-1` to round `r` after it has
+proposed for round `r-1` (priority gate `if !hasProposedFor` puts
+propose strictly before advance). By induction, a validator at
+round `r` has proposed for every round `r' < r`.
+
+This invariant + iterated `SchedulerFairness` is enough to derive
+T3 (every round eventually has 2f+1 proposers); similar
+structural arguments handle T1 and T4 once we add invariants
+for accept-before-advance and store-before-advance.
+
+L1 (`honest_round_sync`) cannot be derived from these invariants
++ the current bundle hypotheses — see the long comment at
+the L1 sorry below for the obstruction (gap-1 transient states
+between adjacent round advances). -/
+
+/-
+Operations emitted by `step` only grow `emittedOperations` (monotone).
+Specifically, every operation in `s.emittedOperations` is also in
+`(step system s).emittedOperations`.
+-/
+set_option maxHeartbeats 800000 in
+private lemma step_emittedOperations_monotone
+    (system : BlockSynchroniserSystem) (s : BelugaState) :
+    ∀ op ∈ s.emittedOperations, op ∈ (step system s).emittedOperations := by
+  intro op hop
+  unfold step
+  cases h : List.findSome? (fun x => tryActFor system s x.1 x.2) s.validators
+  · simp [h]; exact hop
+  · simp only [h]
+    rw [List.findSome?_eq_some_iff] at h
+    obtain ⟨l₁, a, l₂, h₁, h₂, _⟩ := h
+    unfold tryActFor at h₂
+    cases hb : List.find? (fun B => !hasAcceptedDigest s a.1 B.d &&
+        B.parents.all fun pd => hasAcceptedDigest s a.1 pd) s.blocks <;>
+      simp_all +decide
+    · cases hb' : List.find? (fun B => hasAcceptedDigest s a.1 B.d &&
+          !hasStoredDigest s a.1 B.d) s.blocks <;> simp_all +decide
+      · split_ifs at h₂ <;>
+          simp_all +decide [doPropose, doAdvance, updateValidator]
+        all_goals subst h₂ <;> grind
+      · split_ifs at h₂ <;>
+          simp_all +decide [doPropose, doStore, updateValidator]
+        all_goals subst h₂ <;> grind
+    · split_ifs at h₂ <;>
+        simp_all +decide [doPropose, doAccept, updateValidator]
+      all_goals subst h₂ <;> grind
+
+/-- `hasProposedFor` is monotone in trace step: once it's true at some
+step, it remains true at all later steps. -/
+private lemma hasProposedFor_monotone
+    (system : BlockSynchroniserSystem) (vid : ValidatorId) (r : Round)
+    (i j : Nat) (hij : i ≤ j)
+    (h : hasProposedFor (belugaTrace system i) vid r = true) :
+    hasProposedFor (belugaTrace system j) vid r = true := by
+  induction' hij with j _ ih
+  · exact h
+  · -- step j → step (j+1) preserves the propose op via emittedOperations monotonicity.
+    unfold hasProposedFor at ih ⊢
+    rw [List.any_eq_true] at ih ⊢
+    obtain ⟨op, hop_mem, hop_match⟩ := ih
+    refine ⟨op, ?_, hop_match⟩
+    exact step_emittedOperations_monotone system _ op hop_mem
+
 
 /-! ## The Beluga §5 post-GST liveness invariant
 
