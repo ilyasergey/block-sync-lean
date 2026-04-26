@@ -13,6 +13,7 @@ import BlockSynchroniser.Timing
 import BlockSynchroniser.Trace
 import BlockSynchroniser.Beluga.Patterns
 import BlockSynchroniser.Beluga.Protocol
+import BlockSynchroniser.Beluga.Order
 import BlockSynchroniser.Mysticeti.Consensus
 import BlockSynchroniser.Mysticeti.Safety
 
@@ -209,22 +210,10 @@ theorem belugaTrace_satisfies_mysticeti_post_gst_liveness
     MysticetiPostGSTLiveness system time := by
   sorry
 
-/-- Standalone axiom-style claim: if an honest validator has accepted a
-block, the block's payload transactions appear in that validator's
-TransactionOrder output. **Not** part of `MysticetiPostGSTLiveness` —
-this is an F-7-style "TransactionOrder ↔ HasAccepted" link that lives
-outside the inductive trace invariant (see `mechanization-findings.md`
-F-7). Sorry'd as a separate obligation. -/
-theorem accepted_implies_in_order_axiom
-    (system : BlockSynchroniserSystem)
-    (order : TransactionOrder)
-    (vid_h : ValidatorId)
-    (_h_honest : isHonestValidator system vid_h = true)
-    (B : Block) (tx : Transaction)
-    (_h_tx : tx ∈ B.payload) (k' : ℕ)
-    (_h_accepted : HasAccepted (belugaTrace system k') vid_h B.d) :
-    tx ∈ order vid_h := by
-  sorry
+-- F-7(b) closed: the "TransactionOrder ↔ HasAccepted" link is now a
+-- *theorem* (`Beluga.accepted_implies_in_belugaTransactionOrder` in
+-- `Beluga/Order.lean`) about the canonical function
+-- `Beluga.belugaTransactionOrder`, not an axiom.
 
 /-- After GST, honest validators enter the same round within `3Δ` (paper
 Lemma 1 applied to Beluga). -/
@@ -613,21 +602,10 @@ lemma honest_validator_eventually_accepts
     ∃ k' ≥ k, HasAccepted (belugaTrace system k') vid_h B.d := by
   exact (belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync).honest_eventually_accepts vid_acc vid_h B k h_acc_honest h_h_honest h_gst h_accepted
 
-/-- Once an honest validator has accepted a block, the block's payload
-transactions are in that validator's ordered output (paper §4.3 +
-consensus ordering). -/
-lemma accepted_implies_in_order
-    (system : BlockSynchroniserSystem)
-    (order : TransactionOrder)
-    (vid_h : ValidatorId)
-    (h_honest : isHonestValidator system vid_h = true)
-    (B : Block) (tx : Transaction)
-    (h_tx : tx ∈ B.payload) (k' : ℕ)
-    (h_accepted : HasAccepted (belugaTrace system k') vid_h B.d) :
-    tx ∈ order vid_h :=
-  -- Direct application of `accepted_implies_in_order_axiom` (the F-7-style
-  -- "TransactionOrder ↔ HasAccepted" axiom; not part of the inductive bundle).
-  accepted_implies_in_order_axiom system order vid_h h_honest B tx h_tx k' h_accepted
+-- The previous `accepted_implies_in_order` helper was a thin wrapper
+-- around `accepted_implies_in_order_axiom`; both are now superseded
+-- by `Beluga.accepted_implies_in_belugaTransactionOrder` (F-7(b)
+-- closed; see `Beluga/Order.lean`).
 
 /--
 **Theorem 6 (paper Appendix D.2) — Mysticeti-Beluga consensus liveness.**
@@ -650,26 +628,29 @@ retrieved, ordered, and finalized.
 -/
 theorem theorem6_consensus_liveness
     (system : BlockSynchroniserSystem)
+    (hids : ValidIds system)
     (time : TimeMap)
     (h_time : time.WellFormed)
-    (h_sync : PartiallySynchronous system (belugaTrace system) time)
-    (order : TransactionOrder) :
+    (h_sync : PartiallySynchronous system (belugaTrace system) time) :
     ∀ vid_acc, isHonestValidator system vid_acc = true →
     ∀ k, time k ≥ system.GST →
     ∀ B, B ∈ (belugaTrace system k).blocks →
          HasAccepted (belugaTrace system k) vid_acc B.d →
     ∀ tx, tx ∈ B.payload →
     ∀ vid_h, isHonestValidator system vid_h = true →
-      tx ∈ order vid_h := by
+      ∃ k', tx ∈ belugaTransactionOrder system k' vid_h := by
   intro vid_acc h_acc_honest k h_gst B h_B_in h_accepted tx h_tx vid_h h_vid_h_honest
-  -- By Beluga availability (§4.3): since vid_acc has accepted B post-GST,
-  -- all honest validators eventually accept B.
-  have h_vid_h_accepts : ∃ k' ≥ k, HasAccepted (belugaTrace system k') vid_h B.d :=
+  -- Step 1: Beluga availability — vid_h eventually accepts B.
+  obtain ⟨k', hk_ge, h_acc'⟩ :=
     honest_validator_eventually_accepts system time h_time h_sync
       vid_acc vid_h h_acc_honest h_vid_h_honest B k h_gst h_accepted
-  obtain ⟨k', _, h_acc'⟩ := h_vid_h_accepts
-  -- Once vid_h has accepted B, its transactions are in vid_h's ordered output.
-  exact accepted_implies_in_order system order vid_h h_vid_h_honest B tx h_tx k' h_acc'
+  -- Step 2: B persists in the trace state to k' by blocks-monotone.
+  have h_B_in' : B ∈ (belugaTrace system k').blocks :=
+    belugaTrace_blocks_monotone system k k' hk_ge B h_B_in
+  -- Step 3: B's payload appears in vid_h's canonical transaction order
+  -- via the order-faithfulness theorem (closes F-7(b)).
+  exact ⟨k', accepted_implies_in_belugaTransactionOrder
+    system hids vid_h B tx h_tx k' h_B_in' h_acc'⟩
 
 end Liveness
 end Mysticeti

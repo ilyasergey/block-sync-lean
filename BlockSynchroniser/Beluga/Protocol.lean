@@ -380,7 +380,7 @@ structure AcceptInv (s : BelugaState) (vid : ValidatorId) : Prop where
   acceptedBlockExists : ∀ d, HasAccepted s vid d → ∃ B ∈ s.blocks, B.d = d
 
 -- The `digest` function is injective when validator IDs are bounded.
-private lemma digest_injective (system : BlockSynchroniserSystem)
+lemma digest_injective (system : BlockSynchroniserSystem)
     (r1 r2 : Round) (v1 v2 : ValidatorId)
     (hv1 : v1 < system.n + 1) (hv2 : v2 < system.n + 1)
     (h : digest system r1 v1 = digest system r2 v2) :
@@ -400,7 +400,7 @@ private lemma digest_injective (system : BlockSynchroniserSystem)
 
 -- No-duplicate-digests follows from BlockInv + ValidIds.
 private lemma noDupDigests_of_blockInv (system : BlockSynchroniserSystem)
-    (s : BelugaState) (hids : ValidIds system)
+    (s : BelugaState) (_hids : ValidIds system)
     (hbi : BlockInv system s) :
     ∀ B1 B2, B1 ∈ s.blocks → B2 ∈ s.blocks → B1.d = B2.d → B1 = B2 := by
   intro B1 B2 h1 h2 hd
@@ -565,7 +565,7 @@ private lemma wellFormed_step (system : BlockSynchroniserSystem) (s : BelugaStat
     · grind +splitImp;
     · grind
 
-private lemma wellFormed_trace (system : BlockSynchroniserSystem) (k : Nat) :
+lemma wellFormed_trace (system : BlockSynchroniserSystem) (k : Nat) :
     BelugaState.WellFormed system (belugaTrace system k) := by
   induction k with
   | zero => exact wellFormed_init system
@@ -667,7 +667,7 @@ private lemma blockInv_step (system : BlockSynchroniserSystem)
     · subst hv;
       convert blockInv_of_doAccept system s vid _ hbi using 1
 
-private lemma blockInv_trace (system : BlockSynchroniserSystem)
+lemma blockInv_trace (system : BlockSynchroniserSystem)
     (hids : ValidIds system) (k : Nat) :
     BlockInv system (belugaTrace system k) := by
   induction k with
@@ -684,7 +684,7 @@ private lemma acceptInv_init (system : BlockSynchroniserSystem)
 
 private lemma acceptInv_of_doPropose (system : BlockSynchroniserSystem)
     (s : BelugaState) (vid_p : ValidatorId) (r : Round)
-    (hids : ValidIds system) (hbi : BlockInv system s)
+    (_hids : ValidIds system) (hbi : BlockInv system s)
     (vid : ValidatorId) (hai : AcceptInv s vid)
     (h_not_proposed : hasProposedFor s vid_p r = false)
     (h_vid_p_bound : vid_p < system.n + 1) :
