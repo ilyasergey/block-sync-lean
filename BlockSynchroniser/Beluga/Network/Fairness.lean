@@ -77,6 +77,7 @@ private lemma getValidator_emittedOperations_irrelevant'
       s.getValidator vid := by
   unfold BelugaState.getValidator; aesop
 
+
 /-! ## Paper §2 primitive: `Δ`-bounded delivery -/
 
 /-- **`NetworkDelivery`** — paper §2's primitive: post-GST, every
@@ -252,25 +253,30 @@ theorem NetworkState.deliverPending_preserves_base_validators (s : NetworkState)
     intro s' h
     apply ih; simp [NetworkState.appendToInbox, h]
 
-/-- `networkTryActFor` preserves the invariant
-"`roundEntryTime ≤ currentTime`" for every validator. The four
-branches each preserve `currentTime`; only `doAdvance` updates a
-validator's `roundEntryTime`, and it sets it to `s.currentTime`.
+/-- Generic helper: for any `f` that preserves `roundEntryTime`,
+`updateValidator s vid_a f` preserves the "`roundEntryTime ≤ T`"
+invariant — given the actor's original bv. -/
+private lemma updateValidator_preserves_rt_bound
+    (s : BelugaState) (vid_a : ValidatorId) (bv_a : BelugaValidator)
+    (h_a_get : s.getValidator vid_a = some bv_a)
+    (f : BelugaValidator → BelugaValidator)
+    (h_f_rt : (f bv_a).roundEntryTime = bv_a.roundEntryTime)
+    (T : Nat)
+    (h_inv : ∀ vid bv, s.getValidator vid = some bv → bv.roundEntryTime ≤ T) :
+    ∀ vid bv, (updateValidator s vid_a f).getValidator vid = some bv →
+      bv.roundEntryTime ≤ T := by
+  intro vid bv h_get
+  by_cases h_eq : vid = vid_a
+  · subst h_eq
+    rw [updateValidator_getValidator_eq' (bv := bv_a) (h := h_a_get)] at h_get
+    injection h_get with h_bv_eq
+    have h_rt : bv.roundEntryTime = bv_a.roundEntryTime := by
+      rw [← h_bv_eq, h_f_rt]
+    rw [h_rt]
+    exact h_inv vid bv_a h_a_get
+  · rw [updateValidator_getValidator_ne' _ _ _ _ h_eq] at h_get
+    exact h_inv vid bv h_get
 
-The proof is a branch-by-branch case analysis on
-`networkTryActFor`. The structural argument:
-- **propose branch**: `doPropose` doesn't touch validators, so the
-  invariant is inherited.
-- **accept branch**: `doAccept` calls `updateValidator` with `f`
-  modifying only `acceptedBlocks`; `roundEntryTime` is preserved.
-- **store branch**: same as accept, with `storedBlocks`.
-- **advance branch**: the actor's `roundEntryTime` is set to
-  `s.currentTime`; non-actor validators are unchanged.
-
-The bookkeeping for `getValidator` on `updateValidator`'s output
-requires the helpers from `Beluga/Theorems.lean` (which we cannot
-import here without a circular dependency). The full discharge is
-queued; the structural argument is sound. -/
 theorem networkTryActFor_preserves_roundEntry_bound
     (system : BlockSynchroniserSystem) (s : NetworkState)
     (h_inv : ∀ vid bv,
@@ -281,23 +287,80 @@ theorem networkTryActFor_preserves_roundEntry_bound
     (h_act : networkTryActFor system s vid_a bv_a = some s') :
     ∀ vid bv,
       s'.base.getValidator vid = some bv → bv.roundEntryTime ≤ s'.currentTime := by
-  -- Branch-by-branch case analysis on `networkTryActFor` (4 cases:
-  -- propose / accept / store / advance). Propose: `doPropose` doesn't
-  -- touch validators, so getValidator is unchanged; `h_inv` gives the
-  -- bound. Accept/store: case on `vid = vid_a`; non-actor uses
-  -- `updateValidator_getValidator_ne'`; actor uses `_eq'`, with the
-  -- f-applied bv preserving `roundEntryTime`. Advance: actor's bv gets
-  -- `roundEntryTime := s.currentTime`; non-actor unchanged.
-  --
-  -- The bookkeeping for `find?` ∘ `.map` (especially in the advance
-  -- branch's outer rewrite of `validators := .map ...`) is finicky in
-  -- raw Lean tactics; the cleanest discharge requires two short
-  -- helper lemmas (`getValidator_map_replace_ne` /
-  -- `getValidator_map_replace_eq`) plus the four state-update
-  -- helpers above. The structural argument is sound; full
-  -- mechanization queued — see
-  -- `docs/resumption-note-network-fairness.md` §"Sorry 1".
-  sorry
+  intro vid bv h_get
+  have h_ct : s'.currentTime = s.currentTime :=
+    networkTryActFor_preserves_currentTime system s vid_a bv_a s' h_act
+  rw [h_ct]
+  unfold networkTryActFor at h_act
+  simp only at h_act
+  split at h_act
+  · -- Propose branch.
+    injection h_act with h_eq
+    rw [← h_eq] at h_get
+    show bv.roundEntryTime ≤ s.currentTime
+    rw [doPropose_getValidator'] at h_get
+    exact h_inv vid bv h_get
+  · split at h_act
+    · -- Accept branch.
+      rename_i B_acc _
+      injection h_act with h_eq
+      rw [← h_eq] at h_get
+      show bv.roundEntryTime ≤ s.currentTime
+      unfold doAccept at h_get
+      have h_inv_ops : ∀ vid bv,
+          ({ s.base with emittedOperations :=
+            s.base.emittedOperations ++ [ValidatorOperation.block_accept vid_a B_acc.d] }
+            : BelugaState).getValidator vid = some bv → bv.roundEntryTime ≤ s.currentTime := by
+        intro vid' bv' h_get'
+        rw [getValidator_emittedOperations_irrelevant'] at h_get'
+        exact h_inv vid' bv' h_get'
+      have h_a_get_ops :
+          ({ s.base with emittedOperations :=
+            s.base.emittedOperations ++ [ValidatorOperation.block_accept vid_a B_acc.d] }
+            : BelugaState).getValidator vid_a = some bv_a := by
+        rw [getValidator_emittedOperations_irrelevant']; exact h_a_get
+      exact updateValidator_preserves_rt_bound _ vid_a bv_a h_a_get_ops _
+        rfl _ h_inv_ops vid bv h_get
+    · split at h_act
+      · -- Store branch.
+        rename_i _ B_sto _
+        injection h_act with h_eq
+        rw [← h_eq] at h_get
+        show bv.roundEntryTime ≤ s.currentTime
+        unfold doStore at h_get
+        have h_inv_ops : ∀ vid bv,
+            ({ s.base with emittedOperations :=
+              s.base.emittedOperations ++ [ValidatorOperation.block_store vid_a B_sto] }
+              : BelugaState).getValidator vid = some bv →
+              bv.roundEntryTime ≤ s.currentTime := by
+          intro vid' bv' h_get'
+          rw [getValidator_emittedOperations_irrelevant'] at h_get'
+          exact h_inv vid' bv' h_get'
+        have h_a_get_ops :
+            ({ s.base with emittedOperations :=
+              s.base.emittedOperations ++ [ValidatorOperation.block_store vid_a B_sto] }
+              : BelugaState).getValidator vid_a = some bv_a := by
+          rw [getValidator_emittedOperations_irrelevant']; exact h_a_get
+        exact updateValidator_preserves_rt_bound _ vid_a bv_a h_a_get_ops _
+          rfl _ h_inv_ops vid bv h_get
+      · -- Advance branch (now uses single updateValidator after refactor).
+        split at h_act
+        · injection h_act with h_eq
+          rw [← h_eq] at h_get
+          show bv.roundEntryTime ≤ s.currentTime
+          -- s'.base = updateValidator s.base vid_a (fun bv0 => { bv0 with cR + 1, rET := s.currentTime })
+          -- The f sets roundEntryTime := s.currentTime, so the updated bv has rt = currentTime.
+          by_cases h_eq_vid : vid = vid_a
+          · subst h_eq_vid
+            rw [updateValidator_getValidator_eq' (bv := bv_a)] at h_get
+            · injection h_get with h_bv_eq
+              -- bv = { bv_a with cR := cR + 1, rET := s.currentTime }
+              have : bv.roundEntryTime = s.currentTime := by rw [← h_bv_eq]
+              rw [this]
+            · exact h_a_get
+          · rw [updateValidator_getValidator_ne' _ _ _ _ h_eq_vid] at h_get
+            exact h_inv vid bv h_get
+        · contradiction
 
 /-- The trace invariant: at every step of `networkTrace`, every
 validator's `roundEntryTime` is bounded by the state's

@@ -144,14 +144,13 @@ def networkTryActFor (system : BlockSynchroniserSystem) (s : NetworkState)
       | none =>
         -- 4. Advance round if quorum gate fires OR timeout has fired
         if allProposedFor system s.base r || s.timeoutFired system bv then
-          let bv' : BelugaValidator :=
-            { bv with currentRound := r + 1, roundEntryTime := s.currentTime }
-          let base' : BelugaState := doAdvance s.base vid
-          -- Update the validator's roundEntryTime in the new base.
-          let base'' : BelugaState := { base' with
-            validators := base'.validators.map (fun (id, bv0) =>
-              if id == vid then (id, bv') else (id, bv0)) }
-          some { s with base := base'' }
+          -- Single `updateValidator` call: bumps `currentRound` AND records
+          -- `roundEntryTime`. Equivalent to `doAdvance` + manual rewrite of
+          -- `roundEntryTime`, but uses the standard `updateValidator` shape
+          -- so the existing `updateValidator_getValidator_*` lemmas apply.
+          some { s with base := updateValidator s.base vid (fun bv0 =>
+            { bv0 with currentRound := bv0.currentRound + 1,
+                       roundEntryTime := s.currentTime }) }
         else none
 
 /-! ## Network-aware step
