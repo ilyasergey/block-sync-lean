@@ -11,13 +11,13 @@ Status legend: 🟡 IN_PROGRESS · ✅ COMPLETE (integrated) · ⚠️ COMPLETE_
 | Project ID | Round | Submitted | Status | Target file(s) | Theorem(s) | Result |
 |---|---|---|---|---|---|---|
 | `3f6cf619-5a7f-4142-9114-c46caafa025f` | 4-followup | 2026-04-26 ~02:30 SGT | 🟡 IN_PROGRESS | [`Beluga/Protocol.lean`](../BlockSynchroniser/Beluga/Protocol.lean) | `causal_history_of_find_none` (trace-level invariant; prompt suggests strengthening to `CausallyClosed` carrier + monotonicity lemmas) | pending |
-| `c9df158a-643c-459f-8faf-2bf035695f46` | theorems-l1-l2 | 2026-04-26 ~12:00 SGT | 🟡 IN_PROGRESS | [`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) | L1, L2 only (under `SchedulerFairness`) — replaces canceled `e3bb7fb6` whose 6-target scope stalled at 6% for >1h | pending |
+| `4f618efb-b2b3-4c61-bfb8-ebc339a949dc` | post-gst-liveness | 2026-04-26 ~13:00 SGT | 🟡 IN_PROGRESS | [`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) | `belugaTrace_satisfies_post_gst_liveness` — single bundle theorem packaging L1, L2, T1, T3, T4. Compound trace-invariant pattern modeled on `belugaTrace_admissionWellFormed`. | pending |
 
 **1 project in flight.** Aristotle accepts concurrent submissions;
 they will process as capacity allows.
 
 Frozen files (do not edit until corresponding rounds complete):
-- `Beluga/Theorems.lean` (theorems-l1-l2 round)
+- `Beluga/Theorems.lean` (post-gst-liveness round)
 
 Freely-editable files: `Lib/`, all base modules
 (`Block`/`Validator`/`Operations`/`System`/`State`/`Causal`/`Trace`/`Properties`),
@@ -53,7 +53,8 @@ all Beluga supporting modules (`State`/`Reputation`/`AdmissionControl`/`Pull`/`B
 | `9f17cf80-caba-4369-90b2-0a99a175e394` | 2026-04-26 03:00 SGT | 2026-04-26 ~07:30 SGT | ⚠️ COMPLETE_WITH_ERRORS (both target sorries closed cleanly via a compound `TraceInv` for the admission invariant + strong induction with `Quorum.quorumIntersection` for L13; one new hypothesis `h_honest_unique` added to L13; standard axioms only) | [`Beluga/AdmissionInvariant.lean`](../BlockSynchroniser/Beluga/AdmissionInvariant.lean) (new), [`Mysticeti/Safety.lean`](../BlockSynchroniser/Mysticeti/Safety.lean) | `belugaTrace_admissionWellFormed`, revised `lemma13_cert_persistence` | (TBD) |
 | `58873be7-0f63-412c-8029-873bbd930abe` | 2026-04-26 01:50 SGT | (canceled 2026-04-26 ~09:05 SGT) | 🚫 CANCELED — stalled at 13% progress for >7h. Replaced by `b544affb-...` with a tighter 2-helper scope. | [`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) | (was) L1, L2, T1, T2, T3, T4 + 2 helpers under SchedulerFairness | — |
 | `b544affb-b9a9-4f8c-965f-2a31051ef75f` | 2026-04-26 09:05 SGT | 2026-04-26 ~10:25 SGT | ✅ COMPLETE (clean — both target helpers proved sorry-free; new auxiliary `updateValidator_none` added; `set_option maxHeartbeats 800000 in` scoped per-lemma; standard axioms only) | [`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) | `step_preserves_validator_ids`, `step_round_monotone` | (TBD) |
-| `e3bb7fb6-40cd-4cd9-8f22-c8f8e6c621fc` | 2026-04-26 10:30 SGT | (canceled 2026-04-26 ~12:00 SGT) | 🚫 CANCELED — 6-target scope (L1, L2, T1–T4 under `SchedulerFairness`) stalled at 6% for >1h. Replaced by `c9df158a-...` with a tighter 2-target (L1, L2) scope. | [`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) | (was) L1, L2, T1, T2, T3, T4 | — |
+| `e3bb7fb6-40cd-4cd9-8f22-c8f8e6c621fc` | 2026-04-26 10:30 SGT | (canceled 2026-04-26 ~12:00 SGT) | 🚫 CANCELED — 6-target scope (L1, L2, T1–T4 under `SchedulerFairness`) stalled at 6% for >1h. | [`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) | (was) L1, L2, T1, T2, T3, T4 | — |
+| `c9df158a-643c-459f-8faf-2bf035695f46` | 2026-04-26 12:00 SGT | (canceled 2026-04-26 ~13:00 SGT) | 🚫 CANCELED — superseded by the BelugaPostGSTLiveness bundle refactor + the load-bearing `belugaTrace_satisfies_post_gst_liveness` round (4f618efb). | [`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) | (was) L1, L2 only | — |
 | `3f6cf619-5a7f-4142-9114-c46caafa025f` | 2026-04-26 02:30 SGT | 2026-04-26 ~11:10 SGT | ✅ COMPLETE (clean — `causal_history_of_find_none` proved by introducing a 3-stage trace invariant: structural (`BlockInv`) → acceptance closure (`AcceptInv`) → `CausallyClosed`; the file now has 0 sorries) | [`Beluga/Protocol.lean`](../BlockSynchroniser/Beluga/Protocol.lean) | `causal_history_of_find_none` (new sigs add `hids : ValidIds system`, `hTrace : ∃ k, s = belugaTrace system k` to it + downstream callers; new `ValidIds`/`CausallyClosed`/`BlockInv`/`AcceptInv` definitions and ~15 supporting lemmas) | (TBD) |
 
 Full attribution detail in [aristotle-attributions.md](aristotle-attributions.md).

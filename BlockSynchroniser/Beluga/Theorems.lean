@@ -406,22 +406,32 @@ theorem theorem1_block_availability
 
 /-- **Theorem 2 (paper §5).** Beluga satisfies Causal availability.
 
-Direct from `causally_closed_trace` in `Protocol.lean`: at every
+Direct from `causallyClosed_trace` in `Protocol.lean`: at every
 state in the trace, accepted digests have all their causal-ancestor
 digests already accepted. So the `Eventually` quantifier in
 `CausalAvailability` is satisfied at the current step (`k' = k`).
-No fairness needed. -/
+No fairness needed; only the standard `ValidIds` BFT side condition
+(finding F-8(b)) for the underlying digest-injectivity step. -/
 theorem theorem2_causal_availability
     (system : BlockSynchroniserSystem)
+    (hids : ValidIds system)
     (_time : TimeMap)
     (_h_time : _time.WellFormed)
     (_h_sync : PartiallySynchronous system (belugaTrace system) _time)
     (_h_fair : SchedulerFairness system _time) :
     CausalAvailability system (belugaTrace system) := by
-  -- Direct application of `causally_closed_trace` from Protocol.lean.
-  -- Stub kept as a tiny separate proof obligation; the trace
-  -- invariant subsumes the `Eventually` quantifier.
-  sorry
+  intro k vid d B _h_honest h_acc h_get B' h_reach
+  -- Eventually trace k P := ∃ k' ≥ k, P k' (trace k'). Take k' = k.
+  refine ⟨k, le_refl k, ?_⟩
+  -- `getBlockByDigest = some B` means B has digest d.
+  have h_B_d : B.d = d := by
+    unfold getBlockByDigest at h_get
+    have := List.find?_some h_get
+    simpa using this
+  -- Apply causal closure: accepted digest d = B.d implies ancestors accepted.
+  have hcc := causallyClosed_trace system vid hids k
+  rw [← h_B_d] at h_acc
+  exact hcc B h_acc B' h_reach
 
 /-- **Theorem 3 (paper §5).** Beluga satisfies Round-Progression. -/
 theorem theorem3_round_progression
@@ -450,6 +460,7 @@ all four properties of Definition 1, under the timing model and
 scheduler-fairness assumption. -/
 theorem belugaTrace_isBlockSynchronizer
     (system : BlockSynchroniserSystem)
+    (hids : ValidIds system)
     (time : TimeMap)
     (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
@@ -458,7 +469,7 @@ theorem belugaTrace_isBlockSynchronizer
   ⟨theorem3_round_progression system time h_time h_sync h_fair,
    theorem4_round_termination system time h_time h_sync h_fair,
    theorem1_block_availability system time h_time h_sync h_fair,
-   theorem2_causal_availability system time h_time h_sync h_fair⟩
+   theorem2_causal_availability system hids time h_time h_sync h_fair⟩
 
 end Theorems
 end Beluga
