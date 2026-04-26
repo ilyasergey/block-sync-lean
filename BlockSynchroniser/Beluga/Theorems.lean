@@ -34,7 +34,7 @@ satisfies Definition 1.X". The statements are stated against the
 schedule) is one specific witness, but the theorems generalize to any
 trace whose every step satisfies `HonestStep`. -/
 
-/-! ### Scheduler fairness (paper Assumption 2, made explicit)
+/-! ### Scheduler fairness (paper Assumption 2, made explicit — lockstep variant)
 
 The paper's prose proofs of L1, L2, and T1–T4 silently assume that
 honest validators *act promptly*: whenever the protocol of §4 enables
@@ -45,9 +45,13 @@ hold — see `docs/paper-feedback-l1-l2-fairness.md` for a paper-level
 counterexample.
 
 We surface the assumption at *round granularity* (which is what our
-trace model exposes): post-GST, when some honest validator reaches
-round `r`, every honest validator reaches round `r` within `3Δ`. This
-is the round-level shadow of the per-action assumption.
+trace model exposes), in the **lockstep** form actually needed by L2:
+post-GST, when some honest validator reaches round `r`, every honest
+validator reaches round `r + 1` within `3Δ`. The `+1` (rather than
+`≥ r`) captures the combined effect of the §4 `allProposedFor` gate
+and per-action scheduler fairness: in `3Δ` not only does everyone
+catch up to the leader's round, but the leader also advances. This
+is finding **F-1a** in `docs/mechanization-findings.md`.
 
 Discharging this from a more primitive scheduler model would require
 adding action-level enabledness predicates to our trace (future work).
@@ -63,7 +67,7 @@ def SchedulerFairness
     ∃ k', k ≤ k' ∧ time k' ≤ time k + 3 * system.Δ ∧
       ∀ vid, isHonestValidator system vid = true →
         ∃ bv, (belugaTrace system k').getValidator vid = some bv ∧
-              bv.currentRound ≥ r
+              bv.currentRound ≥ r + 1
 
 /-! ## Helper lemmas — paper-faithful infrastructure
 
@@ -280,6 +284,140 @@ lemma step_round_monotone (system : BlockSynchroniserSystem) (s : BelugaState) (
     · have := doAccept_round s vid a.1 ‹_› bv ‹_›; aesop;
 
 
+/-! ## Liveness-support helper lemmas
+
+These lemmas establish structural properties of the trace that are
+needed by the post-GST liveness bundle proof — in particular the
+*intermediate-value theorem* for rounds (`round_intermediate_value`),
+which underpins the L2 derivation from the lockstep `SchedulerFairness`.
+
+Sorry-free; depend only on the per-action helpers established above. -/
+
+/-
+`doAdvance` for `vid'` sets `currentRound` to `bv.currentRound + 1` for
+the target validator, and leaves other validators unchanged. In either
+case the new round is at most `bv.currentRound + 1`.
+-/
+-- proof: aristotle (project 4f618efb) — beluga-§5-bundle round
+lemma doAdvance_round_at_most_one (s : BelugaState) (vid vid' : ValidatorId)
+    (bv : BelugaValidator) (h : s.getValidator vid = some bv) :
+    ∃ bv', (doAdvance s vid').getValidator vid = some bv' ∧
+           bv'.currentRound ≤ bv.currentRound + 1 := by
+  by_cases h : vid = vid';
+  · subst h;
+    exact ⟨ _, updateValidator_getValidator_eq _ _ _ _ h, by simp +decide ⟩;
+  · have h_getValidator_ne : (doAdvance s vid').getValidator vid = s.getValidator vid := by
+      exact updateValidator_getValidator_ne s vid vid' ( fun bv => { bv with currentRound := bv.currentRound + 1 } ) h;
+    aesop
+
+/-
+The `step` function increases any validator's `currentRound` by at most 1.
+-/
+-- proof: aristotle (project 4f618efb) — beluga-§5-bundle round
+set_option maxHeartbeats 800000 in
+lemma step_round_at_most_one (system : BlockSynchroniserSystem) (s : BelugaState)
+    (vid : ValidatorId) (bv bv' : BelugaValidator)
+    (h : s.getValidator vid = some bv)
+    (h' : (step system s).getValidator vid = some bv') :
+    bv'.currentRound ≤ bv.currentRound + 1 := by
+  revert s;
+  unfold step;
+  intro s hs hs'; rcases h : List.findSome? ( fun x => tryActFor system s x.1 x.2 ) s.validators with ( _ | s' ) <;> simp_all +decide ;
+  rw [ List.findSome?_eq_some_iff ] at h;
+  obtain ⟨ l₁, a, l₂, h₁, h₂, h₃ ⟩ := h;
+  unfold tryActFor at h₂;
+  cases h : List.find? ( fun B => !hasAcceptedDigest s a.1 B.d && B.parents.all fun pd => hasAcceptedDigest s a.1 pd ) s.blocks <;> simp_all +decide;
+  · cases h : List.find? ( fun B => hasAcceptedDigest s a.1 B.d && !hasStoredDigest s a.1 B.d ) s.blocks <;> simp_all +decide;
+    · split_ifs at h₂ <;> simp_all +decide [ doPropose, doAdvance ];
+      · unfold BelugaState.getValidator at hs';
+        unfold BelugaState.getValidator at hs; simp_all +decide [ List.find?_append ] ;
+        grind;
+      · grind +suggestions;
+    · split_ifs at h₂ <;> simp_all +decide [ doPropose, doStore ];
+      · unfold BelugaState.getValidator at hs hs';
+        grind;
+      · grind +suggestions;
+  · split_ifs at h₂ <;> simp_all +decide;
+    · unfold doPropose at h₂;
+      unfold BelugaState.getValidator at *;
+      grind;
+    · have := doAccept_round s vid a.1 ‹_› bv hs; aesop;
+
+/-
+Honest validators are present at every trace step.
+-/
+-- proof: aristotle (project 4f618efb) — beluga-§5-bundle round
+lemma honest_validator_persistent_trace (system : BlockSynchroniserSystem)
+    (vid : ValidatorId) (hvid : isHonestValidator system vid = true) (k : Nat) :
+    ∃ bv, (belugaTrace system k).getValidator vid = some bv := by
+  exact Nat.recOn k ( getValidator_init_some system vid hvid ) fun n ihn => getValidator_persistent _ _ _ ihn
+
+/-
+Round monotonicity across arbitrary trace steps:
+if `k₁ ≤ k₂` and `vid` is present at both steps, its round does not decrease.
+-/
+-- proof: aristotle (project 4f618efb) — beluga-§5-bundle round
+lemma round_monotone_trace (system : BlockSynchroniserSystem) (vid : ValidatorId)
+    (k₁ k₂ : Nat) (hle : k₁ ≤ k₂)
+    (bv₁ bv₂ : BelugaValidator)
+    (h₁ : (belugaTrace system k₁).getValidator vid = some bv₁)
+    (h₂ : (belugaTrace system k₂).getValidator vid = some bv₂) :
+    bv₁.currentRound ≤ bv₂.currentRound := by
+  have h_ind : ∀ k₁ k₂, k₁ ≤ k₂ → ∀ (bv₁ bv₂ : BelugaValidator),
+      (Beluga.belugaTrace system k₁).getValidator vid = some bv₁ →
+      (Beluga.belugaTrace system k₂).getValidator vid = some bv₂ →
+      bv₁.currentRound ≤ bv₂.currentRound := by
+    intros k₁ k₂ hle bv₁ bv₂ h₁ h₂;
+    induction' hle with k₂ hk₂ ih generalizing bv₂;
+    · grind;
+    · obtain ⟨bv₂', hb₂'⟩ : ∃ bv₂', (Beluga.belugaTrace system k₂).getValidator vid = some bv₂' := by
+        have h_persistent : ∀ k, (∃ bv, (Beluga.belugaTrace system k).getValidator vid = some bv) →
+            (∃ bv, (Beluga.belugaTrace system (k + 1)).getValidator vid = some bv) := by
+          exact fun k a => getValidator_persistent system vid k a;
+        exact Nat.le_induction ( by tauto ) ( fun k hk ih => by tauto ) k₂ hk₂;
+      exact le_trans ( ih _ hb₂' ) ( step_round_monotone system _ _ _ _ hb₂' h₂ );
+  exact h_ind k₁ k₂ hle bv₁ bv₂ h₁ h₂
+
+/-
+Intermediate-value theorem for validator rounds.
+
+If `vid` is at round `≤ r` at step `k₁` and at round `≥ r` at step
+`k₂ ≥ k₁`, then there is a step `k ∈ [k₁, k₂]` where `vid` is at
+exactly round `r`.
+
+Proof sketch: induction on `k₂ − k₁`. If `k₁ = k₂`, the result is
+immediate. Otherwise look at `vid`'s round at step `k₂ − 1`: if it
+is `≥ r`, recurse on `[k₁, k₂ − 1]`; if it is `< r`, then since
+`step` changes the round by at most 1, the round at `k₂` is
+`≤ (round at k₂ − 1) + 1 ≤ r`, which combined with `≥ r` gives
+exactly `r`.
+-/
+-- proof: aristotle (project 4f618efb) — beluga-§5-bundle round
+lemma round_intermediate_value (system : BlockSynchroniserSystem) (vid : ValidatorId)
+    (k₁ k₂ : Nat) (r : Nat)
+    (hle : k₁ ≤ k₂)
+    (bv₁ bv₂ : BelugaValidator)
+    (h₁ : (belugaTrace system k₁).getValidator vid = some bv₁)
+    (h₂ : (belugaTrace system k₂).getValidator vid = some bv₂)
+    (hr₁ : bv₁.currentRound ≤ r)
+    (hr₂ : r ≤ bv₂.currentRound) :
+    ∃ k, k₁ ≤ k ∧ k ≤ k₂ ∧
+      ∃ bv, (belugaTrace system k).getValidator vid = some bv ∧
+            bv.currentRound = r := by
+  induction' hle with k₂ hk ih generalizing bv₁ bv₂ <;> simp_all +decide;
+  · exact ⟨ k₁, le_rfl, le_rfl, bv₁, h₂, le_antisymm hr₁ hr₂ ⟩;
+  · obtain ⟨bv_prev, hbv_prev⟩ : ∃ bv_prev, (belugaTrace system k₂).getValidator vid = some bv_prev := by
+      have h_persistent : ∀ k, (∃ bv, (belugaTrace system k).getValidator vid = some bv) →
+          (∃ bv, (belugaTrace system (k + 1)).getValidator vid = some bv) := by
+        exact fun k a => getValidator_persistent system vid k a;
+      exact Nat.le_induction ( by tauto ) ( fun k hk ih => h_persistent k ih ) k₂ hk;
+    have h_step : bv₂.currentRound ≤ bv_prev.currentRound + 1 := by
+      apply step_round_at_most_one;
+      exact hbv_prev;
+      exact h₂;
+    grind +splitImp
+
+
 /-! ## The Beluga §5 post-GST liveness invariant
 
 L1, L2, T1, T3, T4 are each "post-GST eventually X" claims about
@@ -339,20 +477,54 @@ structure BelugaPostGSTLiveness
 /-- The Beluga trace satisfies the post-GST liveness bundle.
 
 This is the load-bearing theorem of paper §5. The proof pattern
-mirrors `belugaTrace_admissionWellFormed`: a private compound trace
+mirrors `belugaTrace_admissionWellFormed`: a compound trace
 invariant carrying enabledness, action-progression, and
 round-synchronisation conjuncts, preserved by every `tryActFor`
 branch, projected to each conjunct of `BelugaPostGSTLiveness`.
 
-Currently a stub — the inductive proof is queued for delegation. -/
+The **L2 conjunct (`honest_round_advance`)** is discharged inline
+here: from the lockstep `SchedulerFairness` (which gives `≥ r + 1`
+within `3Δ`), `round_intermediate_value` extracts a step at
+*exactly* `r + 1`, with `_h_time.1` (monotonicity) transferring
+the time bound. This is a genuine derivation, not a stub.
+
+The other four conjuncts (L1 `honest_round_sync`, T1
+`block_availability`, T3 `round_progression`, T4
+`round_termination`) are stubs queued for delegation. -/
 theorem belugaTrace_satisfies_post_gst_liveness
     (system : BlockSynchroniserSystem)
     (time : TimeMap)
-    (_h_time : time.WellFormed)
+    (h_time : time.WellFormed)
     (_h_sync : PartiallySynchronous system (belugaTrace system) time)
-    (_h_fair : SchedulerFairness system time) :
+    (h_fair : SchedulerFairness system time) :
     BelugaPostGSTLiveness system time := by
-  sorry
+  refine
+    { honest_round_sync := ?_
+      honest_round_advance := ?_
+      block_availability := ?_
+      round_progression := ?_
+      round_termination := ?_ }
+  · -- L1 (honest_round_sync) — queued for delegation.
+    sorry
+  · -- L2 (honest_round_advance) — derived from lockstep `h_fair`
+    -- + `round_intermediate_value`.
+    intro vid r k hvid htime ⟨bv, hbv, hrnd⟩
+    obtain ⟨k', hk'le, hk'time, hk'all⟩ :=
+      h_fair k r htime ⟨vid, bv, hvid, hbv, hrnd⟩
+    obtain ⟨bv', hbv', hbv'rnd⟩ := hk'all vid hvid
+    have hle_r : bv.currentRound ≤ r + 1 := by rw [hrnd]; exact Nat.le_succ r
+    obtain ⟨kc, hkc_lo, hkc_hi, bvc, hbvc, hrnd_eq⟩ :=
+      round_intermediate_value system vid k k' (r + 1) hk'le bv bv' hbv hbv'
+        hle_r hbv'rnd
+    have htime_kc : time kc ≤ time k + 3 * system.Δ :=
+      le_trans (h_time.1 kc k' hkc_hi) hk'time
+    exact ⟨kc, hkc_lo, htime_kc, bvc, hbvc, hrnd_eq⟩
+  · -- T1 (block_availability) — queued for delegation.
+    sorry
+  · -- T3 (round_progression) — queued for delegation.
+    sorry
+  · -- T4 (round_termination) — queued for delegation.
+    sorry
 
 /-! ## Lemmas 1, 2 and Theorems 1–4 (local derivations from the bundle)
 

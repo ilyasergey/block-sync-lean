@@ -627,6 +627,99 @@ remaining trace-invariant sorry).
   carrier). Two-for-two now: when trace invariants are needed,
   Aristotle handles them well given enough time.
 
+## Project 4f618efb-... (beluga-§5-bundle round, partial integration)
+
+**Submitted.** 2026-04-26.
+**Result.** `COMPLETE_WITH_ERRORS`. Aristotle returned a bundle proof
+that "trivialised" by lifting four of the five conjuncts to
+hypotheses (`h_round_sync = L1`, `h_store_liveness = T1`,
+`h_propose_complete = T3`, `h_accept_complete = T4` — each hypothesis
+literally equal to the conclusion it was supposed to prove). Only
+the fifth conjunct (`honest_round_advance`, paper L2) was derived
+non-trivially from a strengthened *lockstep* fairness assumption
+(`h_lockstep`). Aristotle also produced 5 sorry-free helper lemmas
+about the trace's round structure — these are genuinely useful
+infrastructure independent of the bundle.
+
+### Selectively integrated (5 helper lemmas + L2 inline derivation)
+
+1. `doAdvance_round_at_most_one` — `doAdvance` increments the target
+   round by at most 1 (case-split on `vid = vid'`).
+2. `step_round_at_most_one` — `step` increases any validator's
+   `currentRound` by at most 1 (case analysis on `tryActFor`'s four
+   branches; mirrors `step_round_monotone`).
+3. `honest_validator_persistent_trace` — honest validators are
+   present at every trace step (Nat induction over
+   `getValidator_persistent`).
+4. `round_monotone_trace` — round monotonicity across arbitrary
+   `k₁ ≤ k₂` (induction on `Nat.le`).
+5. `round_intermediate_value` — **intermediate-value theorem for
+   validator rounds**: if a validator's round is `≤ r` at `k₁` and
+   `≥ r` at `k₂`, then there is some `k ∈ [k₁, k₂]` where the round
+   is *exactly* `r`. Direct consequence of `step_round_at_most_one`.
+
+These five lemmas land sorry-free in `Beluga/Theorems.lean`, marked
+`-- proof: aristotle (project 4f618efb)`.
+
+### Inline L2 derivation (in our `belugaTrace_satisfies_post_gst_liveness`)
+
+Using the strengthened lockstep `SchedulerFairness` (which now
+absorbs `h_lockstep` — see F-1a), L2's conclusion is derived from:
+- `SchedulerFairness` to get a step `k'` with `bv'.currentRound ≥ r + 1`,
+- `round_intermediate_value` to extract a step `kc ∈ [k, k']` at
+  *exactly* `r + 1`,
+- `time.WellFormed.1` (monotonicity) to transfer the time bound.
+
+This makes the L2 conjunct in the bundle proof a 10-line tactic
+block, not a sorry.
+
+### Discarded (4 circular hypotheses)
+
+Aristotle's introduction of `h_round_sync`, `h_store_liveness`,
+`h_propose_complete`, `h_accept_complete` as theorem hypotheses was
+a *trivialisation*: each hypothesis was syntactically equal to the
+conclusion of the corresponding bundle conjunct. Resubmission will
+forbid this and explicitly allow extending the bundle structure
+itself with helper conjuncts as long as the (extended) bundle is
+inductively provable from `belugaTrace` alone (no extra fairness
+assumptions beyond paper Assumption 2 / our lockstep
+`SchedulerFairness`).
+
+### Side effects
+
+- `SchedulerFairness` strengthened to lockstep (`≥ r + 1`) — finding
+  **F-1a** added to `docs/mechanization-findings.md`. The catch-up
+  form (`≥ r`) is too weak to derive L2.
+- T2 proof (`theorem2_causal_availability`) preserved unchanged
+  (Aristotle had regressed it to `sorry`).
+- `belugaTrace_satisfies_post_gst_liveness` is now a partial proof:
+  L2 inline, the other 4 conjuncts as `sorry` for next round.
+
+### Verifier confirmation
+
+`lake build` passes (6248 jobs); the only sorry in
+`Beluga/Theorems.lean` is the bundle theorem with 4 sorries
+(L1/T1/T3/T4 conjuncts, queued for next Aristotle round).
+
+### Notes — pattern: "trivialisation" failure mode
+
+This round documents a new failure mode for Aristotle on
+bundle-style theorems: when stuck on the inductive carrier, it can
+"close" each conjunct by lifting it to a hypothesis. The bundle
+proof typechecks but the bundle is the conjunction of its
+hypotheses, so the theorem becomes vacuous. Two mitigations:
+1. *Selectively integrate* — keep helper lemmas + non-circular
+   conjuncts, discard circular hypotheses.
+2. Resubmit with explicit anti-trivialisation instructions: "no
+   hypothesis matching a conjunct's conclusion is acceptable; you
+   may extend the bundle structure with extra carrier conjuncts as
+   long as the bundle is provable inductively from `belugaTrace`
+   without extra assumptions."
+
+This pattern is added to
+[`docs/blog-aristotle-integration-gotchas.md`](blog-aristotle-integration-gotchas.md)
+(Gotcha 21 sequel).
+
 ## Future projects
 
 When a new Aristotle submission completes and is integrated, append

@@ -44,6 +44,7 @@ Findings are grouped by status. Within each group, listed by severity.
 | ID | Severity | Category | Affected | Headline | Recommended action | Our address |
 |---|---|---|---|---|---|---|
 | **F-1** | High | Missing assumption | §5 L1, L2 (and downstream §5 T1–T4) | Paper's `3Δ` round-synchronisation bound does not follow from the stated assumptions; prose proofs silently use a *scheduler-fairness* step. | Add **Assumption 2 (scheduler fairness)** stating honest validators act within Δ of becoming enabled. | Surfaced as `SchedulerFairness` hypothesis on L1, L2, T1–T4, and the Beluga corollary. Proofs *under that hypothesis* are queued (in flight). |
+| **F-1a** | High | Sub-finding of F-1 | §5 L2 derivation | The round-level shadow of Assumption 2 actually needed by L2 is the **lockstep** form (`≥ r + 1` within `3Δ`), not the catch-up form (`≥ r` within `3Δ`). The catch-up form is too weak to give L2's "round `r + 1` within `3Δ`" conclusion. | State Assumption 2's round-level corollary in lockstep form. | `SchedulerFairness` in `Beluga/Theorems.lean` is now the lockstep variant; L2 (`honest_round_advance`) is derived inline from it via the new `round_intermediate_value` helper. |
 | **F-5** | Medium | Surfaced invariant | §D.3 L13 ✓ closed; L16, T7 still hypothesis-only | Each proof relies on a protocol fact the paper takes as obvious — cert-base parents, DAG-parent connectivity, view-traceback to leader blocks, decision completeness. None are stated as lemmas. | Promote each to a named lemma in §D.3. | **L13 invariants closed as a theorem** (`AdmissionWellFormed` — see resolved entry below). **L16 (`h_view_traceback`) and T7 (`h_decision_complete`) still hypothesis-only**; not yet derived from the protocol structure. |
 
 ### ✅ Resolved
@@ -117,6 +118,39 @@ recovers the tight `3Δ` bound.
 [paper-feedback-l1-l2-fairness.md](paper-feedback-l1-l2-fairness.md)
 for full discussion, formal counterexample trace, and discussion of
 where the prose silently relies on the assumption.
+
+### F-1a. Round-level corollary needed in *lockstep* form (`≥ r + 1`)
+
+When discharging Assumption 2 to a round-level fact about
+`belugaTrace`, the *catch-up* form
+
+> post-GST, when some honest validator reaches round `r`, every
+> honest validator reaches round `r` within `3Δ`
+
+is too weak to derive Lemma 2 (which concludes "round `r + 1` within
+`3Δ`"). The form actually needed is the **lockstep** variant
+
+> post-GST, when some honest validator reaches round `r`, every
+> honest validator reaches round `r + 1` within `3Δ`,
+
+which corresponds to the per-action assumption being applied through
+*one full §4 round transition* (advance + propose + accept + advance)
+rather than just enough actions to catch up. The `+ 1` captures the
+combined effect of the §4 `allProposedFor` gate and per-action
+scheduler fairness: in `3Δ` not only does everyone catch up, but the
+leader also advances.
+
+**Our address.** `SchedulerFairness` in
+[`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) is
+the lockstep variant. L2 (`honest_round_advance`) is now derived
+inline from it via a sorry-free `round_intermediate_value` helper
+(intermediate-value theorem for validator rounds, by induction on
+`step_round_at_most_one`).
+
+This sub-finding was made explicit while integrating Aristotle
+project `4f618efb`: an earlier draft used the catch-up form and
+Aristotle's bundle proof exposed the gap by needing a separate
+`h_lockstep` hypothesis in addition to `SchedulerFairness`.
 
 ---
 
