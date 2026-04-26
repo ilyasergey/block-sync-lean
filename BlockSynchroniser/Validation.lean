@@ -60,8 +60,10 @@ def goldenSystem : BlockSynchroniserSystem where
   Δ          := 1
   validators := [(0, true), (1, true), (2, true), (3, true)]
   honestMajority      := by decide
-  validatorIdsUnique  := by decide
+  validatorsNodup     := by decide
   validatorCountCorrect := by decide
+  validIds            := by decide
+  byzantineBound      := by decide
 
 /-- A simple round-0 block proposed by validator `i`, with no parents. -/
 def goldenBlock (i : ValidatorId) : Block :=

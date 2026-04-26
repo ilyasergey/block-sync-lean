@@ -22,8 +22,10 @@ def system4 : BlockSynchroniserSystem where
   Δ          := 1
   validators := [(0, true), (1, true), (2, true), (3, true)]
   honestMajority        := by decide
-  validatorIdsUnique    := by decide
+  validatorsNodup       := by decide
   validatorCountCorrect := by decide
+  validIds              := by decide
+  byzantineBound        := by decide
 
 /-- Run the executable Beluga `step` `n` times starting from the initial
 state of `system4`. -/

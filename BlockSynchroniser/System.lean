@@ -3,6 +3,7 @@ Copyright Ilya Sergey
 
 Licensed under the Apache License, Version 2.0.
 -/
+import Mathlib.Data.List.Basic
 import BlockSynchroniser.Block
 
 namespace BlockSynchroniser
@@ -33,12 +34,16 @@ structure BlockSynchroniserSystem where
   validators : List (ValidatorId × Bool)
   /-- Quorum-intersection precondition: `n ≥ 3f + 1`. -/
   honestMajority : n ≥ 3 * f + 1
-  /-- Validator IDs are unique. -/
-  validatorIdsUnique :
-    let validatorIds := validators.map (·.1)
-    validatorIds.eraseDups.length = validatorIds.length
+  /-- Validator IDs are unique (Nodup form). -/
+  validatorsNodup : (validators.map Prod.fst).Nodup
   /-- The `validators` list has length `n`. -/
   validatorCountCorrect : n = validators.length
+  /-- Validator IDs are bounded by `n + 1` (paper §2 implicit; needed for
+  `digest` injectivity). -/
+  validIds : ∀ p ∈ validators, p.1 < n + 1
+  /-- Byzantine count is bounded by `f`. Combined with `honestMajority` and
+  `validatorCountCorrect`, gives the standard `honest ≥ 2f + 1` bound. -/
+  byzantineBound : (validators.filter (fun p => !p.2)).length ≤ f
   deriving Repr
 
 namespace BlockSynchroniserSystem
@@ -54,6 +59,25 @@ def isHonest (system : BlockSynchroniserSystem) (id : ValidatorId) : Bool :=
   match system.validators.find? (fun (vid, _) => vid = id) with
   | some (_, isHonest) => isHonest
   | none => false
+
+/-- Honest validator count is at least `2 * f + 1`. Derived from
+`honestMajority` (`n ≥ 3f+1`), `validatorCountCorrect` (`n = validators.length`),
+and `byzantineBound` (Byzantine count ≤ f). -/
+theorem honestBound (system : BlockSynchroniserSystem) :
+    (system.validators.filter (fun p => p.2 = true)).length ≥ 2 * system.f + 1 := by
+  have h_partition := List.length_eq_length_filter_add (l := system.validators)
+    (f := fun p : ValidatorId × Bool => p.2)
+  have h_filter_eq :
+      (system.validators.filter (fun p => p.2 = true)).length =
+      (system.validators.filter (fun p => p.2)).length := by
+    congr 1
+    apply List.filter_congr
+    intro p _; simp
+  rw [h_filter_eq]
+  have h_n := system.validatorCountCorrect
+  have h_maj := system.honestMajority
+  have h_byz := system.byzantineBound
+  omega
 
 end BlockSynchroniserSystem
 

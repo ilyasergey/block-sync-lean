@@ -144,22 +144,8 @@ private lemma traceInv_of_doPropose (system : BlockSynchroniserSystem)
           have h_parents : ∃ parents : List ValidatorId, parents.length ≥ 2 * system.f + 1 ∧ (parents.map (fun x => x)).Nodup ∧ ∀ p ∈ parents, p ∈ system.validators.map Prod.fst := by
             have h_parents : (system.validators.map Prod.fst).length ≥ 2 * system.f + 1 := by
               have := system.honestMajority; have := system.validatorCountCorrect; norm_num at *; linarith;
-            have h_parents : (system.validators.map Prod.fst).Nodup := by
-              have := system.validatorIdsUnique;
-              contrapose! this;
-              have h_erase_dups : ∀ {l : List ValidatorId}, ¬List.Nodup l → List.length (List.eraseDups l) < List.length l := by
-                intros l hl; induction' l with hd tl ih <;> simp_all +decide [ List.eraseDups_cons ] ;
-                by_cases h : hd ∈ tl <;> simp_all +decide [ List.eraseDups_cons ];
-                · have h_erase_dups : List.length (List.filter (fun b => !b == hd) tl) < List.length tl := by
-                    simp +zetaDelta at *;
-                    assumption;
-                  refine' lt_of_le_of_lt _ h_erase_dups;
-                  induction' ( List.filter ( fun b => !b == hd ) tl ) using List.reverseRecOn with hd tl ih <;> simp_all +decide [ List.eraseDups_cons ];
-                  simp_all +decide [ List.eraseDups_append ];
-                  simp_all +decide [ List.removeAll ];
-                  grind;
-                · rw [ List.filter_eq_self.mpr ] <;> aesop;
-              exact ne_of_lt ( h_erase_dups this );
+            have h_parents : (system.validators.map Prod.fst).Nodup :=
+              system.validatorsNodup;
             exact ⟨ _, by assumption, by simpa using h_parents, fun p hp => by simpa using hp ⟩;
           grind;
         obtain ⟨ parents, hparents₁, hparents₂, hparents₃ ⟩ := h_parents;
@@ -237,22 +223,8 @@ private lemma traceInv_of_doAdvance (system : BlockSynchroniserSystem)
     simp [doAdvance] at hp;
     by_cases h : p.1 = vid <;> simp_all +decide [ updateValidator ];
     · have h_val_eq : List.Nodup (s.validators.map Prod.fst) := by
-        have h_val_eq : List.Nodup (system.validators.map Prod.fst) := by
-          have := system.validatorIdsUnique;
-          contrapose! this;
-          have h_erase_dups_length : ∀ {l : List ValidatorId}, ¬List.Nodup l → List.length (List.eraseDups l) < List.length l := by
-            intros l hl; induction' l with hd tl ih <;> simp_all +decide [ List.eraseDups_cons ] ;
-            by_cases h : hd ∈ tl <;> simp_all +decide [ List.eraseDups_cons ];
-            · have h_erase_dups_length : List.length (List.filter (fun b => !b == hd) tl) < List.length tl := by
-                simp +zetaDelta at *;
-                assumption;
-              refine' lt_of_le_of_lt _ h_erase_dups_length;
-              induction' ( List.filter ( fun b => !b == hd ) tl ) using List.reverseRecOn with hd tl ih <;> simp_all +decide [ List.eraseDups_cons ];
-              simp_all +decide [ List.eraseDups_append ];
-              simp_all +decide [ List.removeAll ];
-              grind +splitIndPred;
-            · rw [ List.filter_eq_self.mpr ] <;> aesop;
-          exact ne_of_lt ( h_erase_dups_length this );
+        have h_val_eq : List.Nodup (system.validators.map Prod.fst) :=
+          system.validatorsNodup
         have := ‹TraceInv system s›.2.2.1; aesop;
       rw [ List.nodup_iff_injective_get ] at h_val_eq;
       obtain ⟨ a, b, hab, rfl ⟩ := hp;
