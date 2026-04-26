@@ -28,12 +28,13 @@ Findings are listed in **decreasing order of importance**.
 | **F-7** | High | Missing assumption (safety/liveness boundary) | §D.3 T7 | T7's prose proof equates "consistent views" (L16) with "identical views" (needs liveness) and treats `order` as separable from `view` (it isn't). Two non-paper ingredients hidden in one short paragraph. | Either weaken T7's conclusion to prefix-consistency on the *intersection* of decided positions, or import decision-completeness from §D.2 explicitly. | ⚠️ **Not addressed.** T7 currently passes via two non-paper hypotheses (`h_decision_complete`, `h_order_from_view`); the chosen restatement is open. |
 | **F-5** | Medium | Surfaced invariant | §D.3 L13, L16, T7 | Each proof relies on a protocol fact the paper takes as obvious — cert-base parents, DAG-parent connectivity, view-traceback to leader blocks, decision completeness. None are stated as lemmas. | Promote each to a named lemma in §D.3. | **Statement-level fix.** Each invariant is now an explicit hypothesis on the relevant theorem (`h_cert_base`, `h_dag_parent`, `h_view_traceback`, `h_decision_complete`); bridges in L13/L16/T7 are closed under those. The invariants themselves are not yet derived from the protocol structure (future work). |
 | **F-2** | Medium | Scope-pinning | §2 (model), used throughout | The `\|A∩B\| ≥ f+1` bound for two `(2f+1)`-quorums only holds at `n = 3f+1` exactly; the paper writes `f < n/3` but uses fixed `2f+1` quorums uniformly. | Pin `n = 3f+1` explicitly, or scale quorum size to `n − f`. | **Resolved.** `n = 3 * f + 1` is now an explicit hypothesis on `quorumIntersection`, `certified_unique`, `lemma15_unique_cert`, and `lemma10_round_robin_pigeonhole`; all proved. |
-| **F-3** | Medium | Surfaced invariant | §4.4 (uniqueness consequence) | Paper's "honest validators don't equivocate" is stated within-block; the uniqueness proof needs the *cross-block* form (any two honest blocks agree on parents at the same `(author, round)`). | State the cross-block form alongside the within-block form. | **Resolved.** `NoEquivocationInParents` (cross-block form) is now a hypothesis of `certified_unique` (proved) and propagates through `lemma15_unique_cert`. |
+| **F-3** | Medium | Surfaced invariant | §4.4 (uniqueness consequence), §D.3 L13 | Paper's "honest validators don't equivocate" is stated within-block; uniqueness proofs need both: **(a)** the cross-block parent-set agreement form, and **(b)** the block-uniqueness form (an honest validator authors at most one block per `(author, round)` pair). | State both forms alongside the within-block form. | **Resolved.** Form (a) as `NoEquivocationInParents` (used by `certified_unique`); form (b) as `h_honest_unique` on L13 (used in the quorum-intersection step). Both proved sorry-free under the hypotheses. |
+| **F-11** | Medium | Notation / definition | §2.1 block structure | Block digest `B.d` is treated as a primitive field, but every uniqueness argument silently relies on it being a *function of `(B.r, B.author)`* — i.e., the digest is determined by who wrote the block and at what round. | Define `B.d` as a function of `(r, author)` rather than a free field, or state the determinism as a named hypothesis. | **Resolved.** `BlockInv` (in `causal_history` invariant chain) carries the constraint `B.d = digest system B.r B.author` as a trace invariant; `digest_injective` derived. |
 | **F-4** | Low | Surfaced invariant (naming) | §C.2 L4, L5 | Proofs of L4/L5 invoke Assumption 1 (latency triangle) implicitly to derive per-round Δ advancement. | Cite Assumption 1 explicitly, or state the round-advancement corollary as a named consequence. | **Fully fixed.** `LatencyTriangle` is now an explicit hypothesis of L4 and L5; both proved sorry-free. |
-| **F-8** | Low | Notational hygiene | §D.1.2 (round-robin), §D.3 L10 | `r mod n` round-robin presumes validator IDs are exactly `{0, …, n−1}`; the paper takes this as obvious. | State that the validator set has IDs `{0, …, n−1}`, or reformulate the schedule via a list index. | **Resolved.** `h_ids : ∀ i < n, ∃ pair ∈ validators, pair.1 = i` is now an explicit hypothesis on `lemma10_round_robin_pigeonhole`; proved. |
+| **F-8** | Low | Notational hygiene | §D.1.2 (round-robin), §D.3 L10, §4.2 (digest) | Two related ID-bound assumptions are silent: **(a)** `r mod n` round-robin presumes IDs are exactly `{0, …, n−1}` (used by L10); **(b)** `digest`'s injectivity presumes IDs are bounded by `n+1` (used by trace-invariant proofs). | State that the validator set has IDs `{0, …, n−1}` (covers both). | **Resolved.** Form (a) as `h_ids` on L10; form (b) as `ValidIds` in the `Beluga/Protocol.lean` trace-invariant chain. |
 | **F-6** | Low | Editorial | §4.2 prose vs Figure 8 | Reputation-update trigger is `r−1` in the prose and `r−2` in the pseudocode (off-by-one due to round-increment timing). | Align prose and pseudocode. | **Documentation only.** Followed the prose (`r-1`); flagged in the formalization's "Notes on paper consistency" section. |
 
-⚠️ marks the only finding currently **not addressed**: F-7 (T7's safety/liveness boundary). All others have at least a statement-level fix in place; F-2, F-3, F-4, F-8 have closed proofs under their respective hypotheses.
+⚠️ marks the only finding currently **not addressed**: F-7 (T7's safety/liveness boundary). All others have at least a statement-level fix in place; F-2, F-3, F-4, F-8, F-11 have closed proofs under their respective hypotheses.
 
 Each entry has a stable identifier (`F-N`) so we can refer to them
 across documents.
@@ -274,30 +275,43 @@ paper's intent without changing protocol numbers.
 
 ---
 
-## F-3. Surfaced invariant: cross-block honest non-equivocation
+## F-3. Surfaced invariants: two honest non-equivocation forms
 
-**Affected statement.** Paper §4.4, the uniqueness consequence
-("for any validator and round, at most one block can become
-certified").
+**Affected statements.** Paper §4.4 uniqueness consequence ("for any
+validator and round, at most one block can become certified");
+paper §D.3 L13 (certificate persistence).
 
-**Finding.** The proof requires that *any two honest-authored
-blocks in the state agree on parents at the same `(author, round)`*
-— i.e., honest validators don't equivocate *across blocks*. The
-paper states honest non-equivocation only within a single block
-("an honest validator's block has at most one parent per author"
-or similar in-block phrasings). The cross-block form is what
-discharges the case where the shared honest validator authored
-two distinct blocks each referencing one of two certified
-candidates.
+**Finding.** The paper states honest non-equivocation only within a
+single block ("an honest validator's block has at most one parent
+per author" or similar in-block phrasings). Two distinct *cross-block*
+forms are silently used by paper proofs, neither stated:
 
-**Suggested fix.** Strengthen the protocol assumption to:
+- **(a) Cross-block parent-set agreement.** Any two honest-authored
+  blocks in the state agree on parents at the same `(author, round)`
+  — i.e., if `B_h^r` and `B_h^{r'}` are both authored by the same
+  honest validator, then for any `(author', round')` they both
+  reference, they reference the *same* parent block.
+  Used by `certified_unique` (paper §4.4 uniqueness) in the case
+  where the shared honest validator authored two distinct blocks
+  each referencing one of two candidate certificates.
 
-> An honest validator never proposes two blocks that disagree on
-> the parent set at any `(author, round)` it includes.
+- **(b) Block-uniqueness per (author, round).** An honest validator
+  authors *at most one* block per `(author, round)` pair — there
+  are not two distinct round-`r` blocks both authored by the same
+  honest validator.
+  Used by paper §D.3 L13's quorum-intersection step: when the
+  shared honest validator from the intersection appears as the
+  author of both a parent of `B'` and a referencer of `B`, those
+  two blocks must be *equal*, not merely agree on parents.
 
-The paper appears to assume this implicitly when arguing
-"honest validators behave consistently" but does not state it as
-a separate condition.
+**Suggested fix.** State both forms explicitly alongside the
+within-block form. Both follow from the broader principle "honest
+validators behave consistently per (author, round)", but the paper's
+prose treats them as immediate when they are not.
+
+**Resolution in our formalization.** Form (a) as `NoEquivocationInParents`
+(used by `certified_unique`); form (b) as `h_honest_unique` on L13.
+Both proved sorry-free under their respective hypotheses.
 
 ---
 
@@ -327,22 +341,29 @@ invocation just isn't named.
 
 ---
 
-## F-8. Round-robin schedule presumes contiguous validator IDs
+## F-8. Validator-ID assumptions silently used by two unrelated proofs
 
-**Affected statement.** Paper §D.1.2, round-robin leader schedule
-(`leader_of(r) := validators[r mod n]`), and Lemma 10 (round-robin
-pigeonhole).
+**Affected statements.** Paper §D.1.2 round-robin leader schedule
+(`leader_of(r) := validators[r mod n]`) and Lemma 10 (round-robin
+pigeonhole); paper §4.2 block-digest derivation.
 
-**Finding.** The round-robin formula `r mod n` produces a numeric
-identifier in `{0, …, n−1}`. For "the leader of round `r`" to be a
-*registered validator*, the validator set must be indexed by exactly
-that range — i.e., the validators carry IDs `0, 1, …, n−1`. The
-paper takes this as obvious; the formalization made it visible
-because we model `system.validators : List (ValidatorId × Bool)`
-allowing arbitrary ID assignment, which means `r mod n` could
-otherwise produce an ID that nobody has, in which case
-`isHonestValidator(r mod n)` returns `false` for every leader and
-the pigeonhole conclusion fails vacuously.
+**Finding.** Two related-but-distinct ID-bound assumptions surface:
+
+- **(a) Contiguous IDs (stronger).** The round-robin formula
+  `r mod n` produces a numeric identifier in `{0, …, n−1}`. For
+  "the leader of round `r`" to be a registered validator, the
+  validator set must be indexed by exactly that range — IDs are
+  `0, 1, …, n−1`. Used by L10 (round-robin pigeonhole).
+
+- **(b) Bounded IDs (weaker).** Block digests are uniquely identified
+  by `(round, author)`; for `digest`'s injectivity, validator IDs
+  must be bounded (e.g., `vid < n + 1`) so the encoding `r * (n+1)
+  + vid` is injective. Used by trace-invariant proofs that rely on
+  digest uniqueness (e.g., `causal_history_of_find_none`'s
+  `BlockInv` chain, where no-duplicate-digests is load-bearing).
+
+(a) ⇒ (b), so a single statement of (a) discharges both. The paper
+takes both as obvious — neither is named.
 
 **Suggested fix.** State explicitly that `system.validators`'s ID
 column is `{0, …, n−1}` (perhaps in §2 alongside `n` and `f`), or
@@ -352,6 +373,54 @@ supplied ID. Either is fine; just pin one.
 
 This is a trivial finding compared to F-1 / F-7 — purely a
 notational hygiene issue. Recording it for completeness.
+
+---
+
+## F-11. Block-digest determinism is implicit, not stated
+
+**Affected statement.** Paper §2.1 block structure
+(`(r, d, author, parents, payload, signature)`) and every uniqueness
+argument that follows.
+
+**Finding.** The paper presents `B.d` (block digest) as a primitive
+field of the block — alongside `B.r`, `B.author`, etc. But every
+uniqueness or no-duplicates argument in the paper silently relies on
+the digest being a *function of `(B.r, B.author)`* — i.e.,
+"two blocks at the same round by the same author have the same
+digest, and conversely two blocks with the same digest agree on
+round and author." Without that, `digest` is just a free label and
+distinct blocks could share digests (or one block could have multiple
+digests across the trace).
+
+This is load-bearing for, among others:
+
+- The Mysticeti-Beluga safety chain (paper §D.3): proofs reason
+  about "the certificate set of `B`" via digest membership in
+  parent lists.
+- The cross-block honest non-equivocation step (F-3): identifying
+  "the block authored by validator `v` at round `r`" requires the
+  digest to fix the (r, author) pair.
+- The L13 quorum-intersection step: equating a parent of `B'` with
+  a referencer of `B` via the shared honest validator's digest.
+
+In implementations this comes for free: digests are cryptographic
+hashes of the block contents, which include `(r, author)`. But a
+*formal* statement of the protocol that doesn't make digests a
+function of contents is missing this load-bearing fact.
+
+**Suggested fix.** Either:
+
+1. Define `B.d` as a function of `(B.r, B.author, ...)` rather than
+   a primitive field — the cleanest restatement.
+2. State block-digest determinism as a named protocol property
+   alongside Definition 1.
+
+**Resolution in our formalization.** The trace-invariant
+`BlockInv` (in the `causal_history_of_find_none` chain) carries
+`B.d = digest system B.r B.author` as an invariant of the executable
+trace, and `digest_injective` is derived from it (under `ValidIds`
+— see F-8). So the formalization works, but only because we surfaced
+this as an invariant; the paper's statement-level treatment elides it.
 
 ---
 
