@@ -960,6 +960,72 @@ theorem network_round_intermediate_value
         exact Nat.le_antisymm h_upper hr₂
       refine ⟨k₂ + 1, Nat.le_succ_of_le hk, le_rfl, bv₂, h₂, h_eq_r⟩
 
+/-- `networkTryActFor` only appends to `emittedOperations` (monotone).
+Specifically, every operation in `s.base.emittedOperations` is also
+in `s'.base.emittedOperations` whenever `networkTryActFor system s vid_a bv_a = some s'`. -/
+theorem networkTryActFor_emittedOperations_monotone
+    (system : BlockSynchroniserSystem) (s : NetworkState)
+    (vid_a : ValidatorId) (bv_a : BelugaValidator)
+    (s' : NetworkState)
+    (h_act : networkTryActFor system s vid_a bv_a = some s') :
+    ∀ op ∈ s.base.emittedOperations, op ∈ s'.base.emittedOperations := by
+  intro op hop
+  unfold networkTryActFor at h_act
+  simp only at h_act
+  split at h_act
+  · -- Propose: doPropose appends [block_propose ...] to emittedOperations.
+    injection h_act with h_eq
+    have h_base : s'.base = doPropose system s.base vid_a bv_a.currentRound := by rw [← h_eq]
+    rw [h_base]; unfold doPropose; simp
+    exact Or.inl hop
+  · split at h_act
+    · -- Accept.
+      rename_i B_acc _
+      injection h_act with h_eq
+      have h_base : s'.base = doAccept s.base vid_a B_acc := by rw [← h_eq]
+      rw [h_base]; unfold doAccept
+      simp only [updateValidator]
+      exact List.mem_append.mpr (Or.inl hop)
+    · split at h_act
+      · -- Store.
+        rename_i _ B_sto _
+        injection h_act with h_eq
+        have h_base : s'.base = doStore s.base vid_a B_sto := by rw [← h_eq]
+        rw [h_base]; unfold doStore
+        simp only [updateValidator]
+        exact List.mem_append.mpr (Or.inl hop)
+      · -- Advance.
+        split at h_act
+        · injection h_act with h_eq
+          have h_base : s'.base = updateValidator s.base vid_a (fun bv0 =>
+              { bv0 with currentRound := bv0.currentRound + 1,
+                         roundEntryTime := s.currentTime }) := by rw [← h_eq]
+          rw [h_base]; unfold updateValidator
+          exact hop
+        · contradiction
+
+/-- One `networkStep` only appends to `emittedOperations`. -/
+theorem networkStep_emittedOperations_monotone
+    (system : BlockSynchroniserSystem) (s : NetworkState) (newTime : Nat) :
+    ∀ op ∈ s.base.emittedOperations,
+      op ∈ (networkStep system s newTime).base.emittedOperations := by
+  intro op hop
+  unfold networkStep
+  -- The advance + delivery don't change base; the action might extend it.
+  have h_del_base :
+      ({ s with currentTime := newTime } : NetworkState).deliverPending.base = s.base := by
+    rw [NetworkState.deliverPending_preserves_base]
+  have h_del_hop : op ∈
+      ({ s with currentTime := newTime } : NetworkState).deliverPending.base.emittedOperations := by
+    rw [h_del_base]; exact hop
+  simp only
+  split
+  case _ s'' h_fs =>
+    rw [List.findSome?_eq_some_iff] at h_fs
+    obtain ⟨_, ⟨vid_a, bv_a⟩, _, _, h_act, _⟩ := h_fs
+    exact networkTryActFor_emittedOperations_monotone system _ vid_a bv_a s'' h_act op h_del_hop
+  case _ _ => exact h_del_hop
+
 /-- The trace invariant: at every step of `networkTrace`, every
 validator's `roundEntryTime` is bounded by the state's
 `currentTime`. -/
