@@ -112,6 +112,24 @@ recovers the tight `3Δ` bound.
 for full discussion, formal counterexample trace, and discussion of
 where the prose silently relies on the assumption.
 
+**Follow-up: ImPoA does not substitute for scheduler fairness.**
+A natural question is whether ImPoA (paper §4.3) — given how
+prominently it features in the §5 prose proofs — somehow replaces
+the missing fairness assumption. It does not: ImPoA is a passive
+structural property of the DAG (a block is implicitly available
+*iff* f+1 subsequent blocks reference it), and is a
+correctness/bandwidth mechanism for *acceptance*, not a liveness
+trigger for *round advance*. The paper's actual liveness mechanism
+is the per-round timeout `T_rd = 4Δ` (paper §4.2), which fires
+unconditionally on a validator's local clock. Combined with
+`Δ`-delivery + push protocol + ImPoA, this yields paper L1's `3Δ`
+bound. Our trace model abstracts the timeout + per-validator clock
+into the single `SchedulerFairness` axiom; deriving it from
+primitives would require modeling messages and per-validator time.
+See
+[paper-feedback-impoa-vs-fairness.md](paper-feedback-impoa-vs-fairness.md)
+for the full analysis.
+
 ### F-1a. Round-level corollary needed in *lockstep* form (`≥ r + 1`)
 
 When discharging Assumption 2 to a round-level fact about
