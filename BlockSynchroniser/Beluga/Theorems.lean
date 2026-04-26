@@ -448,8 +448,8 @@ private lemma step_emittedOperations_monotone
   intro op hop
   unfold step
   cases h : List.findSome? (fun x => tryActFor system s x.1 x.2) s.validators
-  · simp [h]; exact hop
-  · simp only [h]
+  · simp; exact hop
+  · simp only
     rw [List.findSome?_eq_some_iff] at h
     obtain ⟨l₁, a, l₂, h₁, h₂, _⟩ := h
     unfold tryActFor at h₂
@@ -460,13 +460,13 @@ private lemma step_emittedOperations_monotone
           !hasStoredDigest s a.1 B.d) s.blocks <;> simp_all +decide
       · split_ifs at h₂ <;>
           simp_all +decide [doPropose, doAdvance, updateValidator]
-        all_goals subst h₂ <;> grind
+        all_goals subst h₂ ; grind
       · split_ifs at h₂ <;>
           simp_all +decide [doPropose, doStore, updateValidator]
-        all_goals subst h₂ <;> grind
+        all_goals subst h₂ ; grind
     · split_ifs at h₂ <;>
         simp_all +decide [doPropose, doAccept, updateValidator]
-      all_goals subst h₂ <;> grind
+      all_goals subst h₂ ; grind
 
 /-- `hasProposedFor` is monotone in trace step: once it's true at some
 step, it remains true at all later steps. -/
@@ -483,6 +483,105 @@ private lemma hasProposedFor_monotone
     obtain ⟨op, hop_mem, hop_match⟩ := ih
     refine ⟨op, ?_, hop_match⟩
     exact step_emittedOperations_monotone system _ op hop_mem
+
+/- `updateValidator` preserves the list of validator IDs. -/
+private lemma updateValidator_validators_ids_preserved (s : BelugaState)
+    (vid : ValidatorId) (f : BelugaValidator → BelugaValidator) :
+    (updateValidator s vid f).validators.map Prod.fst =
+      s.validators.map Prod.fst := by
+  unfold updateValidator
+  simp only [List.map_map]
+  apply List.map_congr_left
+  rintro ⟨v, bv⟩ _
+  by_cases h : v = vid <;> simp [h]
+
+/-
+`step` preserves the list of validator IDs. Each `tryActFor` branch
+either leaves `s.validators` untouched (`doPropose`) or applies
+`updateValidator` (preserves IDs).
+-/
+set_option maxHeartbeats 800000 in
+private lemma step_validators_ids_preserved
+    (system : BlockSynchroniserSystem) (s : BelugaState) :
+    (step system s).validators.map Prod.fst = s.validators.map Prod.fst := by
+  unfold step
+  cases h_fs : List.findSome? (fun x => tryActFor system s x.1 x.2) s.validators with
+  | none => simp
+  | some s_post =>
+    simp only
+    rw [List.findSome?_eq_some_iff] at h_fs
+    obtain ⟨_, a, _, _, h_act, _⟩ := h_fs
+    unfold tryActFor at h_act
+    simp only at h_act
+    rcases h_findAcc : List.find?
+        (fun B => !hasAcceptedDigest s a.1 B.d &&
+          B.parents.all fun pd => hasAcceptedDigest s a.1 pd) s.blocks
+      with _ | B_acc
+    · rw [h_findAcc] at h_act
+      simp only at h_act
+      rcases h_findSto : List.find?
+          (fun B => hasAcceptedDigest s a.1 B.d &&
+            !hasStoredDigest s a.1 B.d) s.blocks
+        with _ | B_sto
+      · rw [h_findSto] at h_act
+        simp only at h_act
+        by_cases h_prop : (!hasProposedFor s a.1 a.2.currentRound) = true
+        · rw [if_pos h_prop] at h_act
+          have : s_post = doPropose system s a.1 a.2.currentRound :=
+            (Option.some.inj h_act).symm
+          rw [this]
+          unfold doPropose
+          rfl
+        · rw [if_neg h_prop] at h_act
+          by_cases h_all : allProposedFor system s a.2.currentRound = true
+          · rw [if_pos h_all] at h_act
+            have : s_post = doAdvance s a.1 := (Option.some.inj h_act).symm
+            rw [this, doAdvance]
+            exact updateValidator_validators_ids_preserved s a.1 _
+          · rw [if_neg h_all] at h_act
+            simp at h_act
+      · rw [h_findSto] at h_act
+        simp only at h_act
+        by_cases h_prop : (!hasProposedFor s a.1 a.2.currentRound) = true
+        · rw [if_pos h_prop] at h_act
+          have : s_post = doPropose system s a.1 a.2.currentRound :=
+            (Option.some.inj h_act).symm
+          rw [this]; unfold doPropose; rfl
+        · rw [if_neg h_prop] at h_act
+          have : s_post = doStore s a.1 B_sto := (Option.some.inj h_act).symm
+          rw [this, doStore]
+          exact updateValidator_validators_ids_preserved _ _ _
+    · rw [h_findAcc] at h_act
+      simp only at h_act
+      by_cases h_prop : (!hasProposedFor s a.1 a.2.currentRound) = true
+      · rw [if_pos h_prop] at h_act
+        have : s_post = doPropose system s a.1 a.2.currentRound :=
+          (Option.some.inj h_act).symm
+        rw [this]; unfold doPropose; rfl
+      · rw [if_neg h_prop] at h_act
+        have : s_post = doAccept s a.1 B_acc := (Option.some.inj h_act).symm
+        rw [this, doAccept]
+        exact updateValidator_validators_ids_preserved _ _ _
+
+/-
+The Beluga trace preserves nodup-by-id of the validator list.
+Foundation for `step_advance_implies_hasProposedFor`'s actor-vs-find
+identification. Self-inductive (no other invariants required).
+-/
+private lemma belugaTrace_validators_nodup
+    (system : BlockSynchroniserSystem)
+    (h_sys_nodup : (system.validators.map Prod.fst).Nodup) (k : Nat) :
+    ((belugaTrace system k).validators.map Prod.fst).Nodup := by
+  induction k with
+  | zero =>
+    show ((BelugaState.init system).validators.map Prod.fst).Nodup
+    unfold BelugaState.init
+    simp [List.map_map]
+    convert h_sys_nodup
+  | succ k ih =>
+    show ((step system (belugaTrace system k)).validators.map Prod.fst).Nodup
+    rw [step_validators_ids_preserved]
+    exact ih
 
 
 /-! ## The Beluga §5 post-GST liveness invariant
