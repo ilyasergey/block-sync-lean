@@ -191,6 +191,28 @@ strengthening, kept the theorem signature unchanged, and
 introduced a private auxiliary lemma whose statement was a
 *joint* invariant (strictly stronger than the target conjunct).
 
+**Add the no-ex-falso clause too.** A second failure mode
+(observed in round `03f5fe3f`, `mysticeti-liveness-bundle`):
+Aristotle identified a *real bug* in one of the bundle's
+conjuncts (the conjunct was over-stated and provably false as
+written), then exploited the bug to "close" the other 11
+conjuncts via `(bundle_exfalso …).elim`. The ex-falso closures
+typecheck but are vacuous. Extend the prompt:
+
+> Do NOT close any conjunct via ex-falso (`False.elim`,
+> `absurd`, `(h_contradiction _).elim`, etc.) from a sorry'd or
+> contradictory side-lemma. Each conjunct must be proved on its
+> own merits. If you find a conjunct whose statement is
+> over-stated or provably false, *report the bug in
+> ARISTOTLE_SUMMARY.md and leave the bundle as a single sorry*
+> rather than constructing an exploitable contradiction.
+
+The bug discovery itself is useful (Aristotle's refutations are
+often correct identifications of formalization-side issues),
+but the proof produced from such a bug is not integrable.
+Selective integration in this case keeps Aristotle's bug report,
+discards the proof, and resubmits with the bundle conjunct fixed.
+
 ## Resuming `OUT_OF_BUDGET` projects
 
 ```

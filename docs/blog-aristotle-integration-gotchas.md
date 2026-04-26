@@ -521,6 +521,103 @@ You'll catch this every time *if* you make "diff hypotheses
 against conclusions" part of your selective-integration
 checklist.
 
+## Gotcha 23 — Bug-then-exploit: ex-falso closure from a wrong conjunct
+
+**Symptom.** A bundle delegation returns `COMPLETE_WITH_ERRORS`.
+You read `ARISTOTLE_SUMMARY.md` and it cheerfully explains that
+the bundle's *first conjunct is provably false*, and that the
+proof exploits this to close all the other conjuncts via
+`False.elim` / `(bundle_exfalso ...).elim` / `absurd`. The bundle
+theorem typechecks; the proof body is something like:
+
+```
+private lemma bundle_byz_bound ... : ⟨the false conjunct⟩ := sorry
+
+private lemma bundle_exfalso ... : False :=
+  (bundle_byz_bound ⟨counter-witness⟩).elim ⟨refutation⟩
+
+theorem belugaTrace_satisfies_<bundle> ... := by
+  refine ⟨ ?_, ?_, ..., ?_ ⟩
+  · sorry  -- (bundle_byz_bound — actually false)
+  · exact (bundle_exfalso ...).elim
+  · exact (bundle_exfalso ...).elim
+  ...
+```
+
+**Cause.** The bundle definition has a real bug — one conjunct
+is over-stated and provably false. Aristotle correctly identifies
+the bug, then takes the locally-valid shortcut of closing every
+other conjunct via ex-falso. This is "valid Lean", but the proof
+is vacuous: the bundle theorem follows from the false conjunct
+existing as a sorry, not from any actual reasoning about the
+other conjuncts.
+
+This is a more subtle relative of Gotcha 22:
+- Gotcha 22's hypotheses are *circular* (each is equal to the
+  bundle field it "proves") — they don't add information.
+- Gotcha 23's exploit is *via a real bug* — Aristotle has done
+  legitimate refutation work, and the bug discovery is
+  genuinely useful, but the proof structure that exploits it is
+  not integrable.
+
+**Fix.** Three-step:
+
+1. **Acknowledge the bug.** Aristotle's refutation of the
+   over-stated conjunct is a real finding. Save the
+   counter-witness (often a single concrete value the conjunct
+   fails on) — it's good documentation regardless of what you do
+   with the proof.
+2. **Discard the proof entirely.** The 11 ex-falso closures are
+   vacuous; the one sorry'd conjunct is genuinely unprovable.
+   None of it survives. Reset the bundle theorem to plain
+   `sorry`.
+3. **Fix the bundle definition.** Either restate the
+   over-stated conjunct (typically by adding a missing
+   precondition — "for any list of *registered* validators",
+   "for any nodup list", etc.) or, if the conjunct doesn't
+   belong in the bundle at all, move it out (e.g., make it a
+   theorem hypothesis, or derive it locally at use sites). Then
+   resubmit.
+
+**Resubmission prompt.** Add to the standard anti-trivialisation
+language (Gotcha 22):
+
+> Do NOT close any conjunct via ex-falso (`False.elim`,
+> `absurd`, `(h_contradiction _).elim`, etc.) from a sorry'd or
+> contradictory side-lemma. Each conjunct must be proved on its
+> own merits. If you find a conjunct whose statement is
+> over-stated or provably false, *report the bug in
+> `ARISTOTLE_SUMMARY.md` and leave the bundle as a single sorry*
+> rather than constructing an exploitable contradiction.
+
+**Concrete example.** Aristotle round `03f5fe3f` on the
+Mysticeti-Beluga liveness bundle. The bundle's `byz_bound`
+conjunct read:
+
+```
+∀ authors : List ValidatorId,
+  (authors.filter (fun vid => !isHonestValidator system vid)).length ≤ system.f
+```
+
+— quantifying over arbitrary `ValidatorId` lists. Aristotle's
+refutation: take `authors = [99999, ..., 99999]` (`f+1` copies of
+an unregistered ID). `isHonestValidator` returns `false` for
+unregistered IDs, so the filter keeps all `f+1` entries, length
+`f+1 > f`, conjunct violated. Aristotle then used this to derive
+`False` and closed the other 11 conjuncts via ex-falso.
+
+The bug was real (the conjunct was missing a "registered + nodup"
+qualifier; see [Stage 2 paper additions](paper-additions-stage2.md))
+but the proof was unsalvageable. We discarded the proof,
+restated the conjunct (or moved it out of the bundle), and
+resubmitted.
+
+**Why this is a gotcha.** The `ARISTOTLE_SUMMARY.md` text often
+*tells* you what happened — it's the rare case where the
+summary's narrative is more accurate than the proof body. Trust
+the summary's bug report; mistrust the proof structure that
+"closes the rest".
+
 ## What we'd put in a blog post
 
 The operational thesis: **the math tactical wall and integration

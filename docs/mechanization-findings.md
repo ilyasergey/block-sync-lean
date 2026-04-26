@@ -48,7 +48,7 @@ Findings are grouped by status. Within each group, listed by severity.
 | **F-5** | Medium | Surfaced invariant | §D.3 L13 + L15 | Each proof relies on protocol-invariant DAG facts the paper takes as obvious — DAG admission well-formedness (cert-base parents + parent-set distinct authors), author-round uniqueness, no-equivocation in parents, authors-are-registered. None are stated as lemmas. | Promote each to a named lemma in §D.3. | Closed for the `belugaTrace` instantiation. The `MysticetiSafetyInv` bundle ([`Mysticeti/SafetyInvariant.lean`](../BlockSynchroniser/Mysticeti/SafetyInvariant.lean)) packages all four conjuncts as a single trace invariant — `admission` (via `belugaTrace_admissionWellFormed`), `uniqueByAuthorRound`, `noEquivocation`, `authorsValid` — and `belugaTrace_satisfies_mysticetiSafetyInv` proves the bundle sorry-free. The belugaTrace-specialised wrappers `lemma13_cert_persistence_belugaTrace` and `lemma15_unique_cert_belugaTrace` retain only the genuine BFT side conditions (`hN`, `h_byz_bound`, `hids`). The originally listed "view-traceback" and "decision-completeness" facts are *not* DAG invariants — they concern external `view`/`order` parameters, and are tracked under F-7 instead. |
 | **F-11** | Medium | Notation / definition | §2.1 block structure | Block digest `B.d` is treated as a primitive field, but every uniqueness argument silently relies on it being a *function of `(B.r, B.author)`* — i.e., the digest is determined by who wrote the block and at what round. | Define `B.d` as a function of `(r, author)` rather than a free field, or state the determinism as a named hypothesis. | `BlockInv` (in `causal_history` invariant chain) carries `B.d = digest system B.r B.author` as a trace invariant; `digest_injective` derived. |
 | **F-4** | Low | Surfaced invariant (naming) | §C.2 L4, L5 | Proofs of L4/L5 invoke Assumption 1 (latency triangle) implicitly to derive per-round Δ advancement. | Cite Assumption 1 explicitly, or state the round-advancement corollary as a named consequence. | `LatencyTriangle` explicit hypothesis on L4 and L5; both proved sorry-free. |
-| **F-8** | Low | Notational hygiene | §D.1.2 (round-robin), §D.3 L10, §4.2 (digest) | Two related ID-bound assumptions are silent: **(a)** `r mod n` round-robin presumes IDs are exactly `{0, …, n−1}` (used by L10); **(b)** `digest`'s injectivity presumes IDs are bounded by `n+1` (used by trace-invariant proofs). | State that the validator set has IDs `{0, …, n−1}` (covers both). | Form (a) as `h_ids` on L10; form (b) as `ValidIds` in the `Beluga/Protocol.lean` trace-invariant chain. |
+| **F-8** | Low | Notational hygiene | §D.1.2 (round-robin), §D.3 L10, §4.2 (digest), §2 (BFT bound) | Three related ID-bound assumptions are silent: **(a)** `r mod n` round-robin presumes IDs are exactly `{0, …, n−1}` (used by L10); **(b)** `digest`'s injectivity presumes IDs are bounded by `n+1` (used by trace-invariant proofs); **(c)** the "at most `f` Byzantine" bound is implicitly *over the registered validator set* — for an arbitrary list of `ValidatorId`s the bound trivially fails (a list of `f+1` unregistered IDs satisfies `isHonest = false` for all entries). See also: paper-additions-stage2 doc. | State that the validator set has IDs `{0, …, n−1}` (covers (a), (b)) and qualify the BFT bound as "for any subset/list of *registered* validators" (covers (c)). | Form (a) as `h_ids` on L10; form (b) as `ValidIds` in the `Beluga/Protocol.lean` trace-invariant chain; form (c) surfaced by the (failed) `byz_bound` conjunct of `MysticetiPostGSTLiveness` — restructured to take a registered-list-restricted hypothesis instead. |
 | **F-6** | Low | Editorial | §4.2 prose vs Figure 8 | Reputation-update trigger is `r−1` in the prose and `r−2` in the pseudocode (off-by-one due to round-increment timing). | Align prose and pseudocode. | Followed the prose (`r-1`); flagged in `formalization.md`'s "Notes on paper consistency" section. |
 
 Each entry has a stable identifier (`F-N`) so we can refer to them
@@ -409,13 +409,15 @@ invocation just isn't named.
 
 ---
 
-## F-8. Validator-ID assumptions silently used by two unrelated proofs
+## F-8. Validator-ID assumptions silently used across multiple proofs
 
 **Affected statements.** Paper §D.1.2 round-robin leader schedule
 (`leader_of(r) := validators[r mod n]`) and Lemma 10 (round-robin
-pigeonhole); paper §4.2 block-digest derivation.
+pigeonhole); paper §4.2 block-digest derivation; paper §2 BFT bound
+("at most `f` Byzantine validators").
 
-**Finding.** Two related-but-distinct ID-bound assumptions surface:
+**Finding.** Three related-but-distinct ID-bound / universe
+assumptions surface:
 
 - **(a) Contiguous IDs (stronger).** The round-robin formula
   `r mod n` produces a numeric identifier in `{0, …, n−1}`. For
@@ -430,17 +432,39 @@ pigeonhole); paper §4.2 block-digest derivation.
   digest uniqueness (e.g., `causal_history_of_find_none`'s
   `BlockInv` chain, where no-duplicate-digests is load-bearing).
 
-(a) ⇒ (b), so a single statement of (a) discharges both. The paper
-takes both as obvious — neither is named.
+- **(c) BFT bound's universe.** The paper's "at most `f` Byzantine
+  validators" is implicitly *a statement about the registered
+  validator set* — a list of `2f + 1` arbitrary `ValidatorId`s
+  (e.g., the parent-author list of a block in state) is only
+  guaranteed to contain ≥ `f + 1` honest validators if it is
+  known to be a subset of the registered set. Without that
+  qualifier, a list of `f + 1` *unregistered* IDs trivially
+  satisfies "all entries are non-honest" (since `isHonest`
+  returns `false` for unregistered IDs), violating the bound.
+
+(a) ⇒ (b), so a single statement of (a) discharges both. (c) is
+distinct: it doesn't follow from (a)/(b) alone — it is a
+universe-of-quantification clarification on the BFT bound itself,
+saying that the "at most `f` Byzantine" claim ranges over
+*registered* validators, not over the type `ValidatorId`. The
+paper takes all three as obvious — none are named.
 
 **Suggested fix.** State explicitly that `system.validators`'s ID
-column is `{0, …, n−1}` (perhaps in §2 alongside `n` and `f`), or
-formulate the round-robin schedule directly in terms of indices into
-the validator list rather than via `r mod n` of an externally
-supplied ID. Either is fine; just pin one.
+column is `{0, …, n−1}` (perhaps in §2 alongside `n` and `f`), and
+in the same paragraph qualify the BFT bound as "for any nodup
+list/subset of *registered* validators, at most `f` are Byzantine."
+Either is fine; just pin both the universe and the quantification
+range.
 
-This is a trivial finding compared to F-1 / F-7 — purely a
-notational hygiene issue. Recording it for completeness.
+The (c) sub-finding was surfaced when the formalization tried to
+package "at most `f` Byzantine in any author list" as a bundle
+conjunct without the registered-list qualifier; Aristotle round
+`03f5fe3f` exhibited a concrete refutation (a list of `f+1` copies
+of an unregistered ID), confirming that the qualifier is
+load-bearing rather than decorative.
+
+This is a low-severity finding compared to F-1 / F-7 — purely
+notational hygiene. Recording it for completeness.
 
 ---
 
