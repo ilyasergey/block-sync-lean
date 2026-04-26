@@ -204,22 +204,79 @@ structure MysticetiPostGSTLiveness
       HasAccepted (belugaTrace system k) vid_acc B.d →
       ∃ k' ≥ k, HasAccepted (belugaTrace system k') vid_h B.d
 
+/-
+Byzantine count bound: in any nodup list of registered validator IDs,
+at most `f` entries are non-honest. Follows from the system constraints
+`n = 3f+1`, `|honest| = 2f+1`, and `n = |validators|`.
+-/
+-- proof: aristotle (project 2300aa5f) — mysticeti-liveness-bundle-no-exfalso round
+private lemma byz_bound_of_system_constraints
+    (system : BlockSynchroniserSystem)
+    (hN : system.n = 3 * system.f + 1)
+    (hHonest : (system.validators.filter (fun p => p.2 = true)).length
+                = 2 * system.f + 1) :
+    ∀ authors : List ValidatorId,
+      authors.Nodup →
+      (∀ a ∈ authors, ∃ p ∈ system.validators, p.1 = a) →
+      (authors.filter (fun vid => !isHonestValidator system vid)).length ≤ system.f := by
+  intros authors h_nodup h_registered
+  have h_non_honest_count : (List.filter (fun vid => !isHonestValidator system vid) authors).length ≤ (List.filter (fun p => !p.2) system.validators).length := by
+    -- Since `authors` is a nodup list of registered validator IDs, each non-honest author in `authors` must be a non-honest validator in `system.validators`.
+    have h_non_honest_subset : (List.filter (fun vid => !isHonestValidator system vid) authors).toFinset ⊆ (List.filter (fun p => !p.2) system.validators).toFinset.image (fun p => p.1) := by
+      intro a ha;
+      simp_all +decide [ isHonestValidator ];
+      cases h_registered a ha.1 <;> simp_all +decide [ BlockSynchroniserSystem.isHonest ];
+      cases h : List.find? ( fun x => decide ( x.1 = a ) ) system.validators <;> simp_all +decide;
+      · exact False.elim <| h a |>.2 ‹_› rfl;
+      · grind;
+    have := Finset.card_le_card h_non_honest_subset;
+    rw [ List.toFinset_card_of_nodup ] at this;
+    · exact this.trans ( Finset.card_image_le.trans ( List.toFinset_card_le _ ) );
+    · exact h_nodup.filter _;
+  have h_non_honest_count : (List.filter (fun p => !p.2) system.validators).length + (List.filter (fun p => p.2) system.validators).length = system.n := by
+    have h_non_honest_count : ∀ (l : List (ValidatorId × Bool)), (List.filter (fun p => !p.2) l).length + (List.filter (fun p => p.2) l).length = l.length := by
+      intro l; induction l <;> simp +decide [ * ] ;
+      grind;
+    rw [ h_non_honest_count, BlockSynchroniserSystem.validatorCountCorrect ];
+  grind +locals
+
 /-- The Beluga trace satisfies the Mysticeti-Beluga post-GST liveness bundle.
 
-Same proof template as `belugaTrace_admissionWellFormed`: a private
-compound trace invariant carrying conjuncts for action-progression,
-round-synchronisation, and view-derivation, preserved by every
-`tryActFor` branch, projected to each conjunct of the bundle.
+Takes the system-level constraints (`hN`, `hHonest`, `h_ids`) as
+explicit hypotheses, since they are constraints on `system` not
+derivable from a generic `BlockSynchroniserSystem`. The four
+"system-level" conjuncts (`hN`, `hHonest`, `h_ids`, `byz_bound`)
+are then trivially discharged: `hN`/`hHonest`/`h_ids` are passed
+through verbatim, and `byz_bound` is proved sorry-free by
+`byz_bound_of_system_constraints`.
 
-Currently a stub — the inductive proof is the load-bearing pending
-obligation for paper §D.2. -/
+The remaining 8 fields are the genuine post-GST liveness conjuncts
+(paper §D.2 territory) and are stub `sorry`s pending future
+inductive trace analysis. -/
+-- proof: aristotle (project 2300aa5f) — mysticeti-liveness-bundle-no-exfalso round
+-- (system-constraint scaffolding + byz_bound proof; 8 liveness conjuncts pending)
 theorem belugaTrace_satisfies_mysticeti_post_gst_liveness
     (system : BlockSynchroniserSystem)
     (time : TimeMap)
     (_h_time : time.WellFormed)
-    (_h_sync : PartiallySynchronous system (belugaTrace system) time) :
-    MysticetiPostGSTLiveness system time := by
-  sorry
+    (_h_sync : PartiallySynchronous system (belugaTrace system) time)
+    (hN : system.n = 3 * system.f + 1)
+    (hHonest : (system.validators.filter (fun p => p.2 = true)).length
+                = 2 * system.f + 1)
+    (h_ids : ∀ i < system.n, ∃ pair ∈ system.validators, pair.1 = i) :
+    MysticetiPostGSTLiveness system time where
+  hN := hN
+  hHonest := hHonest
+  h_ids := h_ids
+  byz_bound := byz_bound_of_system_constraints system hN hHonest
+  honest_round_entry := by sorry
+  leader_propose := by sorry
+  honest_ref_leader := by sorry
+  honest_certify_leader := by sorry
+  three_consec_commit := by sorry
+  backward_induction := by sorry
+  block_pull_liveness := by sorry
+  honest_eventually_accepts := by sorry
 
 -- F-7(b) closed: the "TransactionOrder ↔ HasAccepted" link is now a
 -- *theorem* (`Beluga.accepted_implies_in_belugaTransactionOrder` in
@@ -232,6 +289,9 @@ lemma honest_round_entry_within_3delta
     (system : BlockSynchroniserSystem)
     (time : TimeMap) (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
+    (hN : system.n = 3 * system.f + 1)
+    (hHonest : (system.validators.filter (fun p => p.2 = true)).length = 2 * system.f + 1)
+    (h_ids : ∀ i < system.n, ∃ pair ∈ system.validators, pair.1 = i)
     (r : Round) (vid : ValidatorId)
     (h_honest : isHonestValidator system vid = true)
     (k : ℕ) (h_gst : time k ≥ system.GST) :
@@ -239,7 +299,7 @@ lemma honest_round_entry_within_3delta
       ∃ k', time k' ≤ time k + 3 * system.Δ ∧
         (∃ bv ∈ (belugaTrace system k').validators,
           bv.1 = vid' ∧ bv.2.currentRound ≥ r) := by
-  exact (belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync).honest_round_entry r vid k h_honest h_gst
+  exact (belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync hN hHonest h_ids).honest_round_entry r vid k h_honest h_gst
 
 /-- After GST, the honest leader's round-`r` block is created and
 disseminated within `Δ` (paper §4.2). -/
@@ -247,6 +307,9 @@ lemma leader_block_disseminated_within_delta
     (system : BlockSynchroniserSystem)
     (time : TimeMap) (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
+    (hN : system.n = 3 * system.f + 1)
+    (hHonest : (system.validators.filter (fun p => p.2 = true)).length = 2 * system.f + 1)
+    (h_ids : ∀ i < system.n, ∃ pair ∈ system.validators, pair.1 = i)
     (r : Round) (vid_leader : ValidatorId)
     (h_honest : isHonestValidator system vid_leader = true)
     (h_leader : vid_leader = leaderOf system r)
@@ -254,7 +317,7 @@ lemma leader_block_disseminated_within_delta
     ∃ k', time k' ≤ time k + system.Δ ∧
       ∃ B_L ∈ (belugaTrace system k').blocks,
         B_L.author = vid_leader ∧ B_L.r = r := by
-  exact (belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync).leader_propose r vid_leader k h_honest h_leader h_gst
+  exact (belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync hN hHonest h_ids).leader_propose r vid_leader k h_honest h_leader h_gst
 
 /-- After GST, an honest validator references the leader block within `4Δ`
 (combines round-entry + leader dissemination + parent selection). -/
@@ -262,6 +325,9 @@ lemma honest_references_leader_within_4delta
     (system : BlockSynchroniserSystem)
     (time : TimeMap) (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
+    (hN : system.n = 3 * system.f + 1)
+    (hHonest : (system.validators.filter (fun p => p.2 = true)).length = 2 * system.f + 1)
+    (h_ids : ∀ i < system.n, ∃ pair ∈ system.validators, pair.1 = i)
     (r : Round) (vid_leader vid_referencer : ValidatorId)
     (h_leader_honest : isHonestValidator system vid_leader = true)
     (h_ref_honest : isHonestValidator system vid_referencer = true)
@@ -273,7 +339,7 @@ lemma honest_references_leader_within_4delta
         ∃ B_L ∈ (belugaTrace system k').blocks,
           B_L.author = vid_leader ∧ B_L.r = r ∧
           B_L.d ∈ B.parents) := by
-  exact (belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync).honest_ref_leader r vid_leader vid_referencer k h_leader_honest h_ref_honest h_leader h_gst
+  exact (belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync hN hHonest h_ids).honest_ref_leader r vid_leader vid_referencer k h_leader_honest h_ref_honest h_leader h_gst
 
 /--
 **Lemma 8 (paper Appendix D.2).**
@@ -295,7 +361,10 @@ theorem lemma8_leader_referenced
     (system : BlockSynchroniserSystem)
     (time : TimeMap)
     (h_time : time.WellFormed)
-    (h_sync : PartiallySynchronous system (belugaTrace system) time) :
+    (h_sync : PartiallySynchronous system (belugaTrace system) time)
+    (hN : system.n = 3 * system.f + 1)
+    (hHonest : (system.validators.filter (fun p => p.2 = true)).length = 2 * system.f + 1)
+    (h_ids : ∀ i < system.n, ∃ pair ∈ system.validators, pair.1 = i) :
     ∀ r vid_leader vid_referencer,
       isHonestValidator system vid_leader = true →
       isHonestValidator system vid_referencer = true →
@@ -308,7 +377,7 @@ theorem lemma8_leader_referenced
               B_L.author = vid_leader ∧ B_L.r = r ∧
               B_L.d ∈ B.parents) := by
   intro r vid_leader vid_referencer h_leader_honest h_ref_honest h_leader k h_gst
-  exact honest_references_leader_within_4delta system time h_time h_sync
+  exact honest_references_leader_within_4delta system time h_time h_sync hN hHonest h_ids
     r vid_leader vid_referencer h_leader_honest h_ref_honest h_leader k h_gst
 
 /-- After GST, `2f+1` honest validators reference the leader block,
@@ -317,6 +386,9 @@ lemma honest_validators_certify_leader
     (system : BlockSynchroniserSystem)
     (time : TimeMap) (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
+    (hN : system.n = 3 * system.f + 1)
+    (hHonest : (system.validators.filter (fun p => p.2 = true)).length = 2 * system.f + 1)
+    (h_ids : ∀ i < system.n, ∃ pair ∈ system.validators, pair.1 = i)
     (r : Round) (vid_leader : ValidatorId)
     (h_honest : isHonestValidator system vid_leader = true)
     (h_leader : vid_leader = leaderOf system r)
@@ -325,7 +397,7 @@ lemma honest_validators_certify_leader
       (∃ B_L ∈ (belugaTrace system k').blocks,
         isLeaderBlock system B_L ∧ B_L.r = r ∧
         certified system (belugaTrace system k') B_L) := by
-  exact (belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync).honest_certify_leader r vid_leader k h_honest h_leader h_gst
+  exact (belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync hN hHonest h_ids).honest_certify_leader r vid_leader k h_honest h_leader h_gst
 
 /--
 **Lemma 9 (paper Appendix D.2).**
@@ -349,7 +421,10 @@ theorem lemma9_honest_certificate
     (system : BlockSynchroniserSystem)
     (time : TimeMap)
     (h_time : time.WellFormed)
-    (h_sync : PartiallySynchronous system (belugaTrace system) time) :
+    (h_sync : PartiallySynchronous system (belugaTrace system) time)
+    (hN : system.n = 3 * system.f + 1)
+    (hHonest : (system.validators.filter (fun p => p.2 = true)).length = 2 * system.f + 1)
+    (h_ids : ∀ i < system.n, ∃ pair ∈ system.validators, pair.1 = i) :
     ∀ r vid_leader,
       isHonestValidator system vid_leader = true →
       vid_leader = leaderOf system r →
@@ -359,7 +434,7 @@ theorem lemma9_honest_certificate
             isLeaderBlock system B_L ∧ B_L.r = r ∧
             certified system (belugaTrace system k') B_L) := by
   intro r vid_leader h_honest h_leader k h_gst
-  exact honest_validators_certify_leader system time h_time h_sync
+  exact honest_validators_certify_leader system time h_time h_sync hN hHonest h_ids
     r vid_leader h_honest h_leader k h_gst
 
 /-- Three consecutive honest leader blocks produce direct-commit decisions
@@ -379,7 +454,7 @@ lemma three_consecutive_honest_direct_commit
         isLeaderBlock system B_L →
         (B_L.r = r₁ ∨ B_L.r = r₁ + 1 ∨ B_L.r = r₁ + 2) →
         directDecide system (belugaTrace system k') B_L = Decision.ToCommit) := by
-  exact (belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync).three_consec_commit startRound k₀ h_gst
+  exact (belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync _hN _hHonest _h_ids).three_consec_commit startRound k₀ h_gst
 
 /-- Backward induction: once three consecutive honest leaders are committed,
 earlier undecided leader blocks get decided via the indirect decision rule. -/
@@ -387,6 +462,9 @@ lemma backward_induction_decides_earlier_rounds
     (system : BlockSynchroniserSystem)
     (time : TimeMap) (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
+    (hN : system.n = 3 * system.f + 1)
+    (hHonest : (system.validators.filter (fun p => p.2 = true)).length = 2 * system.f + 1)
+    (h_ids : ∀ i < system.n, ∃ pair ∈ system.validators, pair.1 = i)
     (r : Round) (r₁ : Round) (k' : ℕ)
     (h_r₁_gt : r₁ > r + 2)
     (h_committed : ∀ B_L ∈ (belugaTrace system k').blocks,
@@ -396,7 +474,7 @@ lemma backward_induction_decides_earlier_rounds
     ∀ B_L ∈ (belugaTrace system k').blocks,
       isLeaderBlock system B_L → B_L.r = r →
       directDecide system (belugaTrace system k') B_L ≠ Decision.Undecided :=
-  (belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync).backward_induction r r₁ k' h_r₁_gt h_committed
+  (belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync hN hHonest h_ids).backward_induction r r₁ k' h_r₁_gt h_committed
 
 /-
 After GST, any round-`r` leader block eventually has a non-Undecided
@@ -408,13 +486,16 @@ lemma eventual_decision_core
     (system : BlockSynchroniserSystem)
     (time : TimeMap) (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
+    (hN : system.n = 3 * system.f + 1)
+    (hHonest : (system.validators.filter (fun p => p.2 = true)).length = 2 * system.f + 1)
+    (h_ids : ∀ i < system.n, ∃ pair ∈ system.validators, pair.1 = i)
     (r : Round) (k₀ : ℕ) (h_gst : time k₀ ≥ system.GST) :
     ∃ k', k' ≥ k₀ ∧
       (∀ B_L ∈ (belugaTrace system k').blocks,
         isLeaderBlock system B_L → B_L.r = r →
         directDecide system (belugaTrace system k') B_L ≠ Decision.Undecided) := by
   -- Composition of three_consec_commit + backward_induction from the bundle.
-  have mli := belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync
+  have mli := belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync hN hHonest h_ids
   obtain ⟨r₁, hr₁_ge, k', hk'_ge, h_committed⟩ := mli.three_consec_commit (r + 3) k₀ h_gst
   have h_r₁_gt : r₁ > r + 2 := Nat.lt_of_succ_le hr₁_ge
   exact ⟨k', hk'_ge, mli.backward_induction r r₁ k' h_r₁_gt h_committed⟩
@@ -442,7 +523,10 @@ theorem lemma11_eventual_decision
     (system : BlockSynchroniserSystem)
     (time : TimeMap)
     (h_time : time.WellFormed)
-    (h_sync : PartiallySynchronous system (belugaTrace system) time) :
+    (h_sync : PartiallySynchronous system (belugaTrace system) time)
+    (hN : system.n = 3 * system.f + 1)
+    (hHonest : (system.validators.filter (fun p => p.2 = true)).length = 2 * system.f + 1)
+    (h_ids : ∀ i < system.n, ∃ pair ∈ system.validators, pair.1 = i) :
     ∀ r,
       ∀ k₀, time k₀ ≥ system.GST →
         ∃ k', k' ≥ k₀ ∧
@@ -450,7 +534,7 @@ theorem lemma11_eventual_decision
             isLeaderBlock system B_L → B_L.r = r →
             directDecide system (belugaTrace system k') B_L ≠ Decision.Undecided) := by
   intro r k₀ h_gst
-  exact eventual_decision_core system time h_time h_sync r k₀ h_gst
+  exact eventual_decision_core system time h_time h_sync hN hHonest h_ids r k₀ h_gst
 
 /-- From `2f+1` references by distinct validators, at least `f+1` are honest
 (quorum argument: at most `f` are Byzantine). -/
@@ -459,6 +543,9 @@ lemma at_least_f_plus_one_honest_referencers
     (hids : ValidIds system)
     (time : TimeMap) (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
+    (hN : system.n = 3 * system.f + 1)
+    (hHonest : (system.validators.filter (fun p => p.2 = true)).length = 2 * system.f + 1)
+    (h_ids : ∀ i < system.n, ∃ pair ∈ system.validators, pair.1 = i)
     (B : Block) (k₀ : ℕ)
     (h_refs : ((((belugaTrace system k₀).blocks).filter (fun B' =>
         decide (B'.r > B.r) && B'.parents.contains B.d)
@@ -510,7 +597,7 @@ lemma at_least_f_plus_one_honest_referencers
     -- |authors| ≥ 2f+1 and at most f are Byzantine → ≥ f+1 honest.
     have h_byzantine_bound : (authors.filter (fun vid =>
         !isHonestValidator system vid)).length ≤ system.f :=
-      (belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync).byz_bound
+      (belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync hN hHonest h_ids).byz_bound
         authors h_authors_nodup h_authors_registered
     have h_partition : honest_authors.length +
         (authors.filter (fun vid => !isHonestValidator system vid)).length
@@ -542,6 +629,9 @@ lemma honest_blocks_eventually_received
     (system : BlockSynchroniserSystem)
     (time : TimeMap) (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
+    (hN : system.n = 3 * system.f + 1)
+    (hHonest : (system.validators.filter (fun p => p.2 = true)).length = 2 * system.f + 1)
+    (h_ids : ∀ i < system.n, ∃ pair ∈ system.validators, pair.1 = i)
     (vid : ValidatorId) (d : BlockDigest)
     (h_honest : isHonestValidator system vid = true)
     (k₀ : ℕ) (h_gst : time k₀ ≥ system.GST)
@@ -551,7 +641,7 @@ lemma honest_blocks_eventually_received
         ∃ B' ∈ (belugaTrace system k₀).blocks,
           B'.author = v ∧ B'.parents.contains d = true) :
     ∃ k' ≥ k₀, HasAccepted (belugaTrace system k') vid d := by
-  exact (belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync).block_pull_liveness vid d k₀ h_honest h_gst h_available
+  exact (belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync hN hHonest h_ids).block_pull_liveness vid d k₀ h_honest h_gst h_available
 
 /--
 **Lemma 12 (paper Appendix D.2).**
@@ -572,7 +662,10 @@ theorem lemma12_referenced_accepted
     (hids : ValidIds system)
     (time : TimeMap)
     (h_time : time.WellFormed)
-    (h_sync : PartiallySynchronous system (belugaTrace system) time) :
+    (h_sync : PartiallySynchronous system (belugaTrace system) time)
+    (hN : system.n = 3 * system.f + 1)
+    (hHonest : (system.validators.filter (fun p => p.2 = true)).length = 2 * system.f + 1)
+    (h_ids : ∀ i < system.n, ∃ pair ∈ system.validators, pair.1 = i) :
     ∀ (B : Block) (vid : ValidatorId),
       isHonestValidator system vid = true →
       ∀ k₀, time k₀ ≥ system.GST →
@@ -583,7 +676,7 @@ theorem lemma12_referenced_accepted
   intro B vid h_honest k₀ h_gst h_refs
   -- Step 1: At least f+1 honest validators reference B (quorum argument).
   obtain ⟨honest_refs, h_count, h_props⟩ :=
-    at_least_f_plus_one_honest_referencers system hids time h_time h_sync B k₀ h_refs
+    at_least_f_plus_one_honest_referencers system hids time h_time h_sync hN hHonest h_ids B k₀ h_refs
   -- Step 2: These f+1 honest blocks form an ImPoA certificate.
   have h_available : ∃ honest_refs' : List ValidatorId,
       honest_refs'.length ≥ system.f + 1 ∧
@@ -593,7 +686,7 @@ theorem lemma12_referenced_accepted
     exact ⟨honest_refs, h_count, fun v hv => by
       obtain ⟨h_hon, B', hB'_mem, hB'_auth, _, hB'_ref⟩ := h_props v hv
       exact ⟨h_hon, B', hB'_mem, hB'_auth, hB'_ref⟩⟩
-  exact honest_blocks_eventually_received system time h_time h_sync
+  exact honest_blocks_eventually_received system time h_time h_sync hN hHonest h_ids
     vid B.d h_honest k₀ h_gst h_available
 
 /-- After GST, any to-commit leader block is referenced by `2f+1` subsequent
@@ -637,13 +730,16 @@ lemma honest_validator_eventually_accepts
     (system : BlockSynchroniserSystem)
     (time : TimeMap) (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
+    (hN : system.n = 3 * system.f + 1)
+    (hHonest : (system.validators.filter (fun p => p.2 = true)).length = 2 * system.f + 1)
+    (h_ids : ∀ i < system.n, ∃ pair ∈ system.validators, pair.1 = i)
     (vid_acc vid_h : ValidatorId)
     (h_acc_honest : isHonestValidator system vid_acc = true)
     (h_h_honest : isHonestValidator system vid_h = true)
     (B : Block) (k : ℕ) (h_gst : time k ≥ system.GST)
     (h_accepted : HasAccepted (belugaTrace system k) vid_acc B.d) :
     ∃ k' ≥ k, HasAccepted (belugaTrace system k') vid_h B.d := by
-  exact (belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync).honest_eventually_accepts vid_acc vid_h B k h_acc_honest h_h_honest h_gst h_accepted
+  exact (belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync hN hHonest h_ids).honest_eventually_accepts vid_acc vid_h B k h_acc_honest h_h_honest h_gst h_accepted
 
 -- The previous `accepted_implies_in_order` helper was a thin wrapper
 -- around `accepted_implies_in_order_axiom`; both are now superseded
@@ -674,7 +770,10 @@ theorem theorem6_consensus_liveness
     (hids : ValidIds system)
     (time : TimeMap)
     (h_time : time.WellFormed)
-    (h_sync : PartiallySynchronous system (belugaTrace system) time) :
+    (h_sync : PartiallySynchronous system (belugaTrace system) time)
+    (hN : system.n = 3 * system.f + 1)
+    (hHonest : (system.validators.filter (fun p => p.2 = true)).length = 2 * system.f + 1)
+    (h_ids : ∀ i < system.n, ∃ pair ∈ system.validators, pair.1 = i) :
     ∀ vid_acc, isHonestValidator system vid_acc = true →
     ∀ k, time k ≥ system.GST →
     ∀ B, B ∈ (belugaTrace system k).blocks →
@@ -685,7 +784,7 @@ theorem theorem6_consensus_liveness
   intro vid_acc h_acc_honest k h_gst B h_B_in h_accepted tx h_tx vid_h h_vid_h_honest
   -- Step 1: Beluga availability — vid_h eventually accepts B.
   obtain ⟨k', hk_ge, h_acc'⟩ :=
-    honest_validator_eventually_accepts system time h_time h_sync
+    honest_validator_eventually_accepts system time h_time h_sync hN hHonest h_ids
       vid_acc vid_h h_acc_honest h_vid_h_honest B k h_gst h_accepted
   -- Step 2: B persists in the trace state to k' by blocks-monotone.
   have h_B_in' : B ∈ (belugaTrace system k').blocks :=

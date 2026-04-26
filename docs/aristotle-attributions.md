@@ -819,6 +819,93 @@ embedding this prompt language in
 [`docs/aristotle-workflow.md`](aristotle-workflow.md) as the
 default for bundle-style delegations going forward.
 
+## Project 2300aa5f-5db8-467d-a007-c10380717265 (mysticeti-liveness-bundle-no-exfalso, partial)
+
+**Submitted.** 2026-04-26 ~19:30 SGT. Resubmission after `03f5fe3f`'s
+ex-falso trivialisation rejection (Gotcha 23).
+**Result.** `COMPLETE_WITH_ERRORS` ~1h30m later. Partial: one
+conjunct closed, architectural fix landed, 8 deep liveness
+conjuncts left as `sorry`.
+
+### What was integrated
+
+- **`byz_bound_of_system_constraints`** (sorry-free helper). Proves
+  that any nodup list of registered validators has ≤ `f`
+  non-honest entries, derived from `hN + hHonest +
+  validatorCountCorrect`. The proof uses
+  `Finset.card_le_card` + `Finset.card_image_le` to inject the
+  non-honest-author finset into the non-honest-validator finset
+  (whose cardinality is exactly `f` by the
+  partition-of-validators argument).
+- **Architectural fix** of the bundle theorem signature: `hN`,
+  `hHonest`, `h_ids` moved from being theorem outputs (bundle
+  conjuncts that needed to be proved) to being theorem inputs
+  (system-level hypotheses). The bundle structure still carries
+  them as conjuncts — trivially passed through inside the
+  theorem body.
+- **Plumbing** through 15 downstream wrappers / helpers in the
+  same file: `honest_round_entry_within_3delta`,
+  `leader_block_disseminated_within_delta`,
+  `honest_references_leader_within_4delta`,
+  `lemma8_leader_referenced`, `lemma9_honest_certificate`,
+  `three_consecutive_honest_direct_commit`,
+  `backward_induction_decides_earlier_rounds`,
+  `eventual_decision_core`, `lemma11_eventual_decision`,
+  `at_least_f_plus_one_honest_referencers`,
+  `honest_blocks_eventually_received`,
+  `lemma12_referenced_accepted`,
+  `honest_validator_eventually_accepts`,
+  `theorem6_consensus_liveness`, plus the bundle theorem itself.
+
+### What was *not* integrated
+
+The 8 liveness conjuncts of the bundle remain `sorry`'d:
+`honest_round_entry`, `leader_propose`, `honest_ref_leader`,
+`honest_certify_leader`, `three_consec_commit`,
+`backward_induction`, `block_pull_liveness`,
+`honest_eventually_accepts`. These are paper §D.2 deep
+liveness properties requiring real inductive trace analysis —
+the load-bearing post-GST liveness work.
+
+### Anti-trivialisation prompt held
+
+This was the second round to use the strengthened bundle prompt
+(c2ca4a2e was the first), and the first to test the *no-ex-falso
+clause* added after `03f5fe3f`. Aristotle complied: no ex-falso,
+no circular hypotheses, real `byz_bound` proof rather than
+ex-falso exploit. Recommend keeping this language for all
+future bundle delegations.
+
+### Side effects
+
+- No `import Mathlib` / `import Mathlib.Tactic` widening; imports
+  preserved as expected.
+- No `exact?` placeholders.
+- One project-wide net effect: sorry-bookkeeping rebalanced from
+  "1 bundle theorem with `sorry` body" to "1 bundle theorem with
+  8 named-conjunct sorries". Same underlying work to do, but now
+  the work is *named and individually delegable*.
+
+### Verifier confirmation
+
+`lake build` passes. Total project sorry count: 12 (4 in
+in-flight Beluga §5 bundle `e8212038` + 8 in this Mysticeti
+liveness bundle).
+
+### Notes — pattern: incremental bundle filling
+
+Lesson for the workflow: when a bundle has too many conjuncts of
+mixed difficulty (here, 4 system-level facts + 8 deep liveness
+proofs), delegating "fill all 12" produces either a trivialisation
+attempt (Gotcha 22 / 23) or — under stricter prompts — a partial
+where the easy parts get done and the hard parts stay sorry'd.
+Both outcomes are recoverable: trivialisation triggers
+selective integration; partial-fill is just a smaller bite. But
+in both cases the next step is to *narrow* — submit subsets of
+the bundle individually. The 12-conjunct bundle was right as a
+*structural* device (gives the file 1 sorry instead of 11) but
+wrong as a *single delegation unit*.
+
 ## Future projects
 
 When a new Aristotle submission completes and is integrated, append
