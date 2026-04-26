@@ -436,6 +436,39 @@ L1 (`honest_round_sync`) cannot be derived from these invariants
 the L1 sorry below for the obstruction (gap-1 transient states
 between adjacent round advances). -/
 
+/-! ### Side conditions threaded through the bundle
+
+Two paper-§2 side conditions surface in nearly every theorem in
+this file. Naming them lets the public signatures stay readable
+and centralizes their justification. -/
+
+/-- BFT honest-count side condition (paper §2). T3 (round_progression)
+and T4 (round_termination) both need to count `2f + 1` distinct
+honest validators that propose / accept; the bundle is vacuously
+satisfied otherwise (`SchedulerFairness` ranges over honest
+validators but is trivial when the honest set is empty).
+
+We take the **lower-bound form** `≥ 2 * f + 1` rather than the
+exact `= 2 * f + 1` form the rest of the project tends to use:
+- Paper §2 only commits to `f < n / 3` (Byzantine strictly
+  fewer than a third), from which honest count is `n - f > 2f`,
+  i.e., honest ≥ 2f + 1.
+- The exact equality follows only under F-2's pinning of
+  `n = 3f + 1` (a notational tightening we recommend the paper
+  adopt, but not yet committed to globally in this bundle).
+- T3 / T4 only need the lower bound (counting argument).
+Using `≥` keeps the bundle independent of F-2's pinning while
+still being directly supported by the paper text. -/
+abbrev HonestBFTBound (system : BlockSynchroniserSystem) : Prop :=
+  (system.validators.filter (fun p => p.2 = true)).length ≥ 2 * system.f + 1
+
+/-- Paper §2 implicit: validator IDs are distinct (one record per
+registered validator). Threaded through the trace via
+`belugaTrace_validators_nodup`. Needed by T3/T4 to identify
+the `findSome?` actor with the `find?`-target. -/
+abbrev ValidatorsNodup (system : BlockSynchroniserSystem) : Prop :=
+  (system.validators.map Prod.fst).Nodup
+
 /-
 Operations emitted by `step` only grow `emittedOperations` (monotone).
 Specifically, every operation in `s.emittedOperations` is also in
@@ -570,7 +603,7 @@ identification. Self-inductive (no other invariants required).
 -/
 private lemma belugaTrace_validators_nodup
     (system : BlockSynchroniserSystem)
-    (h_sys_nodup : (system.validators.map Prod.fst).Nodup) (k : Nat) :
+    (h_sys_nodup : ValidatorsNodup system) (k : Nat) :
     ((belugaTrace system k).validators.map Prod.fst).Nodup := by
   induction k with
   | zero =>
@@ -791,7 +824,7 @@ extracted by `step_advance_implies_hasProposedFor`.
 -/
 private lemma proposed_for_lt_currentRound
     (system : BlockSynchroniserSystem)
-    (h_sys_nodup : (system.validators.map Prod.fst).Nodup) :
+    (h_sys_nodup : ValidatorsNodup system) :
     ∀ k vid bv, (belugaTrace system k).getValidator vid = some bv →
       ∀ r' < bv.currentRound, hasProposedFor (belugaTrace system k) vid r' = true := by
   intro k
@@ -896,6 +929,154 @@ private lemma hasProposedFor_iff_mem (s : BelugaState)
     refine ⟨ValidatorOperation.block_propose vid B r, h_mem, ?_⟩
     simp +decide
 
+/- Generic version of `getValidator_of_mem` for any `(α × β)` list with
+nodup-by-fst. Used to identify the find?-result on `system.validators`
+(which is `(ValidatorId × Bool)`) and on `BelugaState.validators`. -/
+private lemma find_of_mem_nodup_fst {α β : Type*} [BEq α] [LawfulBEq α]
+    (l : List (α × β)) (a : α) (b : β)
+    (h_nodup : (l.map Prod.fst).Nodup) (h_mem : (a, b) ∈ l) :
+    l.find? (fun x => x.1 == a) = some (a, b) := by
+  induction l with
+  | nil => simp at h_mem
+  | cons hd tl ih =>
+    rw [List.find?_cons]
+    cases h_match : hd.1 == a with
+    | false =>
+      rw [List.mem_cons] at h_mem
+      rcases h_mem with h_eq | h_in
+      · exfalso
+        have : hd.1 = a := by rw [← h_eq]
+        simp [this] at h_match
+      · rw [List.map_cons] at h_nodup
+        exact ih h_nodup.of_cons h_in
+    | true =>
+      rw [List.mem_cons] at h_mem
+      rcases h_mem with h_eq | h_in
+      · exact congrArg some h_eq.symm
+      · exfalso
+        rw [List.map_cons] at h_nodup
+        have h_hd_eq : hd.1 = a := by simpa using h_match
+        apply h_nodup.notMem
+        rw [h_hd_eq]
+        exact List.mem_map.mpr ⟨(a, b), h_in, rfl⟩
+
+/- For a pair `(vid, true)` in `system.validators` with nodup-by-id,
+`isHonestValidator system vid = true`. -/
+private lemma isHonestValidator_of_mem
+    (system : BlockSynchroniserSystem) (vid : ValidatorId)
+    (h_nodup : ValidatorsNodup system)
+    (h_mem : (vid, true) ∈ system.validators) :
+    isHonestValidator system vid = true := by
+  unfold isHonestValidator BlockSynchroniserSystem.isHonest
+  have h_find : system.validators.find? (fun (id, _) => id == vid) = some (vid, true) :=
+    find_of_mem_nodup_fst system.validators vid true h_nodup h_mem
+  rw [← find_beq_eq_find, h_find]
+
+/- T3 (paper §5): post-GST round-progression. For every round, there
+is a step at which ≥ 2f+1 distinct honest validators have proposed
+for that round. Iterates `SchedulerFairness` to bring all honest
+validators past the target round, then extracts their propose ops
+via `proposed_for_lt_currentRound` and counts via `toFinset.card`. -/
+private lemma round_progression_aux
+    (system : BlockSynchroniserSystem)
+    (time : TimeMap) (h_time : time.WellFormed)
+    (h_fair : SchedulerFairness system time)
+    (hHonest : HonestBFTBound system)
+    (h_sys_nodup : ValidatorsNodup system) :
+    RoundProgression system (belugaTrace system) := by
+  intro round
+  unfold HonestBFTBound at hHonest
+  set honest_pairs := system.validators.filter (fun p => p.2 = true) with h_hp_def
+  have h_hp_ne : honest_pairs ≠ [] := by
+    intro h_e
+    rw [h_e] at hHonest
+    simp at hHonest
+  have h_pair_w_mem : honest_pairs.head h_hp_ne ∈ honest_pairs := List.head_mem _
+  set pair_w := honest_pairs.head h_hp_ne with h_pw_def
+  have h_pw_filter := List.mem_filter.mp h_pair_w_mem
+  have h_pw_in : pair_w ∈ system.validators := h_pw_filter.1
+  have h_pw_true : pair_w.2 = true := by simpa using h_pw_filter.2
+  set vid_w := pair_w.1
+  have h_w_pair_eq : (vid_w, true) ∈ system.validators := by
+    have h_eq : pair_w = (vid_w, true) := by
+      apply Prod.ext
+      · rfl
+      · exact h_pw_true
+    rw [← h_eq]; exact h_pw_in
+  have h_w_honest : isHonestValidator system vid_w = true :=
+    isHonestValidator_of_mem system vid_w h_sys_nodup h_w_pair_eq
+  obtain ⟨k₀, h_k₀_gst⟩ := h_time.2 system.GST
+  obtain ⟨k, _, _, h_all⟩ :=
+    all_honest_eventually_at_round system time h_time h_fair vid_w h_w_honest
+      k₀ h_k₀_gst (round + 1)
+  refine ⟨k, ?_⟩
+  set honest_vids := honest_pairs.map Prod.fst with h_hv_def
+  have h_hv_len : honest_vids.length ≥ 2 * system.f + 1 := by
+    rw [h_hv_def, List.length_map]; exact hHonest
+  have h_hp_nodup_records : honest_pairs.Nodup := by
+    rw [h_hp_def]
+    apply List.Nodup.filter
+    exact List.Nodup.of_map _ h_sys_nodup
+  have h_hv_nodup : honest_vids.Nodup := by
+    rw [h_hv_def]
+    apply List.Nodup.map_on _ h_hp_nodup_records
+    intro x hx y hy h_eq
+    have hx_in : x ∈ system.validators := (List.mem_filter.mp hx).1
+    have hy_in : y ∈ system.validators := (List.mem_filter.mp hy).1
+    have hx_find : system.validators.find? (fun z => z.1 == x.1) = some x :=
+      find_of_mem_nodup_fst system.validators x.1 x.2 h_sys_nodup hx_in
+    have hy_find : system.validators.find? (fun z => z.1 == y.1) = some y :=
+      find_of_mem_nodup_fst system.validators y.1 y.2 h_sys_nodup hy_in
+    rw [h_eq] at hx_find
+    rw [hx_find] at hy_find
+    grind
+  set proposers_raw := (opsAt (belugaTrace system) k).filterMap (fun op =>
+    match op with
+    | .block_propose vid _ r => if r = round then some vid else none
+    | _ => none) with h_pr_def
+  have h_subset : ∀ vid ∈ honest_vids, vid ∈ proposers_raw := by
+    intro vid h_vid_mem
+    obtain ⟨pair, h_pair_mem, h_pair_fst⟩ := List.mem_map.mp h_vid_mem
+    have h_pair_filter := List.mem_filter.mp h_pair_mem
+    have h_pair_in : pair ∈ system.validators := h_pair_filter.1
+    have h_pair_true : pair.2 = true := by simpa using h_pair_filter.2
+    have h_vid_pair_in : (vid, true) ∈ system.validators := by
+      have h_pair_eq : pair = (vid, true) := by
+        apply Prod.ext
+        · exact h_pair_fst
+        · exact h_pair_true
+      rw [← h_pair_eq]; exact h_pair_in
+    have h_vid_honest : isHonestValidator system vid = true :=
+      isHonestValidator_of_mem system vid h_sys_nodup h_vid_pair_in
+    obtain ⟨bv, h_bv, h_bv_round⟩ := h_all vid h_vid_honest
+    have h_round_lt : round < bv.currentRound := by grind
+    have h_prop := proposed_for_lt_currentRound system h_sys_nodup k vid bv h_bv round h_round_lt
+    obtain ⟨B, h_op⟩ := (hasProposedFor_iff_mem _ vid round).mp h_prop
+    rw [h_pr_def]
+    apply List.mem_filterMap.mpr
+    refine ⟨ValidatorOperation.block_propose vid B round, h_op, ?_⟩
+    simp +decide
+  show proposers_raw.eraseDups.length ≥ 2 * system.f + 1
+  have h_fin_subset : honest_vids.toFinset ⊆ proposers_raw.toFinset := by
+    intro x hx
+    rw [List.mem_toFinset] at hx ⊢
+    exact h_subset x hx
+  have h_card_le : honest_vids.toFinset.card ≤ proposers_raw.toFinset.card :=
+    Finset.card_le_card h_fin_subset
+  have h_hv_card : honest_vids.toFinset.card = honest_vids.length :=
+    List.toFinset_card_of_nodup h_hv_nodup
+  have h_eraseDups_ge_toFinset : ∀ (l : List ValidatorId),
+      l.eraseDups.length ≥ l.toFinset.card := by
+    intro l
+    induction' l using List.reverseRecOn with l a ih
+    · rfl
+    · simp +decide [ List.eraseDups_append ]
+      by_cases h : a ∈ l.toFinset <;> simp_all +decide [ List.removeAll ]
+      exact Nat.lt_succ_of_le ‹_›
+  have h_pr_ge : proposers_raw.eraseDups.length ≥ proposers_raw.toFinset.card :=
+    h_eraseDups_ge_toFinset proposers_raw
+  omega
+
 
 
 /-! ## The Beluga §5 post-GST liveness invariant
@@ -992,31 +1173,8 @@ theorem belugaTrace_satisfies_post_gst_liveness
     (h_time : time.WellFormed)
     (_h_sync : PartiallySynchronous system (belugaTrace system) time)
     (h_fair : SchedulerFairness system time)
-    -- BFT honest-count side condition (paper §2). T3 (round_progression)
-    -- and T4 (round_termination) both need to count `2f + 1` distinct
-    -- honest validators that propose / accept; the bundle is
-    -- vacuously satisfied otherwise (`SchedulerFairness` ranges over
-    -- honest validators but is trivial when the honest set is empty).
-    --
-    -- We take the **lower-bound form** `≥ 2 * f + 1` rather than the
-    -- exact `= 2 * f + 1` form the rest of the project tends to use:
-    --   - Paper §2 only commits to `f < n / 3` (Byzantine strictly
-    --     fewer than a third), from which honest count is
-    --     `n - f > 2f`, i.e., honest ≥ 2f + 1.
-    --   - The exact equality follows only under F-2's pinning of
-    --     `n = 3f + 1` (a notational tightening we recommend the
-    --     paper adopt, but not yet committed to globally in this
-    --     bundle).
-    --   - T3 / T4 only need the lower bound (counting argument).
-    -- Using `≥` keeps the bundle independent of F-2's pinning while
-    -- still being directly supported by the paper text.
-    (hHonest : (system.validators.filter (fun p => p.2 = true)).length
-                ≥ 2 * system.f + 1)
-    -- Paper §2 implicit: validator IDs are distinct (one record per
-    -- registered validator). Threaded through the trace via
-    -- `belugaTrace_validators_nodup`. Needed by T3/T4 to identify
-    -- the `findSome?` actor with the `find?`-target.
-    (h_sys_nodup : (system.validators.map Prod.fst).Nodup) :
+    (hHonest : HonestBFTBound system)
+    (h_sys_nodup : ValidatorsNodup system) :
     BelugaPostGSTLiveness system time := by
   refine
     { honest_round_sync := ?_
@@ -1044,8 +1202,7 @@ theorem belugaTrace_satisfies_post_gst_liveness
     exact ⟨kc, hkc_lo, htime_kc, bvc, hbvc, hrnd_eq⟩
   · -- T1 (block_availability) — queued for delegation.
     sorry
-  · -- T3 (round_progression) — queued for delegation.
-    sorry
+  · exact round_progression_aux system time h_time h_fair hHonest h_sys_nodup
   · -- T4 (round_termination) — queued for delegation.
     sorry
 
@@ -1073,8 +1230,8 @@ theorem lemma1_honest_round_entry
     (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
     (h_fair : SchedulerFairness system time)
-    (hHonest : (system.validators.filter (fun p => p.2 = true)).length ≥ 2 * system.f + 1)
-    (h_sys_nodup : (system.validators.map Prod.fst).Nodup) :
+    (hHonest : HonestBFTBound system)
+    (h_sys_nodup : ValidatorsNodup system) :
     ∀ vid_ref r k₀, isHonestValidator system vid_ref = true →
       time k₀ ≥ system.GST →
       (∃ bv_ref, (belugaTrace system k₀).getValidator vid_ref = some bv_ref ∧
@@ -1093,8 +1250,8 @@ theorem lemma2_round_latency
     (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
     (h_fair : SchedulerFairness system time)
-    (hHonest : (system.validators.filter (fun p => p.2 = true)).length ≥ 2 * system.f + 1)
-    (h_sys_nodup : (system.validators.map Prod.fst).Nodup) :
+    (hHonest : HonestBFTBound system)
+    (h_sys_nodup : ValidatorsNodup system) :
     ∀ vid r k,
       isHonestValidator system vid = true →
       time k ≥ system.GST →
@@ -1111,8 +1268,8 @@ theorem theorem1_block_availability
     (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
     (h_fair : SchedulerFairness system time)
-    (hHonest : (system.validators.filter (fun p => p.2 = true)).length ≥ 2 * system.f + 1)
-    (h_sys_nodup : (system.validators.map Prod.fst).Nodup) :
+    (hHonest : HonestBFTBound system)
+    (h_sys_nodup : ValidatorsNodup system) :
     BlockAvailability system (belugaTrace system) :=
   (belugaTrace_satisfies_post_gst_liveness system time h_time h_sync h_fair hHonest h_sys_nodup).block_availability
 
@@ -1152,8 +1309,8 @@ theorem theorem3_round_progression
     (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
     (h_fair : SchedulerFairness system time)
-    (hHonest : (system.validators.filter (fun p => p.2 = true)).length ≥ 2 * system.f + 1)
-    (h_sys_nodup : (system.validators.map Prod.fst).Nodup) :
+    (hHonest : HonestBFTBound system)
+    (h_sys_nodup : ValidatorsNodup system) :
     RoundProgression system (belugaTrace system) :=
   (belugaTrace_satisfies_post_gst_liveness system time h_time h_sync h_fair hHonest h_sys_nodup).round_progression
 
@@ -1164,8 +1321,8 @@ theorem theorem4_round_termination
     (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
     (h_fair : SchedulerFairness system time)
-    (hHonest : (system.validators.filter (fun p => p.2 = true)).length ≥ 2 * system.f + 1)
-    (h_sys_nodup : (system.validators.map Prod.fst).Nodup) :
+    (hHonest : HonestBFTBound system)
+    (h_sys_nodup : ValidatorsNodup system) :
     RoundTermination system (belugaTrace system) :=
   (belugaTrace_satisfies_post_gst_liveness system time h_time h_sync h_fair hHonest h_sys_nodup).round_termination
 
@@ -1181,9 +1338,8 @@ theorem belugaTrace_isBlockSynchronizer
     (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
     (h_fair : SchedulerFairness system time)
-    (hHonest : (system.validators.filter (fun p => p.2 = true)).length
-                ≥ 2 * system.f + 1)
-    (h_sys_nodup : (system.validators.map Prod.fst).Nodup) :
+    (hHonest : HonestBFTBound system)
+    (h_sys_nodup : ValidatorsNodup system) :
     BlockSynchronizer system (belugaTrace system) :=
   ⟨theorem3_round_progression system time h_time h_sync h_fair hHonest h_sys_nodup,
    theorem4_round_termination system time h_time h_sync h_fair hHonest h_sys_nodup,
