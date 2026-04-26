@@ -229,6 +229,195 @@ theorem currentTime_tracks_time (system : BlockSynchroniserSystem)
       time (k + 1)
     exact networkStep_currentTime system (networkTrace system time k) (time (k + 1))
 
+/-! ## Network-trace structural invariants
+
+These invariants are the network-aware analogues of `belugaTrace`'s
+existing structural invariants (in `Beluga/Theorems.lean`). They
+support the round-entry / scheduler-fairness arguments below. -/
+
+/-- `updateValidator` preserves the validator-id list. -/
+private lemma updateValidator_preserves_ids
+    (s : BelugaState) (vid_a : ValidatorId) (f : BelugaValidator → BelugaValidator) :
+    (updateValidator s vid_a f).validators.map Prod.fst = s.validators.map Prod.fst := by
+  unfold updateValidator
+  simp only
+  -- The map of `.1` over a list-map that preserves `.1` (only changes `.2`)
+  -- is the same as the original `.1` map.
+  rw [List.map_map]
+  apply List.map_congr_left
+  intro p _
+  simp only [Function.comp]
+  by_cases h : p.1 = vid_a <;> simp [h]
+
+/-- `doPropose` preserves the validator-id list. -/
+private lemma doPropose_preserves_ids
+    (system : BlockSynchroniserSystem) (s : BelugaState)
+    (vid : ValidatorId) (r : Round) :
+    (doPropose system s vid r).validators.map Prod.fst = s.validators.map Prod.fst := by
+  rfl
+
+/-- `doAccept` preserves the validator-id list (via `updateValidator`). -/
+private lemma doAccept_preserves_ids
+    (s : BelugaState) (vid_a : ValidatorId) (B : Block) :
+    (doAccept s vid_a B).validators.map Prod.fst = s.validators.map Prod.fst := by
+  unfold doAccept
+  exact updateValidator_preserves_ids _ _ _
+
+/-- `doStore` preserves the validator-id list. -/
+private lemma doStore_preserves_ids
+    (s : BelugaState) (vid_a : ValidatorId) (B : Block) :
+    (doStore s vid_a B).validators.map Prod.fst = s.validators.map Prod.fst := by
+  unfold doStore
+  exact updateValidator_preserves_ids _ _ _
+
+/-- The validator-id list is preserved across `networkTryActFor`. The
+network-trace's nodup-by-id invariant is preserved by every branch
+(propose / accept / store / advance), since each branch uses
+`updateValidator` (or doesn't touch validators at all). -/
+private lemma networkTryActFor_preserves_ids
+    (system : BlockSynchroniserSystem) (s : NetworkState)
+    (vid_a : ValidatorId) (bv_a : BelugaValidator) (s' : NetworkState)
+    (h_act : networkTryActFor system s vid_a bv_a = some s') :
+    s'.base.validators.map Prod.fst = s.base.validators.map Prod.fst := by
+  unfold networkTryActFor at h_act
+  simp only at h_act
+  split at h_act
+  · -- propose
+    injection h_act with h_eq
+    rw [← h_eq]
+    show (doPropose system s.base vid_a bv_a.currentRound).validators.map Prod.fst = _
+    exact doPropose_preserves_ids system s.base vid_a bv_a.currentRound
+  · split at h_act
+    · -- accept
+      rename_i B_acc _
+      injection h_act with h_eq
+      rw [← h_eq]
+      exact doAccept_preserves_ids s.base vid_a B_acc
+    · split at h_act
+      · -- store
+        rename_i _ B_sto _
+        injection h_act with h_eq
+        rw [← h_eq]
+        exact doStore_preserves_ids s.base vid_a B_sto
+      · split at h_act
+        · injection h_act with h_eq
+          rw [← h_eq]
+          exact updateValidator_preserves_ids s.base vid_a _
+        · contradiction
+
+/-- `deliverPending` preserves the validator-id list (since it
+preserves `base.validators` entirely). The `appendToInbox` helper
+only modifies `inboxes`, never `base`. -/
+private lemma deliverPending_preserves_ids (s : NetworkState) :
+    s.deliverPending.base.validators.map Prod.fst =
+    s.base.validators.map Prod.fst := by
+  unfold NetworkState.deliverPending
+  -- The foldl over `appendToInbox` doesn't change `base.validators`.
+  have aux : ∀ (l : List DeliveryEvent) (s' : NetworkState),
+      s'.base.validators.map Prod.fst = s.base.validators.map Prod.fst →
+      (l.foldl (fun acc e => acc.appendToInbox e.recipient e.op) s').base.validators.map Prod.fst
+        = s.base.validators.map Prod.fst := by
+    intro l
+    induction l with
+    | nil => intro _ h; exact h
+    | cons hd tl ih =>
+      intro s' h
+      apply ih
+      simp [NetworkState.appendToInbox, h]
+  generalize hp : s.inflight.partition _ = p
+  obtain ⟨toDeliver, stillInflight⟩ := p
+  simp only
+  exact aux toDeliver _ rfl
+
+/-- `networkStep` preserves the validator-id list. -/
+private lemma networkStep_preserves_ids
+    (system : BlockSynchroniserSystem) (s : NetworkState) (newTime : Nat) :
+    (networkStep system s newTime).base.validators.map Prod.fst =
+    s.base.validators.map Prod.fst := by
+  unfold networkStep
+  simp only
+  cases h_fs : ({ s with currentTime := newTime } : NetworkState).deliverPending.base.validators.findSome?
+      (fun x => networkTryActFor system
+        ({ s with currentTime := newTime } : NetworkState).deliverPending x.1 x.2) with
+  | none =>
+    simp only
+    rw [deliverPending_preserves_ids]
+  | some s'' =>
+    simp only
+    rw [List.findSome?_eq_some_iff] at h_fs
+    obtain ⟨_, ⟨vid_a, bv_a⟩, _, _, h_act, _⟩ := h_fs
+    have := networkTryActFor_preserves_ids system _ vid_a bv_a s'' h_act
+    rw [this]
+    rw [deliverPending_preserves_ids]
+
+/-- **Trace invariant**: at every step, `networkTrace`'s base
+validators have the same id list as `system.validators`. Combined
+with `system.validatorsNodup`, this gives nodup-by-id at every
+step. -/
+theorem networkTrace_validators_ids
+    (system : BlockSynchroniserSystem) (time : Nat → Nat) (k : Nat) :
+    (networkTrace system time k).base.validators.map Prod.fst =
+    system.validators.map Prod.fst := by
+  induction k with
+  | zero =>
+    show ({ NetworkState.init system with currentTime := time 0 }
+      : NetworkState).base.validators.map Prod.fst = _
+    unfold NetworkState.init BelugaState.init
+    simp [List.map_map]
+  | succ k ih =>
+    show (networkStep system (networkTrace system time k) (time (k + 1))).base.validators.map Prod.fst = _
+    rw [networkStep_preserves_ids]
+    exact ih
+
+/-- **Network-trace nodup-by-id invariant.** -/
+theorem networkTrace_validators_nodup
+    (system : BlockSynchroniserSystem) (time : Nat → Nat) (k : Nat) :
+    ((networkTrace system time k).base.validators.map Prod.fst).Nodup := by
+  rw [networkTrace_validators_ids]
+  exact system.validatorsNodup
+
+/-- Generic helper: given `(vid, bv) ∈ l` and `l.map Prod.fst` is
+Nodup, then `l.find? (·.1 == vid) = some (vid, bv)`. -/
+private lemma find?_of_mem_nodup
+    {α β : Type*} [BEq α] [LawfulBEq α] (l : List (α × β))
+    (a : α) (b : β) (h_mem : (a, b) ∈ l)
+    (h_nodup : (l.map Prod.fst).Nodup) :
+    l.find? (fun x => x.1 == a) = some (a, b) := by
+  induction l with
+  | nil => simp at h_mem
+  | cons hd tl ih =>
+    rw [List.find?_cons]
+    cases h_match : hd.1 == a with
+    | false =>
+      rw [List.mem_cons] at h_mem
+      rcases h_mem with h_eq | h_in
+      · exfalso
+        have : hd.1 = a := by rw [← h_eq]
+        simp [this] at h_match
+      · rw [List.map_cons] at h_nodup
+        exact ih h_in h_nodup.of_cons
+    | true =>
+      rw [List.mem_cons] at h_mem
+      rcases h_mem with h_eq | h_in
+      · exact congrArg some h_eq.symm
+      · exfalso
+        rw [List.map_cons] at h_nodup
+        have h_hd_eq : hd.1 = a := by simpa using h_match
+        apply h_nodup.notMem
+        rw [h_hd_eq]
+        exact List.mem_map.mpr ⟨(a, b), h_in, rfl⟩
+
+/-- Under network-trace nodup, if `(vid_a, bv_a) ∈ s.base.validators`,
+then `s.base.getValidator vid_a = some bv_a`. -/
+theorem networkTrace_getValidator_of_mem
+    (system : BlockSynchroniserSystem) (time : Nat → Nat) (k : Nat)
+    (vid_a : ValidatorId) (bv_a : BelugaValidator)
+    (h_mem : (vid_a, bv_a) ∈ (networkTrace system time k).base.validators) :
+    (networkTrace system time k).base.getValidator vid_a = some bv_a := by
+  unfold BelugaState.getValidator
+  rw [find?_of_mem_nodup _ _ _ h_mem (networkTrace_validators_nodup system time k)]
+  rfl
+
 /-! ## Phase E.2: round-entry monotonicity (structural)
 
 The invariant `bv.roundEntryTime ≤ s.currentTime` holds at every
@@ -407,23 +596,84 @@ theorem roundEntryTime_le_currentTime
   | succ k ih =>
     intro vid bv h_get
     rw [currentTime_tracks_time]
-    -- Trace at k+1 = networkStep on trace k.
+    -- Inductive step: networkStep advances currentTime to time(k+1),
+    -- runs deliverPending (preserves base.validators), then
+    -- networkTryActFor (preserves roundEntry-bound by Sorry 1, proved above).
+    -- The IH gives the invariant at trace k under currentTime = time k;
+    -- monotonicity of `time` lifts the bound to time(k+1).
     show bv.roundEntryTime ≤ time (k + 1)
-    -- IH: for any vid' bv', getValidator at trace k = some bv' → bv'.rt ≤ currentTime at trace k = time k.
-    have h_ih_at_time_k : ∀ vid' bv',
-        (networkTrace system time k).base.getValidator vid' = some bv' →
-        bv'.roundEntryTime ≤ time k := by
+    have h_trace_succ : networkTrace system time (k + 1) =
+        networkStep system (networkTrace system time k) (time (k + 1)) := rfl
+    rw [h_trace_succ] at h_get
+    -- The IH (with currentTime_tracks_time) gives a `time k` bound.
+    -- Lift to `time (k+1)` via monotonicity at the post-currentTime-bump
+    -- state (s_pre below).
+    set s_pre : NetworkState := { networkTrace system time k with
+      currentTime := time (k + 1) } with h_s_pre
+    have h_inv_pre : ∀ vid' bv',
+        s_pre.base.getValidator vid' = some bv' →
+        bv'.roundEntryTime ≤ s_pre.currentTime := by
       intro vid' bv' h_get'
-      have := ih vid' bv' h_get'
-      rw [currentTime_tracks_time] at this
-      exact this
-    -- networkStep system (trace k) (time (k+1)) advances currentTime to time(k+1),
-    -- runs deliverPending (preserves base), then networkTryActFor.
-    -- networkTryActFor_preserves_roundEntry_bound gives the result.
-    -- For non-actors and non-action: bv inherited; bv.roundEntryTime ≤ time k ≤ time (k+1).
-    -- For the actor in advance: bv.roundEntryTime = currentTime = time (k+1). ✓.
-    -- This relies on networkTryActFor_preserves_roundEntry_bound (which has a sorry).
-    sorry
+      have h_orig : (networkTrace system time k).base.getValidator vid' = some bv' :=
+        h_get'
+      have h_ih := ih vid' bv' h_orig
+      rw [currentTime_tracks_time] at h_ih
+      calc bv'.roundEntryTime ≤ time k := h_ih
+        _ ≤ time (k + 1) := h_mono _ _ (Nat.le_succ _)
+        _ = s_pre.currentTime := rfl
+    -- After deliverPending: base.validators unchanged, currentTime unchanged.
+    have h_inv_del : ∀ vid' bv',
+        s_pre.deliverPending.base.getValidator vid' = some bv' →
+        bv'.roundEntryTime ≤ s_pre.deliverPending.currentTime := by
+      intro vid' bv' h_get'
+      rw [NetworkState.deliverPending_preserves_currentTime]
+      apply h_inv_pre vid' bv'
+      unfold BelugaState.getValidator at h_get' ⊢
+      rw [NetworkState.deliverPending_preserves_base_validators] at h_get'
+      exact h_get'
+    -- Unfold networkStep.
+    show bv.roundEntryTime ≤ time (k + 1)
+    unfold networkStep at h_get
+    simp only at h_get
+    -- s_pre = { networkTrace ... with currentTime := time(k+1) } matches what
+    -- networkStep constructs internally.
+    -- The trace at k+1 is networkStep system (...) (time(k+1)).
+    -- networkStep applies findSome? over the post-deliverPending state's validators.
+    -- We use networkStep_currentTime to get s_pre.deliverPending base preserves
+    -- currentTime, then split on the findSome?.
+    -- The cleaner argument: the post-state is either s_pre.deliverPending (if
+    -- findSome? = none) or networkTryActFor's result (if some). Both preserve
+    -- the rt-bound at currentTime = time(k+1). We construct the proof by
+    -- showing the rt-bound holds for whatever the post-state is.
+    -- Use `split` on the match in h_get directly.
+    split at h_get
+    case h_1 s'' h_fs_some =>
+      -- some case: networkTryActFor produced s''.
+      rw [List.findSome?_eq_some_iff] at h_fs_some
+      obtain ⟨_, ⟨vid_a, bv_a⟩, _, h_split, h_act, _⟩ := h_fs_some
+      have h_a_mem : (vid_a, bv_a) ∈ s_pre.deliverPending.base.validators := by
+        rw [h_split]; simp +decide
+      have h_a_get : s_pre.deliverPending.base.getValidator vid_a = some bv_a := by
+        unfold BelugaState.getValidator
+        rw [find?_of_mem_nodup _ _ _ h_a_mem]
+        · rfl
+        · rw [NetworkState.deliverPending_preserves_base_validators]
+          show ((networkTrace system time k).base.validators.map Prod.fst).Nodup
+          exact networkTrace_validators_nodup system time k
+      have h_post := networkTryActFor_preserves_roundEntry_bound system
+        s_pre.deliverPending h_inv_del vid_a bv_a h_a_get s'' h_act vid bv h_get
+      have h_ct'' : s''.currentTime = s_pre.deliverPending.currentTime :=
+        networkTryActFor_preserves_currentTime system s_pre.deliverPending vid_a bv_a s'' h_act
+      rw [h_ct''] at h_post
+      rw [NetworkState.deliverPending_preserves_currentTime] at h_post
+      change bv.roundEntryTime ≤ s_pre.currentTime at h_post
+      exact h_post
+    case h_2 _ =>
+      -- none case: post-state is s_pre.deliverPending.
+      have h_le := h_inv_del vid bv h_get
+      rw [NetworkState.deliverPending_preserves_currentTime] at h_le
+      change bv.roundEntryTime ≤ s_pre.currentTime at h_le
+      exact h_le
 
 /-! ## Phase E.3: timeout firing -/
 
