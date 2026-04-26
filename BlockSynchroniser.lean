@@ -24,6 +24,7 @@ import BlockSynchroniser.Beluga.AdmissionInvariant
 import BlockSynchroniser.Beluga.Order
 import BlockSynchroniser.Beluga.Examples
 import BlockSynchroniser.Beluga.Theorems
+import BlockSynchroniser.Beluga.TheoremsHand
 import BlockSynchroniser.Beluga.PerformanceLemmas
 import BlockSynchroniser.Mysticeti.Consensus
 import BlockSynchroniser.Mysticeti.SafetyInvariant
