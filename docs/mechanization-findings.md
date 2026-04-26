@@ -652,6 +652,75 @@ protocol — flagging only because it surfaced as a confusion point.
 
 ---
 
+## F-12. §5 proof strategies: action-priority obviates ImPoA-based reasoning
+
+The paper's §5 proofs of T1 (block availability) and T2 (causal
+availability) lean on the ImPoA / pull-protocol mechanism — "the
+parent blocks are referenced by f+1 subsequent blocks → at least
+one honest stored them → pull → eventually accept". Our mechanized
+proofs of T1 and T2 do not need ImPoA at all.
+
+The reason is structural: when accept and store actions are
+priority-ordered (accept before store before round-advance, all
+above propose), the "eventually" claims of T1 and T2 collapse to
+single-step structural facts:
+
+- **T1** holds because store sits strictly above round-advance in
+  the action priority. At the next round-advance step, every
+  accepted-and-still-in-pool digest must already be stored
+  (otherwise the higher-priority store action would have fired).
+- **T2** holds because the accept rule itself requires
+  parent-acceptance before accepting a block. The accepted-digest
+  set is closed under causal-ancestor lookup at every step — no
+  eventual quantifier needed.
+
+The ImPoA-based reasoning in §4.3 is still required for the
+*runtime* of the protocol (it is what enables a validator to
+participate without having directly received every block); but it
+is not load-bearing for the *correctness* properties T1, T2. A
+reader trying to formalize from §5 may waste effort tracing the
+ImPoA argument through the T1 and T2 proofs.
+
+**Suggested paper change.** State T1 and T2 with the simpler
+action-priority argument (rewritten proof sketches in
+[`paper-additions-stage2.md`](paper-additions-stage2.md) §2.3,
+§2.4); preserve the ImPoA discussion in §4.3 as the
+*implementation* mechanism it is, decoupled from the safety/liveness
+proofs of §5.
+
+---
+
+## F-13. Accept-store atomicity: paper Figure 8 vs. action-split
+
+Paper Figure 8 (Appendix E) line 13 has `create_new_block` emitting
+both `block_accept_i` and `block_store_i` for the new block in a
+single procedure step. The §5 prose proofs implicitly assume this
+atomicity (e.g., T1's proof says "v_i must have stored B" as a
+direct consequence of having accepted B).
+
+If accept and store are instead taken as two distinct outputs (which
+the paper's §4 prose does, treating them as separately observed at
+different consumers — §4.4 "consensus" reads `block_accept`,
+"execution" reads `block_store`), T1's conclusion is no longer
+trivially true at the moment of acceptance: "eventually stores"
+requires at least one further protocol step.
+
+**Suggested paper change.** Either (a) make the atomicity explicit
+by collapsing accept and store into a single
+`block_accept_and_store` action in Figure 8, after which T1's
+conclusion holds at the step of acceptance and T1's proof is
+one sentence; or (b) split accept and store as separate actions
+and use the action-priority argument of F-12 for T1 (this matches
+our mechanization).
+
+The current paper presentation is mildly ambiguous: §4 prose
+treats accept and store as conceptually distinct, while Figure 8
+glues them into one step. This finding is invisible to a reader
+who does not try to derive T1 mechanically; the paper's prose
+proofs read fine without it.
+
+---
+
 ## Conventions
 
 - Findings get a stable identifier (`F-N`) the moment they are

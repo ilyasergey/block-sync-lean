@@ -261,8 +261,85 @@ honest-synchronous proxy for the AC quorum-advance condition. -/
 def allProposedFor (system : BlockSynchroniserSystem) (s : BelugaState) (r : Round) : Bool :=
   system.validators.all (fun (vid, _) => hasProposedFor s vid r)
 
+/-! ### `tryActFor` and the paper's pseudocode
+
+Paper Figure 8 (Appendix E) gives Beluga's full AC-based optimistic
+push protocol as the pseudocode for one validator `v_i`:
+
+```
+1: procedure create_new_block(r, B^{r-1})
+2:   Initialize a block B with B.r := r, B.author := i, ...
+3:   parents ← AC_parent_selection(r, B^{r-1})
+4:   B.parents ← digests of parents
+5:   B.weaklinks ← {B'.d | B' ∈ B^{r-1} \ parents is acceptable}
+6:   watermark ← []
+7:   for ∀ B' ∈ B^{r-1} do
+8:      watermark[B'.author] ← B'.r
+9:   B.watermark ← watermark
+10:  B.ancestors ← compute_ancestors(parents)
+11:  signs and broadcasts B using best-effort broadcast
+12:  update_score_with_watermarks(r, B^{r-1})
+13:  outputs block_accept_i and block_store_i for B and every
+      acceptable block in B^{r-1} not done so already
+14: procedure AC_parent_selection(r, B)
+15:   B := {B' ∈ B | B'.r = r-1 ∧ B' is acceptable}
+16:   parents ← top 2f+1 blocks in B by TR_i[B'.author]
+17:   return parents
+18: procedure compute_ancestors(parents) ...
+23: procedure update_score_with_watermarks(r, B) ...
+31: upon pulling or receiving f+1 pull requests for a missing block ...
+32:   TR_i[j] ← TR_i[j] - R_L
+```
+
+Our `tryActFor` is the **state-transition view** of the paper's
+event-driven loop. The mapping:
+
+| Paper (Figure 8 + §4.2 prose)         | Lean                          |
+|---------------------------------------|-------------------------------|
+| `create_new_block(r, B^{r-1})` lines 1–13 | `doPropose system s vid r` |
+| `block_accept_i` for acceptable parents (line 13, expanded as ImPoA-driven accept rule §4.3) | `doAccept s vid B` (when parents accepted) |
+| `block_store_i` after accept + availability check (§4.3 Hybrid Pull) | `doStore s vid B` |
+| Round advance (§4.2 "advances to round r if either: (i) receives 2f+1 blocks from round r-1 whose creators have reputations above a threshold ... or (ii) the per-round timeout T_rd expires") | `doAdvance s vid` (under the simplified gate `allProposedFor`, see F-1a) |
+| `AC_parent_selection` line 14–17 (rep-ordered top 2f+1) | `acParentSelection` in [`AdmissionControl.lean`](AdmissionControl.lean) |
+| `update_score_with_watermarks` line 23–30 (reputation update) | `updateScoreWithWatermarks` in [`Reputation.lean`](Reputation.lean) |
+| Pull invocation lines 31–32 (blame on missing block) | `reputationPenalty` (modeling decision: deferred behavioural pull; see F-3) |
+
+**Action-priority structure.** Our `tryActFor` packages the four
+state-transitions into a deterministic priority order (propose →
+accept → store → advance), matching the paper's narrative ordering
+within a round (§4.2: "create block, accept available blocks, store
+when available, advance once round complete"). The paper's
+pseudocode is event-driven (each `upon`/`procedure` triggers
+independently), but on a single validator's local trace the same
+priority falls out: propose first to participate in the round,
+accept before referencing in the next propose, store before
+garbage-collection, advance only once everyone in the current
+round has proposed (`allProposedFor` gate).
+
+**Why a priority order, not the paper's event loop?** The paper
+describes Beluga as the synchronizer module within a larger BFT
+stack; events are driven by network deliveries (block arrivals,
+pull responses). Our model abstracts the network layer (paper §2
+already factors it out via `GST`/`Δ`); the priority order is the
+deterministic collapse of the event loop suitable for a closed-form
+trace model. This is faithful to the paper's claim that Beluga's
+guarantees do not depend on the event ordering, only on the
+existence of *some* compatible schedule (formalized as
+`SchedulerFairness`, F-1a).
+
+**What's *not* in `tryActFor` (and where it lives).** Block
+construction details from Figure 8 — `weaklinks`, `watermark`,
+`ancestors`, signing, broadcast — are factored into `doPropose`'s
+helpers (`Reputation.lean`, `BlockExt.lean`) or omitted as the paper
+permits (signing, broadcast — see paper §4 abstraction discussion).
+The reputation-based parent selection and admission control (Figure
+8 lines 14–22) live in `AdmissionControl.lean`; the round advance
+gate `canAdvanceByQuorum` is the paper-faithful version of our
+simplified `allProposedFor`. -/
+
 /-- Try to take an action for validator `vid` in `s`. Action priority:
-propose → accept → store → advance. Returns `none` if no action applies. -/
+propose → accept → store → advance. Returns `none` if no action applies.
+See the section header above for the mapping to paper Figure 8. -/
 def tryActFor (system : BlockSynchroniserSystem) (s : BelugaState)
     (vid : ValidatorId) (bv : BelugaValidator) : Option BelugaState :=
   let r := bv.currentRound

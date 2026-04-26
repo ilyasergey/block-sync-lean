@@ -626,7 +626,6 @@ private lemma getValidator_of_mem (s : BelugaState) (vid : ValidatorId)
   unfold BelugaState.getValidator
   suffices h : s.validators.find? (fun x => x.1 == vid) = some (vid, bv) by
     rw [h]; rfl
-  -- List-level auxiliary, generalised so induction can use it.
   have aux : ∀ l : List (ValidatorId × BelugaValidator),
       (l.map Prod.fst).Nodup → (vid, bv) ∈ l →
       l.find? (fun x => x.1 == vid) = some (vid, bv) := by
@@ -744,15 +743,12 @@ private lemma step_advance_inversion
             have h_post_eq : s_post = doAdvance s a.1 :=
               (Option.some.inj h_act).symm
             rw [h_post_eq] at h'
-            -- gate gives hasProposedFor s a.1 a.2.currentRound = true
             have h_hpr : hasProposedFor s a.1 a.2.currentRound = true := by
               cases h_b : hasProposedFor s a.1 a.2.currentRound
               · exfalso; apply h_prop_gate; simp [h_b]
               · rfl
-            -- two sub-cases on vid = a.1
             by_cases h_eq_vid : vid = a.1
-            · -- vid is the actor. Need bv = a.2 (via nodup).
-              have h_a_pair_mem : (vid, a.2) ∈ s.validators := by
+            · have h_a_pair_mem : (vid, a.2) ∈ s.validators := by
                 have h_a_eq : a = (a.1, a.2) := by rfl
                 grind
               have h_bv_eq_a2 : bv = a.2 :=
@@ -795,8 +791,7 @@ private lemma step_advance_inversion
                   rw [h_acc, h_sto_false] at h_no
                   simp at h_no
               · rw [h_bv_eq_a2]; exact h_all
-            · -- vid ≠ a.1: doAdvance preserves vid's state.
-              rw [doAdvance] at h'
+            · rw [doAdvance] at h'
               rw [updateValidator_getValidator_ne s vid a.1 _ h_eq_vid] at h'
               rw [h] at h'
               have h_eq : bv = bv' := Option.some.inj h'
@@ -944,12 +939,10 @@ private lemma proposed_for_lt_currentRound
       rw [h_succ_none] at h_get
       contradiction
     obtain ⟨bv_prev, h_prev⟩ := h_present_k
-    -- bv_prev.currentRound ≤ bv.currentRound ≤ bv_prev.currentRound + 1
     have h_mono : bv_prev.currentRound ≤ bv.currentRound :=
       step_round_monotone system _ vid bv_prev bv h_prev h_get
     have h_at_most_one : bv.currentRound ≤ bv_prev.currentRound + 1 :=
       step_round_at_most_one system _ vid bv_prev bv h_prev h_get
-    -- Two cases: round preserved or advanced.
     by_cases h_eq : bv.currentRound = bv_prev.currentRound
     · -- Preserved: IH at k + monotone.
       rw [h_eq] at h_lt
@@ -1045,10 +1038,8 @@ private lemma block_parents_in_pool
   | succ k ih =>
     intro B hB pd hpd
     show ∃ B_p ∈ (step system (belugaTrace system k)).blocks, B_p.d = pd ∧ B_p.r + 1 = B.r
-    -- Set up case analysis on step.
     set s := belugaTrace system k with h_s_def
     show ∃ B_p ∈ (step system s).blocks, B_p.d = pd ∧ B_p.r + 1 = B.r
-    -- Reduce: every B ∈ s.blocks is in (step system s).blocks (monotone).
     have h_blocks_mono : ∀ B', B' ∈ s.blocks → B' ∈ (step system s).blocks := by
       intro B' hB'
       unfold step
@@ -1103,7 +1094,6 @@ private lemma block_parents_in_pool
           · rw [if_neg h_p] at h_act
             have : s_post = doAccept s a.1 B_acc := (Option.some.inj h_act).symm
             rw [this, doAccept_blocks_eq]; exact hB'
-    -- Now case on whether B is in s.blocks (old) or new (added by doPropose).
     show ∃ B_p ∈ (step system s).blocks, B_p.d = pd ∧ B_p.r + 1 = B.r
     change B ∈ (step system s).blocks at hB
     unfold step at hB
@@ -1741,13 +1731,10 @@ theorem belugaTrace_satisfies_post_gst_liveness
       block_availability := ?_
       round_progression := ?_
       round_termination := ?_ }
-  · -- L1 (honest_round_sync) — *weakened* form (see F-1b): all
-    -- honest reach round ≥ r + 1 within 3Δ. This is exactly
-    -- `h_fair`'s content rephrased; no extra work needed.
+  · -- L1 (honest_round_sync), weakened (F-1b): direct h_fair invocation.
     intro vid_ref r k₀ _hvid_ref htime ⟨bv_ref, hbv_ref, hrnd_ref⟩
     exact h_fair k₀ r htime ⟨vid_ref, bv_ref, _hvid_ref, hbv_ref, hrnd_ref⟩
-  · -- L2 (honest_round_advance) — derived from lockstep `h_fair`
-    -- + `round_intermediate_value`.
+  · -- L2 (honest_round_advance): h_fair + round_intermediate_value.
     intro vid r k hvid htime ⟨bv, hbv, hrnd⟩
     obtain ⟨k', hk'le, hk'time, hk'all⟩ :=
       h_fair k r htime ⟨vid, bv, hvid, hbv, hrnd⟩
@@ -1759,14 +1746,7 @@ theorem belugaTrace_satisfies_post_gst_liveness
     have htime_kc : time kc ≤ time k + 3 * system.Δ :=
       le_trans (h_time.1 kc k' hkc_hi) hk'time
     exact ⟨kc, hkc_lo, htime_kc, bvc, hbvc, hrnd_eq⟩
-  · -- T1 (block_availability): vid has accepted d at step k. Take a
-    -- post-GST step, advance vid by one round via h_fair, locate the
-    -- advance step k_a (vid at round r at trace k_a, at round r+1 at
-    -- trace (k_a+1)). At trace k_a, the store action is disabled (else
-    -- doStore would have fired with higher priority than doAdvance);
-    -- so every B ∈ (trace k_a).blocks with hasAcceptedDigest vid B.d
-    -- has hasStoredDigest vid B.d. AcceptInv (via hids) gives such a
-    -- B for d. Hence vid has stored some block with digest d.
+  · -- T1: store-before-advance gate at vid's first post-acceptance advance step.
     intro k vid d h_honest h_acc
     obtain ⟨k_post, hk_post_le, hk_post_gst⟩ : ∃ k', k ≤ k' ∧ time k' ≥ system.GST := by
       obtain ⟨k', hk'⟩ := h_time.2 system.GST
@@ -1908,14 +1888,11 @@ theorem theorem2_causal_availability
     (_h_fair : SchedulerFairness system _time) :
     CausalAvailability system (belugaTrace system) := by
   intro k vid d B _h_honest h_acc h_get B' h_reach
-  -- Eventually trace k P := ∃ k' ≥ k, P k' (trace k'). Take k' = k.
   refine ⟨k, le_refl k, ?_⟩
-  -- `getBlockByDigest = some B` means B has digest d.
   have h_B_d : B.d = d := by
     unfold getBlockByDigest at h_get
     have := List.find?_some h_get
     simpa using this
-  -- Apply causal closure: accepted digest d = B.d implies ancestors accepted.
   have hcc := causallyClosed_trace system vid hids k
   rw [← h_B_d] at h_acc
   exact hcc B h_acc B' h_reach
