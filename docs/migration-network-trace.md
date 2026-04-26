@@ -35,14 +35,17 @@ effect on `base`:
 - [x] `networkStep_round_monotone` (commit `aa8bb53`)
 - [x] `networkStep_round_at_most_one` (commit `be42b5a`)
 - [x] `network_round_monotone_trace` — trace-level k₁ ≤ k₂ ⇒ round monotone (commit `5233197`)
+- [x] `network_honest_validator_persistent_trace` (commit `1dd5432`)
+- [x] `network_round_intermediate_value` (commit `b75c03a`)
+- [x] `networkStep_emittedOperations_monotone` + `networkTryActFor_emittedOperations_monotone` (commit `6a2e482`)
 - [ ] `networkStep_advance_inversion` — inverse: if round
-      advanced, the advance branch fired
+      advanced, the advance branch fired (NOTE: conclusion needs adjusting:
+      advance-gate becomes `allProposedFor ∨ timeoutFired`,
+      accept-disabled becomes "no canAcceptBlock-acceptable block",
+      i.e., neither directly-receivable nor ImPoA-available)
 - [ ] `networkStep_advance_implies_*` — projections of inversion
       (`hasProposedFor`, `stored`, `acceptComplete`)
-- [ ] `networkStep_advance_implies_advanceGate` — `allProposedFor ∨ timeoutFired`
 - [ ] `networkStep_preserves_none` — absence is preserved
-- [ ] `networkStep_emittedOperations_monotone`
-- [ ] `network_honest_validator_persistent_trace`
 
 ### Phase 2 — Block / Accept / Causal invariants for `networkTrace`
 
