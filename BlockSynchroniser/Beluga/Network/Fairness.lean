@@ -862,6 +862,32 @@ theorem network_round_monotone_trace
         vid bv_mid bv₂ h_mid (h_step ▸ h₂)
     exact le_trans ih' h_mono
 
+/-- Honest validators are present at every step of `networkTrace`. -/
+theorem network_honest_validator_persistent_trace
+    (system : BlockSynchroniserSystem) (time : Nat → Nat)
+    (vid : ValidatorId) (h_vid_honest : isHonestValidator system vid = true)
+    (k : Nat) :
+    ∃ bv, (networkTrace system time k).base.getValidator vid = some bv := by
+  -- Step 1: vid is in system.validators (with isHonest = true).
+  have h_vid_in_system : vid ∈ system.validators.map Prod.fst := by
+    unfold isHonestValidator BlockSynchroniserSystem.isHonest at h_vid_honest
+    cases h_some : system.validators.find? (fun p => p.1 = vid) with
+    | none => rw [h_some] at h_vid_honest; exact absurd h_vid_honest (by simp)
+    | some p =>
+      have h_p_in := List.mem_of_find?_eq_some h_some
+      have h_match := List.find?_some h_some
+      have h_p1 : p.1 = vid := by simpa using h_match
+      rw [← h_p1]; exact List.mem_map.mpr ⟨p, h_p_in, rfl⟩
+  -- Step 2: trace at step k has same IDs as system, so vid is also there.
+  have h_vid_in_k : vid ∈ (networkTrace system time k).base.validators.map Prod.fst := by
+    rw [networkTrace_validators_ids]; exact h_vid_in_system
+  -- Step 3: extract the bv from the validator pair (membership).
+  obtain ⟨p, h_p_in, h_p_eq⟩ := List.mem_map.mp h_vid_in_k
+  refine ⟨p.2, ?_⟩
+  have h_pair : p = (vid, p.2) := Prod.ext h_p_eq rfl
+  rw [h_pair] at h_p_in
+  exact networkTrace_getValidator_of_mem system time k vid p.2 h_p_in
+
 /-- The trace invariant: at every step of `networkTrace`, every
 validator's `roundEntryTime` is bounded by the state's
 `currentTime`. -/
