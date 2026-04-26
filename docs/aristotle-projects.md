@@ -11,13 +11,15 @@ Status legend: 🟡 IN_PROGRESS · ✅ COMPLETE (integrated) · ⚠️ COMPLETE_
 | Project ID | Round | Submitted | Status | Target file(s) | Theorem(s) | Result |
 |---|---|---|---|---|---|---|
 | `3f6cf619-5a7f-4142-9114-c46caafa025f` | 4-followup | 2026-04-26 ~02:30 SGT | 🟡 IN_PROGRESS | [`Beluga/Protocol.lean`](../BlockSynchroniser/Beluga/Protocol.lean) | `causal_history_of_find_none` (trace-level invariant; prompt suggests strengthening to `CausallyClosed` carrier + monotonicity lemmas) | pending |
-| `4f618efb-b2b3-4c61-bfb8-ebc339a949dc` | post-gst-liveness | 2026-04-26 ~13:00 SGT | 🟡 IN_PROGRESS | [`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) | `belugaTrace_satisfies_post_gst_liveness` — single bundle theorem packaging L1, L2, T1, T3, T4. Compound trace-invariant pattern modeled on `belugaTrace_admissionWellFormed`. | pending |
+| `4f618efb-b2b3-4c61-bfb8-ebc339a949dc` | post-gst-liveness | 2026-04-26 ~13:00 SGT | 🟡 IN_PROGRESS | [`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) | `belugaTrace_satisfies_post_gst_liveness` — Beluga §5 bundle theorem packaging L1, L2, T1, T3, T4. | pending |
+| `03f5fe3f-72f3-447f-a3e5-96f532b8a77f` | mysticeti-liveness-bundle | 2026-04-26 ~14:30 SGT | 🟡 IN_PROGRESS | [`Mysticeti/Liveness.lean`](../BlockSynchroniser/Mysticeti/Liveness.lean) | `belugaTrace_satisfies_mysticeti_post_gst_liveness` — Mysticeti-Beluga §D.2 bundle theorem packaging the 12 conjuncts (BFT side conditions + action-level liveness). | pending |
 
-**1 project in flight.** Aristotle accepts concurrent submissions;
+**2 projects in flight.** Aristotle accepts concurrent submissions;
 they will process as capacity allows.
 
 Frozen files (do not edit until corresponding rounds complete):
 - `Beluga/Theorems.lean` (post-gst-liveness round)
+- `Mysticeti/Liveness.lean` (mysticeti-liveness-bundle round)
 
 Freely-editable files: `Lib/`, all base modules
 (`Block`/`Validator`/`Operations`/`System`/`State`/`Causal`/`Trace`/`Properties`),
