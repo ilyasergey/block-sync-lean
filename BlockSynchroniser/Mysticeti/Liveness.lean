@@ -69,9 +69,9 @@ private lemma belugaTrace_blocks_monotone
 
 /-! ## The Mysticeti-Beluga post-GST liveness invariant
 
-The 11 sorry-bottoming helpers below all require post-GST liveness
+The 11 helpersbelow all require post-GST liveness
 properties of `belugaTrace` that aren't entailed by `step` alone.
-Each sorry corresponds to either:
+Each obligation corresponds to either:
 
 - a **standard BFT side condition** (`hN`, `hHonest`, `h_ids`, the
   Byzantine-count bound), or

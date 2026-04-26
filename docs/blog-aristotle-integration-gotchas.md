@@ -342,6 +342,83 @@ or (c) restrict the override scope with a `section ... end` block.
 
 We've kept `set_option` cases case-by-case; never globally.
 
+## Gotcha 21 — Bundle inductive invariants before delegating
+
+**Symptom.** A file has many sorry'd theorems whose proofs all need
+the *same* inductive invariant of the protocol — round monotonicity,
+admission well-formedness, scheduler fairness, BFT side conditions,
+"every accepted block has accepted parents", etc. You hand this file
+to Aristotle round after round, narrowly scoped to one theorem at a
+time. Each round re-derives a slightly different shape of the same
+invariant inside the proof; nothing is reusable; the rounds stall on
+"4-target scope at 13% for 7 hours" because every target re-discovers
+the inductive structure from scratch.
+
+**Cause.** A trace invariant is a *single* fact about every state in
+the trace, derivable by induction on `step`. If you ask Aristotle to
+prove ten theorems each of which "happens to" need the same invariant,
+each round bears the full cost of the induction. Worse, Aristotle's
+incremental proofs of the invariant aren't compatible across rounds —
+each picks slightly different conjuncts for the carrier.
+
+**Fix.** Before delegating, do the structural decomposition yourself:
+
+1. **Identify the shared invariant.** Look at the sorries' contexts
+   in the file. If many of them bottom out at "X holds at every trace
+   step" for related Xs, you're staring at one trace invariant.
+2. **Define a bundle structure** (`Prop`-valued, with named fields,
+   one per conjunct). Make each field the *conclusion* of a sorry'd
+   theorem in the file, or the structural fact a sorry'd proof needs.
+3. **State a single load-bearing meta-theorem** producing the bundle
+   from the trace, with `:= by sorry`. This is the only sorry that
+   will be delegated.
+4. **Refactor each downstream theorem** to be a one-line projection
+   from the bundle (or a small composition + projection). The file's
+   sorry count typically drops by an order of magnitude.
+5. **Delegate the bundle theorem** with explicit permission for
+   Aristotle to extend the bundle structure with more conjuncts, as
+   long as the resulting structure is preserved by `step`.
+
+The shape that works is the AdmissionInvariant pattern (in our
+formalization): a private compound trace carrier with N conjuncts
+(typically 4–12), proved preserved by every action branch, then
+projected outward to the public bundle predicate.
+
+**Why this works for Aristotle specifically.** Aristotle is good at
+trace-level invariant proofs *given the right invariant carrier*. The
+hard part of these proofs is choosing the carrier — which conjuncts
+are mutually inductive, what auxiliary facts they need to pull along
+to be preserved by each branch. When you bundle the conjuncts
+yourself, you've handed Aristotle the carrier and asked it to do the
+mechanical-but-tedious case-splits. That's the right division of
+labor.
+
+**Why this is a gotcha.** It's tempting to just iterate one theorem
+at a time; that's how the workflow naturally starts (you fix the most
+broken file first). The bundling step requires noticing the pattern
+*after* you've done a few rounds and started seeing the same proof
+shape. Until you do, you'll keep submitting overlapping work and
+seeing the rounds stall.
+
+**Concrete examples from the formalization** (each closed a chunk of
+prior sorries in one round):
+
+| Bundle | File | Conjuncts | Sorry delta |
+|---|---|---|---|
+| `AdmissionWellFormed` | `Beluga/AdmissionInvariant.lean` | 1 (with 4-conjunct private `TraceInv` carrier) | −2 (closed L13 invariants) |
+| `BlockInv` / `AcceptInv` / `CausallyClosed` chain | `Beluga/Protocol.lean` | 3-stage invariant chain | −1 (closed `causal_history_of_find_none` + closed `step_refines_HonestStep` transitively) |
+| `BelugaPostGSTLiveness` | `Beluga/Theorems.lean` | 5 (L1, L2, T1, T3, T4) | refactored 6 sorries to 1 bundle theorem |
+| `MysticetiPostGSTLiveness` | `Mysticeti/Liveness.lean` | 12 (BFT side conditions + 8 helper conclusions) | refactored 15 sorries to 1 bundle theorem |
+
+All four bundle theorems were proved (or are being proved) in single
+focused Aristotle rounds rather than the death-by-a-thousand-rounds
+that the per-theorem decomposition required.
+
+**The meta-pattern.** The unit of delegation should be a *whole*
+inductive invariant, not a leaf theorem that uses it. If you find
+yourself running 7 rounds on a single file, stop and ask: "is there
+one invariant under all of these?" If yes, bundle it.
+
 ## What we'd put in a blog post
 
 The operational thesis: **the math tactical wall and integration
