@@ -534,6 +534,69 @@ T1–T4) remain pending in that file (queued in the next round).
   Recommend this scope discipline as the default for trace/inductive
   helpers going forward.
 
+## Project 3f6cf619-5a7f-4142-9114-c46caafa025f (round 4-followup)
+
+| Field | Value |
+|---|---|
+| Submitted | 2026-04-26 02:30 SGT |
+| Returned | 2026-04-26 ~11:10 SGT (status `COMPLETE`, fully clean) |
+| Result tarball | `/tmp/aristotle-rch.tar.gz` |
+| Prompt | Replace the `sorry` in `causal_history_of_find_none` with a real proof; suggested CausallyClosed carrier + monotonicity lemmas. |
+| Integration commit | (TBD; this commit) |
+
+### What landed — three-stage trace invariant
+
+The single-state form of `causal_history_of_find_none` is unprovable;
+Aristotle restructured around a three-stage trace invariant:
+
+| Stage | Invariant | Captures |
+|---|---|---|
+| 1 | `BlockInv` | Every block has canonical digest `B.d = digest system B.r B.author`; corresponding `block_propose` op in log; uniqueness per `(validator, round)` pair; bounded author IDs. Together → no-duplicate-digests. |
+| 2 | `AcceptInv` | (a) accepted digest ⇒ all parent digests accepted (`acceptedParents`); (b) accepted digest ⇒ corresponding block in pool (`acceptedBlockExists`). Hardest case: `doAccept` (uses no-duplicate-digests so the parent check covers all blocks). |
+| 3 | `CausallyClosed` | Derived from `AcceptInv` by induction on `Reaches`: at each parent step the intermediate block is in the pool and accepted, so its parent digests are accepted by `acceptedParents`. |
+
+Plus `causallyClosed_trace`: `CausallyClosed` holds at every trace step.
+
+### Signature changes
+
+To thread the trace ancestry through:
+
+- `causal_history_of_find_none`: now takes `system : BlockSynchroniserSystem`, `hids : ValidIds system`, `hTrace : ∃ k, s = belugaTrace system k`. The original `hfindAccNone` is retained but unused (subsumed by the invariant).
+- `honestStep_of_store`, `tryActFor_honestStep`, `step_refines_HonestStep`: gained `hids` and `hTrace` parameters (propagation only).
+- `belugaTrace` was moved earlier in the file so the invariant section can reference it; `hasAcceptedDigest_true_imp` and `hasAcceptedDigest_false_imp` likewise.
+
+### New definitions
+
+| Definition | Role |
+|---|---|
+| `ValidIds system` | All validator IDs `< system.n + 1` (ensures `digest` injectivity). |
+| `CausallyClosed s vid` | Target: accepted blocks have all causal ancestors accepted. |
+| `BlockInv` / `AcceptInv` | Per-stage trace invariants with full per-action preservation lemmas. |
+| `digest_injective`, `noDupDigests_of_blockInv`, `wellFormed_init`/`_step`/`_trace`, `HasAccepted` per-action iff-lemmas, monotonicity for each `do*` action | Supporting infrastructure (~15 lemmas) |
+
+### Side effects
+
+- No `import Mathlib`. No `exact?`. Standard axioms only.
+- File grew from ~565 to ~837 lines (mostly new invariant infrastructure).
+- The Status: bookkeeping at the top of Protocol.lean had to be re-stripped (Aristotle's tarball pre-dated our cleanup).
+
+### Verifier confirmation
+
+`lake build` passes (6246 jobs). `Beluga/Protocol.lean` is now
+**0 sorries** (was 1: `causal_history_of_find_none`). `step_refines_HonestStep` is now fully transitively closed (no
+remaining trace-invariant sorry).
+
+### Notes
+
+- This was a slow round: ~8h45m end-to-end. Trace-invariant proofs
+  require Aristotle to invent the right inductive carrier (here:
+  the 3-stage `BlockInv`/`AcceptInv`/`CausallyClosed` hierarchy);
+  unsurprising that this takes longer than tactical-wall rounds.
+- The 3-stage decomposition mirrors what we recommended for the
+  `belugaTrace_admissionWellFormed` round (compound `TraceInv`
+  carrier). Two-for-two now: when trace invariants are needed,
+  Aristotle handles them well given enough time.
+
 ## Future projects
 
 When a new Aristotle submission completes and is integrated, append
