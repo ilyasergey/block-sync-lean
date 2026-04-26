@@ -30,10 +30,13 @@ Helpers that establish algebraic properties of `networkStep`'s
 effect on `base`:
 
 - [x] `deliverPending_preserves_base` — full base equality (commit `d65b2a5`)
-- [ ] `networkTryActFor_round_monotone` — round never decreases
-      across one `networkTryActFor` step
-- [ ] `networkStep_round_monotone`
-- [ ] `networkStep_round_at_most_one`
+- [x] `networkTryActFor_round_monotone` — round never decreases (commit `fea1f3b`)
+- [x] `networkTryActFor_round_at_most_one` — round increases ≤ 1 (commit `fea1f3b`)
+- [x] `networkStep_round_monotone` (commit `aa8bb53`)
+- [x] `networkStep_round_at_most_one` (commit `be42b5a`)
+- [ ] `network_round_monotone_trace` — trace-level k₁ ≤ k₂ ⇒ round monotone
+      (attempted, induction structure needs `bv₂` generalized inside the induction;
+       use `intro k₂ h_le; induction h_le with ...` rather than fixing bv₂ outside)
 - [ ] `networkStep_advance_inversion` — inverse: if round
       advanced, the advance branch fired
 - [ ] `networkStep_advance_implies_*` — projections of inversion
@@ -41,6 +44,7 @@ effect on `base`:
 - [ ] `networkStep_advance_implies_advanceGate` — `allProposedFor ∨ timeoutFired`
 - [ ] `networkStep_preserves_none` — absence is preserved
 - [ ] `networkStep_emittedOperations_monotone`
+- [ ] `network_honest_validator_persistent_trace`
 
 ### Phase 2 — Block / Accept / Causal invariants for `networkTrace`
 
@@ -111,3 +115,37 @@ The invariant chain in `Beluga/Protocol.lean`:
 Commit per phase, with a concrete count of lemmas closed in the
 message body. Do not advance to the next phase until the current
 phase builds cleanly with zero sorries.
+
+## Session log
+
+### Session 2026-04-27 (start)
+
+Phase 1: 4 of ~10 foundational lemmas closed (commits `d65b2a5`,
+`fea1f3b`, `aa8bb53`, `be42b5a`):
+
+- `deliverPending_preserves_base`
+- `networkTryActFor_round_monotone`
+- `networkTryActFor_round_at_most_one`
+- `networkStep_round_monotone`
+- `networkStep_round_at_most_one`
+
+Each builds clean, zero sorries, in `Beluga/Network/Fairness.lean`.
+
+Next session priorities:
+
+1. Finish Phase 1 — the trace-level monotonicity lemma
+   `network_round_monotone_trace` (induction over `Nat.le` with `bv₂`
+   generalized inside) and `network_honest_validator_persistent_trace`
+   (use `getValidator_init_some` from `Beluga/Theorems.lean` for the
+   init step, and `networkStep_preserves_ids` for the inductive step).
+
+2. Phase 2 — start the inversion family
+   (`networkStep_advance_inversion`). This is the largest single
+   lemma (~150 lines for the `step` version); follows the case-split
+   pattern from `Beluga/Theorems.lean` lines 735–894 but adds the
+   timeout case to the advance branch.
+
+3. Decide whether to make selected `private` helpers in
+   `Beluga/Theorems.lean` public so the migration file (when split
+   off) can use them, or keep migrating in
+   `Beluga/Network/Fairness.lean`.
