@@ -6,17 +6,10 @@ paper's own terminology — no proof-assistant background needed —
 and is intended to be self-contained enough to fold back into the
 paper if you choose.
 
-We distinguish three categories:
-
-- **Missing assumption.** A claim in the paper does not follow from
-  the explicit assumptions; an additional hypothesis is needed (and
-  appears to be the one the prose silently relies on).
-- **Scope-pinning.** The paper's statement is correct in a special
-  case (e.g. `n = 3f + 1`) but ambiguous in the general case the
-  notation suggests; we recommend pinning it.
-- **Surfaced invariant.** A protocol fact the paper treats as
-  obvious that the proof of a stated theorem actually relies on; we
-  recommend stating it as a lemma.
+The Category column captures the kind of fix we recommend (missing
+assumption, scope-pinning, surfaced invariant, notational hygiene,
+editorial); each finding's narrative section below the summary
+table explains the specific issue and proposed change in full.
 
 Findings are listed in **decreasing order of importance**.
 
