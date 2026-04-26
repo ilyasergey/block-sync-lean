@@ -180,7 +180,7 @@ as its `newTime`. -/
 def networkTrace (system : BlockSynchroniserSystem) (time : Nat → Nat) :
     Trace NetworkState :=
   fun n => Nat.rec (motive := fun _ => NetworkState)
-    (NetworkState.init system)
+    { NetworkState.init system with currentTime := time 0 }
     (fun i s => networkStep system s (time (i + 1))) n
 
 end Network
