@@ -495,6 +495,45 @@ Sorry delta: −2 (the two we submitted to close); no new sorries added.
   compound `TraceInv` carrier was the right framing for both the
   trace invariant and L13's quorum-intersection step.
 
+## Project b544affb-b9a9-4f8c-965f-2a31051ef75f (theorems-helpers round)
+
+| Field | Value |
+|---|---|
+| Submitted | 2026-04-26 09:05 SGT |
+| Returned | 2026-04-26 ~10:25 SGT (status `COMPLETE`, fully clean) |
+| Result tarball | `/tmp/aristotle-rh.tar.gz` |
+| Prompt | Prove the two helper-stubs `step_preserves_validator_ids` and `step_round_monotone` in `Beluga/Theorems.lean`. |
+| Integration commit | (TBD; this commit) |
+
+### Theorems closed (2 + 1 auxiliary)
+
+| Theorem | Strategy |
+|---|---|
+| `step_preserves_validator_ids` | Unfold `step`, case-split on `findSome?` and `tryActFor`'s four branches; structural analysis of `updateValidator`/`BelugaState.getValidator` plus the new helper `updateValidator_none`. |
+| `step_round_monotone` | Unfold `step`, case-split on `findSome?` and `tryActFor` branches; reuse `doPropose_getValidator`, `doAccept_round`, `doStore_round`, `doAdvance_round` — each shows the corresponding action preserves or increments `currentRound`. |
+| `updateValidator_none` (new aux.) | `updateValidator` preserves `getValidator vid = none`. |
+
+### Side effects
+
+- `set_option maxHeartbeats 800000 in` scoped per-lemma above the two
+  targets (suggested in the prompt; needed for the deep `tryActFor`
+  case analysis to typecheck).
+- No `import Mathlib`. No `exact?`. Standard axioms only.
+
+### Verifier confirmation
+
+`lake build` passes (6246 jobs). The two previous sorry-stubs in
+`Theorems.lean` are now closed; only the 6 main theorems (L1, L2,
+T1–T4) remain pending in that file (queued in the next round).
+
+### Notes
+
+- This was the *focused replacement* for the canceled `58873be7`
+  round (which had stalled at ~13% for 7+ hours with an 8-target
+  scope). Tighter scope → 80 min completion vs. unbounded stall.
+  Recommend this scope discipline as the default for trace/inductive
+  helpers going forward.
+
 ## Future projects
 
 When a new Aristotle submission completes and is integrated, append

@@ -114,15 +114,48 @@ lemma getValidator_init_round_zero (system : BlockSynchroniserSystem) (vid : Val
   cases h.2; aesop
 
 /--
+`updateValidator` preserves `getValidator vid = none`.
+-/
+lemma updateValidator_none (s : BelugaState) (vid vid' : ValidatorId)
+    (f : BelugaValidator → BelugaValidator) :
+    (updateValidator s vid' f).getValidator vid = none → s.getValidator vid = none := by
+  unfold updateValidator BelugaState.getValidator
+  simp +decide
+  intro h; by_contra hc; push_neg at hc
+  obtain ⟨a, b, hmem, rfl⟩ := hc
+  have := h a b hmem
+  split_ifs at this <;> simp at this
+
+/-
 The `step` function preserves the validator ID list.
 
 Proof: structural case analysis on `tryActFor`'s four branches. Aristotle r3a
 discharged this with a `grind` chain that times out in our build context;
 queued as round 3a-followup.
 -/
+set_option maxHeartbeats 800000 in
 lemma step_preserves_validator_ids (system : BlockSynchroniserSystem) (s : BelugaState) (vid : ValidatorId) :
     (step system s).getValidator vid = none → s.getValidator vid = none := by
-  sorry
+  unfold step;
+  cases h : List.findSome? ( fun x => tryActFor system s x.1 x.2 ) s.validators <;> simp_all +decide;
+  have h_findSome : ∃ x ∈ s.validators, tryActFor system s x.1 x.2 = some ‹_› := by
+    rw [List.findSome?_eq_some_iff] at h
+    obtain ⟨l₁, a, l₂, hl, hf, _⟩ := h
+    exact ⟨a, by simp [hl], hf⟩
+  obtain ⟨ x, hx₁, hx₂ ⟩ := h_findSome;
+  unfold tryActFor at hx₂;
+  cases h : List.find? ( fun B => !hasAcceptedDigest s x.1 B.d && B.parents.all fun pd => hasAcceptedDigest s x.1 pd ) s.blocks <;> simp_all +decide;
+  · cases h' : List.find? ( fun B => hasAcceptedDigest s x.1 B.d && !hasStoredDigest s x.1 B.d ) s.blocks <;> simp_all +decide;
+    · split_ifs at hx₂ <;> simp_all +decide [ doPropose, doAdvance ];
+      · unfold BelugaState.getValidator; aesop;
+      · grind +suggestions;
+    · split_ifs at hx₂ <;> simp_all +decide [ doPropose, doStore ];
+      · unfold BelugaState.getValidator; aesop;
+      · unfold BelugaState.getValidator at *; simp_all +decide [ updateValidator ] ;
+        grind;
+  · unfold doAccept at hx₂; simp_all +decide [ updateValidator ] ;
+    unfold doPropose at hx₂; simp_all +decide [ BelugaState.getValidator ] ;
+    grind
 
 /--
 If a validator is present at step `k`, it is present at step `k+1`.
@@ -212,19 +245,38 @@ lemma doAdvance_round (s : BelugaState) (vid vid' : ValidatorId)
   · exact ⟨ bv, by rw [updateValidator_getValidator_ne _ _ _ _ h']; assumption,
            by simp +decide ⟩
 
-/--
+/-
 The `step` function never decreases any validator's `currentRound`.
 
 Proof body times out under our build context (Aristotle r3a's structural
 chain through doAccept/doStore/doAdvance/doPropose hits a heartbeat
 limit on `isDefEq` we can't easily push past). Queued as round 3a-followup.
 -/
+set_option maxHeartbeats 800000 in
 lemma step_round_monotone (system : BlockSynchroniserSystem) (s : BelugaState) (vid : ValidatorId)
     (bv bv' : BelugaValidator)
     (h : s.getValidator vid = some bv)
     (h' : (step system s).getValidator vid = some bv') :
     bv.currentRound ≤ bv'.currentRound := by
-  sorry
+  unfold step at h';
+  cases h'' : List.findSome? ( fun x => tryActFor system s x.1 x.2 ) s.validators <;> simp_all +decide;
+  rw [ List.findSome?_eq_some_iff ] at h'';
+  obtain ⟨ l₁, a, l₂, h₁, h₂, h₃ ⟩ := h'';
+  unfold tryActFor at h₂;
+  cases h : List.find? ( fun B => !hasAcceptedDigest s a.1 B.d && B.parents.all fun pd => hasAcceptedDigest s a.1 pd ) s.blocks <;> simp_all +decide;
+  · split_ifs at h₂;
+    · grind +suggestions;
+    · cases h : List.find? ( fun B => hasAcceptedDigest s a.1 B.d && !hasStoredDigest s a.1 B.d ) s.blocks <;> simp_all +decide;
+      · subst h₂;
+        unfold doAdvance at h';
+        grind +suggestions;
+      · have := doStore_round s vid a.1 ‹_› bv ‹_›; aesop;
+    · cases h : List.find? ( fun B => hasAcceptedDigest s a.1 B.d && !hasStoredDigest s a.1 B.d ) s.blocks <;> simp_all +decide;
+      have := doStore_round s vid a.1 ‹_› bv ‹_›; aesop;
+  · split_ifs at h₂ ; simp_all +decide [ doPropose ];
+    · unfold BelugaState.getValidator at *;
+      grind;
+    · have := doAccept_round s vid a.1 ‹_› bv ‹_›; aesop;
 
 /-! ## Lemmas 1, 2 and Theorems 1–4
 
