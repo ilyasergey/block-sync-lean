@@ -15,6 +15,7 @@ import BlockSynchroniser.Beluga.Patterns
 import BlockSynchroniser.Beluga.Protocol
 import BlockSynchroniser.Beluga.Order
 import BlockSynchroniser.Mysticeti.Consensus
+import BlockSynchroniser.Mysticeti.SafetyInvariant
 import BlockSynchroniser.Mysticeti.Safety
 
 namespace BlockSynchroniser
@@ -108,9 +109,19 @@ structure MysticetiPostGSTLiveness
   hHonest : (system.validators.filter (fun p => p.2 = true)).length
               = 2 * system.f + 1
   h_ids : ∀ i < system.n, ∃ pair ∈ system.validators, pair.1 = i
-  -- Byzantine-count bound: in any nodup author list, ≤ f authors are Byzantine.
+  -- Byzantine-count bound: in any *nodup* list of *registered*
+  -- validators, at most `f` entries are Byzantine. Both qualifiers
+  -- are load-bearing — finding F-8(c) in
+  -- `docs/mechanization-findings.md`. Without `Nodup` the same
+  -- Byzantine validator can pad a list arbitrarily; without the
+  -- "registered" qualifier (`∀ a ∈ authors, ∃ p ∈ system.validators,
+  -- p.1 = a`) a list of f+1 unregistered IDs trivially exceeds the
+  -- bound, since `isHonestValidator` returns `false` for unregistered
+  -- IDs.
   byz_bound :
     ∀ authors : List ValidatorId,
+      authors.Nodup →
+      (∀ a ∈ authors, ∃ p ∈ system.validators, p.1 = a) →
       (authors.filter (fun vid => !isHonestValidator system vid)).length ≤ system.f
   -- Round advance: post-GST, every honest validator catches up to round r within 3Δ.
   honest_round_entry :
@@ -445,6 +456,7 @@ theorem lemma11_eventual_decision
 (quorum argument: at most `f` are Byzantine). -/
 lemma at_least_f_plus_one_honest_referencers
     (system : BlockSynchroniserSystem)
+    (hids : ValidIds system)
     (time : TimeMap) (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
     (B : Block) (k₀ : ℕ)
@@ -464,12 +476,42 @@ lemma at_least_f_plus_one_honest_referencers
   -- Filter authors to honest ones.
   set honest_authors := authors.filter (fun vid =>
     isHonestValidator system vid) with h_honest_def
+  -- The bundle's `byz_bound` conjunct (registered + nodup precondition)
+  -- needs the two sub-proofs assembled below.
+  have h_authors_nodup : authors.Nodup := by
+    -- `eraseDups` produces a `Nodup` list. Inline induction over the
+    -- accumulator-loop, matching the pattern used in `Beluga/Patterns.lean`.
+    have h_loop_nodup : ∀ (l : List ValidatorId) (acc : List ValidatorId),
+        List.Nodup acc →
+        List.Nodup (List.eraseDupsBy.loop (fun x1 x2 => x1 == x2) l acc) := by
+      intros l acc hacc
+      induction' l with hd tl ih generalizing acc <;>
+        simp_all +decide [List.eraseDupsBy.loop]
+      cases h : acc.any fun x2 => hd == x2 <;> simp_all +decide
+      grind
+    simp only [h_authors_def, List.eraseDups]
+    exact h_loop_nodup _ _ (by simp +decide)
+  have h_authors_registered : ∀ a ∈ authors,
+      ∃ p ∈ system.validators, p.1 = a := by
+    intro a h_a_in
+    -- a ∈ authors = (refBlocks.map (·.author)).eraseDups, so a is the
+    -- author of some block in refBlocks ⊆ allBlocks.
+    have h_a_in_orig : a ∈ refBlocks.map (·.author) :=
+      mem_of_mem_eraseDups _ _ h_a_in
+    obtain ⟨B', hB'_in_ref, hB'_auth⟩ := List.mem_map.mp h_a_in_orig
+    have hB'_in : B' ∈ allBlocks := (List.mem_filter.mp hB'_in_ref).1
+    have h_inv :=
+      _root_.BlockSynchroniser.Mysticeti.belugaTrace_satisfies_mysticetiSafetyInv
+        system hids k₀
+    obtain ⟨p, hp_mem, hp_eq⟩ := h_inv.authorsValid B' hB'_in
+    exact ⟨p, hp_mem, hp_eq.trans hB'_auth⟩
   refine ⟨honest_authors, ?_, ?_⟩
   · -- Show |honest_authors| ≥ f+1.
     -- |authors| ≥ 2f+1 and at most f are Byzantine → ≥ f+1 honest.
     have h_byzantine_bound : (authors.filter (fun vid =>
         !isHonestValidator system vid)).length ≤ system.f :=
-      (belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync).byz_bound authors
+      (belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync).byz_bound
+        authors h_authors_nodup h_authors_registered
     have h_partition : honest_authors.length +
         (authors.filter (fun vid => !isHonestValidator system vid)).length
         = authors.length := by
@@ -527,6 +569,7 @@ proof-of-availability certificate for `B` and `B` is output via
 -/
 theorem lemma12_referenced_accepted
     (system : BlockSynchroniserSystem)
+    (hids : ValidIds system)
     (time : TimeMap)
     (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time) :
@@ -540,7 +583,7 @@ theorem lemma12_referenced_accepted
   intro B vid h_honest k₀ h_gst h_refs
   -- Step 1: At least f+1 honest validators reference B (quorum argument).
   obtain ⟨honest_refs, h_count, h_props⟩ :=
-    at_least_f_plus_one_honest_referencers system time h_time h_sync B k₀ h_refs
+    at_least_f_plus_one_honest_referencers system hids time h_time h_sync B k₀ h_refs
   -- Step 2: These f+1 honest blocks form an ImPoA certificate.
   have h_available : ∃ honest_refs' : List ValidatorId,
       honest_refs'.length ≥ system.f + 1 ∧
