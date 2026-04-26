@@ -3,14 +3,6 @@
 Lean 4 formalization of [*Beluga: Block Synchronization for BFT Consensus
 Protocols*](docs/Block_Sync_Project.pdf).
 
-> **Mechanization findings:** see
-> [`docs/mechanization-findings.md`](docs/mechanization-findings.md)
-> for a paper-side log of observations the formalization surfaced
-> (paper terminology, no Lean — written so it can be folded back into
-> the paper). Headline finding so far: **F-1, scheduler-fairness
-> assumption missing from Lemmas 1 & 2** — see also
-> [`docs/paper-feedback-l1-l2-fairness.md`](docs/paper-feedback-l1-l2-fairness.md).
-
 ## Paper → code map
 
 The single source of truth for which paper item lives where in this repo.
@@ -22,7 +14,7 @@ Status: ✅ done · ◐ in progress · ☐ planned · ⊘ out of scope · ⏸ de
 |---|---|---|
 | §2 — Network model (`n`, `f`, `k`, `GST`, `Δ`) | [`System.lean :: BlockSynchroniserSystem`](BlockSynchroniser/System.lean#L21) | ✅ |
 | §2 — Honest / Byzantine partition | [`System.lean :: isHonest` / `isByzantine`](BlockSynchroniser/System.lean#L47) | ✅ |
-| §2.1 — Block structure (`r, d, author, parents, payload, signature`) | [`Block.lean :: Block`](BlockSynchroniser/Block.lean#L22) | ✅ (signature field omitted — see note below) |
+| §2.1 — Block structure (`r, d, author, parents, payload, signature`) | [`Block.lean :: Block`](BlockSynchroniser/Block.lean#L22) | ✅ (signature field omitted — see note below; digest determinism `B.d = digest system B.r B.author` carried as a trace invariant — see F-11) |
 | §2.1 — Synchronizer interface (`block_propose_i`/`block_accept_i`/`block_store_i`) | [`Operations.lean :: ValidatorOperation`](BlockSynchroniser/Operations.lean#L17) | ✅ |
 | §2.1 — Causal history `causal(B)` | [`Causal.lean :: Reaches` / `causal`](BlockSynchroniser/Causal.lean#L27) | ✅ |
 | §2.1 — **Definition 1.1 — Round-Progression** | [`Properties.lean :: RoundProgression`](BlockSynchroniser/Properties.lean#L27) | ✅ |
@@ -36,7 +28,7 @@ Status: ✅ done · ◐ in progress · ☐ planned · ⊘ out of scope · ⏸ de
 | Paper | Code | Status |
 |---|---|---|
 | §4.1 — Block extensions (`weaklinks`, `watermark`, `ancestors`) | [`Beluga/BlockExt.lean :: BelugaBlock`](BlockSynchroniser/Beluga/BlockExt.lean#L31) | ✅ |
-| §4.2 — Reputation mechanism (increase / decrease rules; Figure 8 lines 23–32) | [`Beluga/Reputation.lean`](BlockSynchroniser/Beluga/Reputation.lean#L23) (`reputationIncreaseCandidates`, `updateScoreWithWatermarks`, `reputationPenalty`, `reputationThreshold`, `aboveThreshold`) | ✅ |
+| §4.2 — Reputation mechanism (increase / decrease rules; Figure 8 lines 23–32) | [`Beluga/Reputation.lean`](BlockSynchroniser/Beluga/Reputation.lean#L23) (`reputationIncreaseCandidates`, `updateScoreWithWatermarks`, `reputationPenalty`, `reputationThreshold`, `aboveThreshold`) | ✅ (we follow the prose `r-1` form; see finding F-6 for the prose-vs-Figure-8 off-by-one) |
 | §4.2 — Admission Control + parent selection (Figure 8 lines 14–17 + round-advancement rule (i)) | [`Beluga/AdmissionControl.lean`](BlockSynchroniser/Beluga/AdmissionControl.lean#L60) (`acParentSelection`, `canAdvanceByQuorum`) | ✅ |
 | §4.3 — ImPoA (implicit proof-of-availability) + live/bulk classification | [`Beluga/Pull.lean`](BlockSynchroniser/Beluga/Pull.lean#L30) (`implicitlyAvailable`, `isLive`, `classifyMissing`, `isAcceptableImPoA`) | ✅ strong-link only; weak-link inclusion deferred |
 | §4 — `BelugaState`, `BelugaValidator`, `ReputationTable` | [`Beluga/State.lean`](BlockSynchroniser/Beluga/State.lean#L91) | ✅ |
@@ -46,7 +38,7 @@ Status: ✅ done · ◐ in progress · ☐ planned · ⊘ out of scope · ⏸ de
 | §4.4 — Availability pattern | [`Beluga/Patterns.lean :: availabilityPattern`](BlockSynchroniser/Beluga/Patterns.lean#L38) | ✅ strong-link only |
 | §4.4 — Certificate pattern | [`Beluga/Patterns.lean :: certificatePattern`](BlockSynchroniser/Beluga/Patterns.lean#L49) | ✅ |
 | §4.4 — `available` / `certified` | [`Beluga/Patterns.lean`](BlockSynchroniser/Beluga/Patterns.lean#L54) | ✅ |
-| §4.4 — Uniqueness consequence ("for any validator and round, at most one block can become certified") | [`Beluga/Patterns.lean :: certified_unique`](BlockSynchroniser/Beluga/Patterns.lean#L152) | ✅ proved (with the BFT side conditions documented in "Notes on paper consistency"). |
+| §4.4 — Uniqueness consequence ("for any validator and round, at most one block can become certified") | [`Beluga/Patterns.lean :: certified_unique`](BlockSynchroniser/Beluga/Patterns.lean#L152) | ✅ proved (uses BFT side conditions F-2 / F-3 form (a) — `NoEquivocationInParents`; see [`docs/mechanization-findings.md`](docs/mechanization-findings.md)). |
 
 ### §5 — Beluga's main theorems (Phase 5)
 
@@ -106,10 +98,11 @@ proofs were filled by Aristotle vs hand) lives in
 ## Notes on paper consistency
 
 > **Paper-side findings live in [`docs/mechanization-findings.md`](docs/mechanization-findings.md)**
-> (F-1 through F-8: scheduler-fairness for L1/L2, T7's safety/liveness
-> boundary, surfaced protocol invariants, quorum-size pinning, etc.).
-> That file uses paper terminology only and is the working list of
-> edits we plan to propose to the paper authors.
+> (F-1 through F-8 plus F-11: scheduler-fairness for L1/L2, T7's
+> safety/liveness boundary, surfaced protocol invariants,
+> quorum-size pinning, block-digest determinism, etc.). That file
+> uses paper terminology only and is the working list of edits we
+> plan to propose to the paper authors.
 >
 > The notes below cover only **Lean-side modeling decisions** — items
 > that don't surface a paper concern but explain how our formalization
