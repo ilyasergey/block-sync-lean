@@ -841,6 +841,62 @@ private lemma proposed_for_lt_currentRound
         exact hasProposedFor_monotone system vid bv_prev.currentRound k (k+1)
           (Nat.le_succ k) h_prop_k
 
+/-
+Iterated `SchedulerFairness`: starting from a post-GST step, every
+honest validator can be brought to currentRound ≥ R for any R, by
+applying `h_fair` `R` times. Requires a witness honest validator
+to drive the iteration.
+-/
+private lemma all_honest_eventually_at_round
+    (system : BlockSynchroniserSystem)
+    (time : TimeMap) (h_time : time.WellFormed)
+    (h_fair : SchedulerFairness system time)
+    (vid_w : ValidatorId) (h_w : isHonestValidator system vid_w = true)
+    (k₀ : Nat) (h_gst : time k₀ ≥ system.GST) :
+    ∀ R, ∃ k, k₀ ≤ k ∧ time k ≥ system.GST ∧
+      ∀ vid, isHonestValidator system vid = true →
+        ∃ bv, (belugaTrace system k).getValidator vid = some bv ∧
+              bv.currentRound ≥ R := by
+  intro R
+  induction R with
+  | zero =>
+    refine ⟨k₀, le_refl _, h_gst, ?_⟩
+    intro vid h_vid
+    obtain ⟨bv, h_bv⟩ := honest_validator_persistent_trace system vid h_vid k₀
+    exact ⟨bv, h_bv, Nat.zero_le _⟩
+  | succ R ih =>
+    obtain ⟨k_R, h_k_R_le, h_k_R_gst, h_all_R⟩ := ih
+    obtain ⟨bv_w, h_bv_w, h_bv_w_round⟩ := h_all_R vid_w h_w
+    obtain ⟨k', h_k'_le, _, h_all_succ⟩ :=
+      h_fair k_R bv_w.currentRound h_k_R_gst ⟨vid_w, bv_w, h_w, h_bv_w, rfl⟩
+    refine ⟨k', le_trans h_k_R_le h_k'_le,
+      le_trans h_k_R_gst (h_time.1 _ _ h_k'_le), ?_⟩
+    intro vid h_vid
+    obtain ⟨bv', h_bv', h_bv'_round⟩ := h_all_succ vid h_vid
+    exact ⟨bv', h_bv', le_trans (Nat.succ_le_succ h_bv_w_round) h_bv'_round⟩
+
+/- `hasProposedFor s vid r = true` iff a `block_propose vid _ r` op
+is in `s.emittedOperations`. Bridge between the boolean predicate
+and the operation-list witness. -/
+private lemma hasProposedFor_iff_mem (s : BelugaState)
+    (vid : ValidatorId) (r : Round) :
+    hasProposedFor s vid r = true ↔
+    ∃ B, ValidatorOperation.block_propose vid B r ∈ s.emittedOperations := by
+  unfold hasProposedFor
+  rw [List.any_eq_true]
+  constructor
+  · rintro ⟨op, hop_mem, hop_match⟩
+    cases op with
+    | block_propose v B r' =>
+      simp at hop_match
+      obtain ⟨h_v, h_r⟩ := hop_match
+      exact ⟨B, h_v ▸ h_r ▸ hop_mem⟩
+    | _ => simp at hop_match
+  · rintro ⟨B, h_mem⟩
+    refine ⟨ValidatorOperation.block_propose vid B r, h_mem, ?_⟩
+    simp +decide
+
+
 
 /-! ## The Beluga §5 post-GST liveness invariant
 
@@ -955,7 +1011,12 @@ theorem belugaTrace_satisfies_post_gst_liveness
     -- Using `≥` keeps the bundle independent of F-2's pinning while
     -- still being directly supported by the paper text.
     (hHonest : (system.validators.filter (fun p => p.2 = true)).length
-                ≥ 2 * system.f + 1) :
+                ≥ 2 * system.f + 1)
+    -- Paper §2 implicit: validator IDs are distinct (one record per
+    -- registered validator). Threaded through the trace via
+    -- `belugaTrace_validators_nodup`. Needed by T3/T4 to identify
+    -- the `findSome?` actor with the `find?`-target.
+    (h_sys_nodup : (system.validators.map Prod.fst).Nodup) :
     BelugaPostGSTLiveness system time := by
   refine
     { honest_round_sync := ?_
@@ -1012,7 +1073,8 @@ theorem lemma1_honest_round_entry
     (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
     (h_fair : SchedulerFairness system time)
-    (hHonest : (system.validators.filter (fun p => p.2 = true)).length ≥ 2 * system.f + 1) :
+    (hHonest : (system.validators.filter (fun p => p.2 = true)).length ≥ 2 * system.f + 1)
+    (h_sys_nodup : (system.validators.map Prod.fst).Nodup) :
     ∀ vid_ref r k₀, isHonestValidator system vid_ref = true →
       time k₀ ≥ system.GST →
       (∃ bv_ref, (belugaTrace system k₀).getValidator vid_ref = some bv_ref ∧
@@ -1021,7 +1083,7 @@ theorem lemma1_honest_round_entry
         ∀ vid, isHonestValidator system vid = true →
           ∃ bv, (belugaTrace system k').getValidator vid = some bv ∧
                 bv.currentRound ≥ r + 1 :=
-  (belugaTrace_satisfies_post_gst_liveness system time h_time h_sync h_fair hHonest).honest_round_sync
+  (belugaTrace_satisfies_post_gst_liveness system time h_time h_sync h_fair hHonest h_sys_nodup).honest_round_sync
 
 /-- **Lemma 2 (paper §5).** After GST, an honest validator at round
 `r` enters round `r + 1` within `3Δ`. -/
@@ -1031,7 +1093,8 @@ theorem lemma2_round_latency
     (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
     (h_fair : SchedulerFairness system time)
-    (hHonest : (system.validators.filter (fun p => p.2 = true)).length ≥ 2 * system.f + 1) :
+    (hHonest : (system.validators.filter (fun p => p.2 = true)).length ≥ 2 * system.f + 1)
+    (h_sys_nodup : (system.validators.map Prod.fst).Nodup) :
     ∀ vid r k,
       isHonestValidator system vid = true →
       time k ≥ system.GST →
@@ -1039,7 +1102,7 @@ theorem lemma2_round_latency
       ∃ k' ≥ k, time k' ≤ time k + 3 * system.Δ ∧
         ∃ bv, (belugaTrace system k').getValidator vid = some bv ∧
               bv.currentRound = r + 1 :=
-  (belugaTrace_satisfies_post_gst_liveness system time h_time h_sync h_fair hHonest).honest_round_advance
+  (belugaTrace_satisfies_post_gst_liveness system time h_time h_sync h_fair hHonest h_sys_nodup).honest_round_advance
 
 /-- **Theorem 1 (paper §5).** Beluga satisfies Block availability. -/
 theorem theorem1_block_availability
@@ -1048,9 +1111,10 @@ theorem theorem1_block_availability
     (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
     (h_fair : SchedulerFairness system time)
-    (hHonest : (system.validators.filter (fun p => p.2 = true)).length ≥ 2 * system.f + 1) :
+    (hHonest : (system.validators.filter (fun p => p.2 = true)).length ≥ 2 * system.f + 1)
+    (h_sys_nodup : (system.validators.map Prod.fst).Nodup) :
     BlockAvailability system (belugaTrace system) :=
-  (belugaTrace_satisfies_post_gst_liveness system time h_time h_sync h_fair hHonest).block_availability
+  (belugaTrace_satisfies_post_gst_liveness system time h_time h_sync h_fair hHonest h_sys_nodup).block_availability
 
 /-- **Theorem 2 (paper §5).** Beluga satisfies Causal availability.
 
@@ -1088,9 +1152,10 @@ theorem theorem3_round_progression
     (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
     (h_fair : SchedulerFairness system time)
-    (hHonest : (system.validators.filter (fun p => p.2 = true)).length ≥ 2 * system.f + 1) :
+    (hHonest : (system.validators.filter (fun p => p.2 = true)).length ≥ 2 * system.f + 1)
+    (h_sys_nodup : (system.validators.map Prod.fst).Nodup) :
     RoundProgression system (belugaTrace system) :=
-  (belugaTrace_satisfies_post_gst_liveness system time h_time h_sync h_fair hHonest).round_progression
+  (belugaTrace_satisfies_post_gst_liveness system time h_time h_sync h_fair hHonest h_sys_nodup).round_progression
 
 /-- **Theorem 4 (paper §5).** Beluga satisfies Round-Termination. -/
 theorem theorem4_round_termination
@@ -1099,9 +1164,10 @@ theorem theorem4_round_termination
     (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
     (h_fair : SchedulerFairness system time)
-    (hHonest : (system.validators.filter (fun p => p.2 = true)).length ≥ 2 * system.f + 1) :
+    (hHonest : (system.validators.filter (fun p => p.2 = true)).length ≥ 2 * system.f + 1)
+    (h_sys_nodup : (system.validators.map Prod.fst).Nodup) :
     RoundTermination system (belugaTrace system) :=
-  (belugaTrace_satisfies_post_gst_liveness system time h_time h_sync h_fair hHonest).round_termination
+  (belugaTrace_satisfies_post_gst_liveness system time h_time h_sync h_fair hHonest h_sys_nodup).round_termination
 
 /-- **Beluga is a block synchronizer (corollary of Theorems 1–4).**
 
@@ -1116,11 +1182,12 @@ theorem belugaTrace_isBlockSynchronizer
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
     (h_fair : SchedulerFairness system time)
     (hHonest : (system.validators.filter (fun p => p.2 = true)).length
-                ≥ 2 * system.f + 1) :
+                ≥ 2 * system.f + 1)
+    (h_sys_nodup : (system.validators.map Prod.fst).Nodup) :
     BlockSynchronizer system (belugaTrace system) :=
-  ⟨theorem3_round_progression system time h_time h_sync h_fair hHonest,
-   theorem4_round_termination system time h_time h_sync h_fair hHonest,
-   theorem1_block_availability system time h_time h_sync h_fair hHonest,
+  ⟨theorem3_round_progression system time h_time h_sync h_fair hHonest h_sys_nodup,
+   theorem4_round_termination system time h_time h_sync h_fair hHonest h_sys_nodup,
+   theorem1_block_availability system time h_time h_sync h_fair hHonest h_sys_nodup,
    theorem2_causal_availability system hids time h_time h_sync h_fair⟩
 
 end Theorems
