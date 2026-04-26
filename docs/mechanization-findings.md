@@ -45,7 +45,6 @@ Findings are grouped by status. Within each group, listed by severity.
 |---|---|---|---|---|---|---|
 | **F-1** | High | Missing assumption | §5 L1, L2 (and downstream §5 T1–T4) | Paper's `3Δ` round-synchronisation bound does not follow from the stated assumptions; prose proofs silently use a *scheduler-fairness* step. | Add **Assumption 2 (scheduler fairness)** stating honest validators act within Δ of becoming enabled. | Surfaced as `SchedulerFairness` hypothesis on L1, L2, T1–T4, and the Beluga corollary. Proofs *under that hypothesis* are queued (in flight). |
 | **F-1a** | High | Sub-finding of F-1 | §5 L2 derivation | The round-level shadow of Assumption 2 actually needed by L2 is the **lockstep** form (`≥ r + 1` within `3Δ`), not the catch-up form (`≥ r` within `3Δ`). The catch-up form is too weak to give L2's "round `r + 1` within `3Δ`" conclusion. | State Assumption 2's round-level corollary in lockstep form. | `SchedulerFairness` in `Beluga/Theorems.lean` is now the lockstep variant; L2 (`honest_round_advance`) is derived inline from it via the new `round_intermediate_value` helper. |
-| **F-5** | Medium | Surfaced invariant | §D.3 L13 ✓ fully closed for `belugaTrace`; L15 likewise; L16, T7 still hypothesis-only | Each proof relies on a protocol fact the paper takes as obvious — cert-base parents, DAG-parent connectivity, view-traceback to leader blocks, decision completeness. None are stated as lemmas. | Promote each to a named lemma in §D.3. | **L13 + L15 fully closed for `belugaTrace`**: all four protocol-invariant hypotheses (`h_admission`, `h_honest_unique`, `h_no_eq`, `h_authors_valid`) bundled in `Mysticeti.MysticetiSafetyInv` and proved sorry-free by `belugaTrace_satisfies_mysticetiSafetyInv` (in [`Mysticeti/SafetyInvariant.lean`](../BlockSynchroniser/Mysticeti/SafetyInvariant.lean)). Belu­gaTrace-specialised wrappers `lemma13_cert_persistence_belugaTrace` and `lemma15_unique_cert_belugaTrace` retain only the genuine BFT side conditions (`hN`, `h_byz_bound`, `hids`). **L16 (`h_view_traceback`) and T7 (`h_decision_complete`, `h_order_from_view`) still hypothesis-only** — these concern external `view`/`order` parameters and aren't derivable from trace state alone (overlap with F-7). |
 
 ### ✅ Resolved
 
@@ -53,7 +52,7 @@ Findings are grouped by status. Within each group, listed by severity.
 |---|---|---|---|---|---|---|
 | **F-2** | Medium | Scope-pinning | §2 (model), used throughout | The `\|A∩B\| ≥ f+1` bound for two `(2f+1)`-quorums only holds at `n = 3f+1` exactly; the paper writes `f < n/3` but uses fixed `2f+1` quorums uniformly. | Pin `n = 3f+1` explicitly, or scale quorum size to `n − f`. | `n = 3 * f + 1` explicit hypothesis on `quorumIntersection`, `certified_unique`, `lemma15_unique_cert`, `lemma10_round_robin_pigeonhole`; all proved. |
 | **F-3** | Medium | Surfaced invariant | §4.4 (uniqueness consequence), §D.3 L13 | Paper's "honest validators don't equivocate" is stated within-block; uniqueness proofs need both: **(a)** the cross-block parent-set agreement form, and **(b)** the block-uniqueness form (an honest validator authors at most one block per `(author, round)` pair). | State both forms alongside the within-block form. | Form (a) as `NoEquivocationInParents` (used by `certified_unique`); form (b) as `h_honest_unique` on L13. Both proved sorry-free under the hypotheses; **for `belugaTrace`, both are now derived sorry-free** (no honesty needed, even) from `BlockInv.uniquePropose` via `Mysticeti.MysticetiSafetyInv` (see F-5 row). |
-| **F-5** ↳ L13 part | Medium | Surfaced invariant (sub-item) | §D.3 L13 + L15 | DAG admission well-formedness (every block at round > 0 has ≥ 2f+1 distinct-author parents from the previous round, all in state) is silently used twice in L13's quorum-intersection chain. | Name as a lemma in §D.3. | Closed **as a theorem** about the executable trace: `belugaTrace_admissionWellFormed` (in `Beluga/AdmissionInvariant.lean`). Now part of the broader `MysticetiSafetyInv` bundle (`Mysticeti/SafetyInvariant.lean`) which also folds `h_honest_unique`, `h_no_eq`, `h_authors_valid`. Belu­gaTrace-specialised wrappers `lemma13_cert_persistence_belugaTrace` and `lemma15_unique_cert_belugaTrace` discharge all four hypotheses. |
+| **F-5** | Medium | Surfaced invariant | §D.3 L13 + L15 | Each proof relies on protocol-invariant DAG facts the paper takes as obvious — DAG admission well-formedness (cert-base parents + parent-set distinct authors), author-round uniqueness, no-equivocation in parents, authors-are-registered. None are stated as lemmas. | Promote each to a named lemma in §D.3. | Closed for the `belugaTrace` instantiation. The `MysticetiSafetyInv` bundle ([`Mysticeti/SafetyInvariant.lean`](../BlockSynchroniser/Mysticeti/SafetyInvariant.lean)) packages all four conjuncts as a single trace invariant — `admission` (via `belugaTrace_admissionWellFormed`), `uniqueByAuthorRound`, `noEquivocation`, `authorsValid` — and `belugaTrace_satisfies_mysticetiSafetyInv` proves the bundle sorry-free. The belugaTrace-specialised wrappers `lemma13_cert_persistence_belugaTrace` and `lemma15_unique_cert_belugaTrace` retain only the genuine BFT side conditions (`hN`, `h_byz_bound`, `hids`). The originally listed "view-traceback" and "decision-completeness" facts are *not* DAG invariants — they concern external `view`/`order` parameters, and are tracked under F-7 instead. |
 | **F-11** | Medium | Notation / definition | §2.1 block structure | Block digest `B.d` is treated as a primitive field, but every uniqueness argument silently relies on it being a *function of `(B.r, B.author)`* — i.e., the digest is determined by who wrote the block and at what round. | Define `B.d` as a function of `(r, author)` rather than a free field, or state the determinism as a named hypothesis. | `BlockInv` (in `causal_history` invariant chain) carries `B.d = digest system B.r B.author` as a trace invariant; `digest_injective` derived. |
 | **F-4** | Low | Surfaced invariant (naming) | §C.2 L4, L5 | Proofs of L4/L5 invoke Assumption 1 (latency triangle) implicitly to derive per-round Δ advancement. | Cite Assumption 1 explicitly, or state the round-advancement corollary as a named consequence. | `LatencyTriangle` explicit hypothesis on L4 and L5; both proved sorry-free. |
 | **F-8** | Low | Notational hygiene | §D.1.2 (round-robin), §D.3 L10, §4.2 (digest) | Two related ID-bound assumptions are silent: **(a)** `r mod n` round-robin presumes IDs are exactly `{0, …, n−1}` (used by L10); **(b)** `digest`'s injectivity presumes IDs are bounded by `n+1` (used by trace-invariant proofs). | State that the validator set has IDs `{0, …, n−1}` (covers both). | Form (a) as `h_ids` on L10; form (b) as `ValidIds` in the `Beluga/Protocol.lean` trace-invariant chain. |
@@ -260,47 +259,67 @@ being explicit about which.
 ## F-5. Surfaced invariants: protocol facts assumed in safety proofs
 
 **Affected statements.** Paper §D.3 (Mysticeti-Beluga safety),
-Lemma 13 (certificate persistence), Lemma 16 (consistent
-leader-status decision), Theorem 7 (consensus safety).
+Lemma 13 (certificate persistence) and Lemma 15 (uniqueness of
+certified leader per round).
 
 **Finding.** Each proof relies on a protocol invariant the paper
-treats as obvious but doesn't formally state. Mechanizing the
-proofs forced these out:
+treats as obvious but doesn't formally state. Mechanizing the proofs
+forced four out, all DAG-level facts:
 
-1. **DAG admission well-formedness (used in L13).** *Every block at a
-   positive round has at least `2f+1` distinct-author parents from the
-   immediately preceding round, all themselves in the state.* This is
-   a consequence of Beluga's parent-selection rule but is not named as
-   a lemma in the paper. The proof of L13 (paper §D.3) silently relies
-   on it twice: at round `r+2` it uses quorum intersection between any
-   block's `2f+1` parents and the `2f+1` certificate set of `B`; at
-   later rounds it uses the existence of a parent from the previous
-   round to thread the inductive argument. The paper's prose elides
-   both steps. **Status: ✓ closed in our formalization** as a *trace
-   invariant theorem* on the executable trace (no longer a hypothesis):
-   the compound trace invariant simultaneously tracks four properties
-   (admission well-formedness, propose-op-implies-block-in-state,
-   validator-ID match, and round-r-implies-allProposedFor-(r-1)) and is
-   preserved by each `tryActFor` branch. We recommend the paper state
-   this as a named lemma alongside §D.3's L13 — it's the load-bearing
-   step of the proof.
-2. **View-traceback (used in L16).** *Every non-`Undecided`
-   honest view on a digest `d` traces back to a leader block
-   `B` with `B.d = d` whose `directDecide` is non-`Undecided`.*
-   Captures the protocol invariant that all consensus decisions
-   originate from direct DAG-pattern observations on leader
-   blocks.
-4. **Decision completeness (used in T7).** *If one honest
-   validator's view on a digest is `Undecided`, then all honest
-   validators' views on that digest are `Undecided` (and vice
-   versa).* This is the liveness-derived property that honest
-   validators eventually all decide the same way. (See F-7a — we
-   flag this separately as a safety/liveness boundary issue.)
+1. **DAG admission well-formedness.** *Every block at a positive
+   round has at least `2f + 1` distinct-author parents from the
+   immediately preceding round, all themselves in the state.*
+2. **Author-round uniqueness.** *Any two blocks in the state with
+   the same `(author, round)` are equal.* Stronger than the paper's
+   "honest validators don't equivocate" — uniqueness here is total,
+   following from the protocol's *propose-op uniqueness* invariant
+   (digital signatures + at-most-one-propose-per-round behavior).
+3. **No equivocation in parents.** *For any two blocks in the state
+   that reference parents with the same `(author', round')`, the
+   referenced parents coincide.*
+4. **Authors are registered.** *Every block author corresponds to a
+   registered validator.*
 
-**Suggested fix.** Each is candidate material for a named lemma in
-§D.3. Items (1) and (2) follow from the DAG protocol structure;
-items (3) and (4) follow from §D.1's decision rules and the
-liveness theorems respectively.
+The proof of L13 (paper §D.3) uses item (1) twice — once at round
+`r + 2` for the quorum-intersection step, again at later rounds to
+thread the inductive argument — and items (2)–(4) for the
+quorum-intersection's "at least one honest validator referenced
+both" step. Paper L15 uses the same items (via
+`certified_unique`'s quorum-intersection chain).
+
+**Status: ✓ closed for the executable trace.** All four items
+are bundled in `Mysticeti.MysticetiSafetyInv`
+([`Mysticeti/SafetyInvariant.lean`](../BlockSynchroniser/Mysticeti/SafetyInvariant.lean)),
+and `belugaTrace_satisfies_mysticetiSafetyInv` proves the bundle
+sorry-free for `belugaTrace system k`:
+- item (1) via `belugaTrace_admissionWellFormed` (whose proof in
+  [`Beluga/AdmissionInvariant.lean`](../BlockSynchroniser/Beluga/AdmissionInvariant.lean)
+  threads a compound `TraceInv` through every `tryActFor` branch);
+- items (2) and (3) directly from `BlockInv.uniquePropose`
+  (already part of the `BlockInv → AcceptInv → CausallyClosed`
+  chain in [`Beluga/Protocol.lean`](../BlockSynchroniser/Beluga/Protocol.lean));
+- item (4) via a joint blocks-+-validator-IDs Nat induction
+  (Aristotle round `c2ca4a2e`).
+
+The belugaTrace-specialised wrappers
+`lemma13_cert_persistence_belugaTrace` and
+`lemma15_unique_cert_belugaTrace` consume the bundle, so their
+only remaining hypotheses are the genuine BFT side conditions
+(`hN`, `h_byz_bound`, `hids`).
+
+**Suggested fix for the paper.** Each of (1)–(4) is candidate
+material for a named lemma in §D.3 — they are load-bearing steps
+the prose treats as obvious. Naming them would also make L13 and
+L15 explicit about which invariants they consume, which is useful
+for follow-on protocol designs that vary the parent-selection
+rule.
+
+**Note: not in F-5.** Two facts the original entry listed —
+"view-traceback" (used in L16) and "decision completeness" (used
+in T7) — are *not* DAG invariants; they concern external
+`view : ConsensusView` / `order : TransactionOrder` parameters.
+Those are tracked under [F-7](#f-7-theorem-7s-prose-proof-slips-a-liveness-step-into-a-safety-claim)
+(safety/liveness boundary).
 
 ---
 
