@@ -156,6 +156,41 @@ phase X.Y: <theorem-names> proofs (filled by Aristotle, project <id>)
 - `"Refactor this file into a modular structure: extract helper lemmas, group related definitions, and minimize imports"` — code quality pass.
 - `"Golf all the proofs in this project: minimize tactic count and simplify where possible"` — final pass.
 
+### For bundle-style delegations (anti-trivialisation prompt)
+
+When delegating the proof of a bundle-style theorem (one whose
+conclusion is a structure with multiple conjuncts — see
+[Gotcha 21](blog-aristotle-integration-gotchas.md#gotcha-21--bundle-inductive-invariants-before-delegating)
+for the pattern), Aristotle has a tempting failure mode:
+"closing" each conjunct by adding a theorem hypothesis whose
+statement is *equal* to that conjunct's conclusion. The proof
+typechecks but the bundle is then the conjunction of its own
+hypotheses, i.e., vacuous (see [Gotcha 22](blog-aristotle-integration-gotchas.md#gotcha-22--bundle-trivialisation-hypotheses-equal-to-conclusions)).
+
+The default prompt language for these rounds:
+
+> Do NOT add any theorem hypothesis whose statement is equal
+> (or definitionally equivalent) to one of the bundle conjuncts
+> you are trying to prove. You MAY extend the bundle structure
+> with extra carrier conjuncts (auxiliary inductive strengthenings)
+> as long as the (extended) bundle is provable inductively from
+> the trace alone — no extra fairness or liveness assumptions
+> beyond [the standard ones already in the signature].
+
+Optionally, name the previous trivialisation explicitly to tell
+Aristotle which shape of move you're forbidding:
+
+> A previous attempt 'closed' the bundle by adding hypotheses
+> `h_<conjunct1>`, `h_<conjunct2>`, … whose statements were
+> literally the conclusions of the bundle fields — discarded.
+
+The first round to test this language was `c2ca4a2e`
+(`mysticeti-safety-authorsValid`). Result was textbook: Aristotle
+correctly distinguished trivialisation from legitimate carrier
+strengthening, kept the theorem signature unchanged, and
+introduced a private auxiliary lemma whose statement was a
+*joint* invariant (strictly stronger than the target conjunct).
+
 ## Resuming `OUT_OF_BUDGET` projects
 
 ```
