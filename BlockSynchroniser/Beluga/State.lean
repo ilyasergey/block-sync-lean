@@ -72,6 +72,12 @@ structure BelugaValidator where
   currentRound   : Round            := 0
   pendingBlocks  : List BlockDigest := []
   liveBulk       : List BlockDigest × List BlockDigest := ([], [])
+  /-- Wall-clock at which the validator entered `currentRound`. Used by
+  the per-round timeout `T_rd = 4Δ` (paper §4.2). Default `0` covers
+  the initial state where every validator starts at round `0` at
+  wall-clock `0`. The timeout fires at wall-clock
+  `roundEntryTime + 4Δ`. -/
+  roundEntryTime : Nat := 0
   deriving Repr, DecidableEq
 
 /-- Project a `BelugaValidator` to the abstract `Validator` (drop Beluga
