@@ -168,29 +168,37 @@ theorem lemma10_round_robin_pigeonhole
       norm_num [add_assoc, Nat.add_mod]
   grind
 
-/--
+/-
+In a list of ≥ f+1 registered validators, at least one is honest.
+Follows from h_byz_bound: at most f validators are Byzantine, so a list
+of > f registered validators contains at least one honest one.
+-/
+private lemma exists_honest_in_shared
+    (system : BlockSynchroniserSystem)
+    (shared : List ValidatorId)
+    (h_shared_nodup : shared.Nodup)
+    (h_shared_len : shared.length ≥ system.f + 1)
+    (h_shared_valid : ∀ vid ∈ shared, ∃ pair ∈ system.validators, pair.1 = vid)
+    (h_byz_bound : (system.validators.filter (fun p => p.2 = false)).length
+      ≤ system.f) :
+    ∃ v ∈ shared, isHonestValidator system v = true := by
+  contrapose! h_byz_bound;
+  refine' lt_of_lt_of_le h_shared_len _;
+  have h_byzantine_count : List.toFinset (List.map (fun p => p.1) (List.filter (fun p => p.2 = false) system.validators)) ⊇ List.toFinset shared := by
+    intro x hx; specialize h_byz_bound x; simp_all +decide [ isHonestValidator ] ;
+    cases h_shared_valid x hx <;> simp_all +decide [ BlockSynchroniserSystem.isHonest ];
+    cases h : List.find? ( fun x_1 => decide ( x_1.1 = x ) ) system.validators <;> simp_all +decide;
+    · exact False.elim <| h x |>.2 ‹_› rfl;
+    · grind;
+  have := Finset.card_mono h_byzantine_count; simp_all +decide [ List.toFinset_card_of_nodup ] ;
+  exact this.trans ( List.toFinset_card_le _ ) |> le_trans <| by simp +decide [ List.filter_eq ] ;
+
+/-
 **Lemma 13 (paper Appendix D.3).**
 *If `2f+1` round-`(r+1)` blocks from distinct validators reference a
 block `B` formed in round `r`, then every block in any round `r' > r+1`
 must (directly or transitively) reach a referencer of `B` via the
 causal-history relation.*
-
-PROVIDED SOLUTION (paper Appendix D)
-Recall that a block is a certificate for `B` if it references `2f+1`
-blocks that themselves reference `B`. Consider round `r+1`. Every
-block in this round references `2f+1` blocks from round `r`. By quorum
-intersection, any such set intersects the certificate set of `B` in at
-least one honest validator. Since honest validators do not equivocate,
-every round-`(r+1)` block must reference a block that is a certificate
-for `B`. By induction over rounds, this property propagates to all
-`r' > r`.
-
-The paper-implicit "every block has 2f+1 parents from the previous
-round" structural property lives in
-[`Beluga/AdmissionInvariant.lean :: AdmissionWellFormed`](../Beluga/AdmissionInvariant.lean)
-(a trace invariant of `belugaTrace`'s `step`, not an adversary
-constraint). The proof of L13 reconstructs the quorum-intersection
-step inside the proof rather than assuming its conclusion.
 -/
 theorem lemma13_cert_persistence
     (system : BlockSynchroniserSystem) {S} [SystemState S] (state : S)
@@ -204,6 +212,11 @@ theorem lemma13_cert_persistence
       ∃ pair ∈ system.validators, pair.1 = B'.author)
     (h_byz_bound : (system.validators.filter (fun p => p.2 = false)).length
       ≤ system.f)
+    -- Honest validators produce at most one block per (author, round) pair.
+    -- In a real protocol, this follows from digital signatures + honest behavior.
+    (h_honest_unique : ∀ B₁ ∈ SystemState.blocks state, ∀ B₂ ∈ SystemState.blocks state,
+      isHonestValidator system B₁.author = true →
+      B₁.author = B₂.author → B₁.r = B₂.r → B₁ = B₂)
     (B : Block) (h_B : B ∈ SystemState.blocks state)
     (h_cert : ∃ certs : List Block,
                 certs.length ≥ 2 * system.f + 1 ∧
@@ -218,7 +231,48 @@ theorem lemma13_cert_persistence
   -- `h_no_eq` + `hN` (paper Appendix D's quorum-intersection step).
   -- The inductive step uses `h_admission` for the previous-round
   -- parent + IH + `Reaches.trans`.
-  sorry
+  -- By induction on $d = B'.r - (B.r + 2)$, we can show that there exists a certificate for $B$ that $B'$ reaches.
+  have h_ind : ∀ d ≥ 0, ∀ B' : Block, B' ∈ SystemState.blocks state → B'.r = B.r + 2 + d → ∃ C, isCertificateFor state C B ∧ Reaches state B' C := by
+    intro d hd B' hB' hB'_r
+    induction' d with d ih generalizing B';
+    · obtain ⟨ certs, hcerts₁, hcerts₂, hcerts₃, hcerts₄ ⟩ := h_cert;
+      obtain ⟨parents, hparents₁, hparents₂, hparents₃⟩ : ∃ parents : List Block, parents.length ≥ 2 * system.f + 1 ∧ (parents.map (·.author)).Nodup ∧ ∀ P ∈ parents, P ∈ SystemState.blocks state ∧ P.d ∈ B'.parents ∧ P.r + 1 = B'.r := by
+        have := h_admission B' hB';
+        grind;
+      -- By quorum intersection, there exists a shared list of at least f+1 elements between parents and certs.
+      obtain ⟨shared, hshared₁, hshared₂⟩ : ∃ shared : List ValidatorId, shared.Nodup ∧ shared.length ≥ system.f + 1 ∧ ∀ vid ∈ shared, vid ∈ parents.map (·.author) ∧ vid ∈ certs.map (·.author) := by
+        apply Quorum.quorumIntersection system (parents.map (·.author)) (certs.map (·.author));
+        · constructor;
+          · assumption;
+          · grind;
+        · constructor;
+          · assumption;
+          · grind +locals;
+        · exact hN;
+      obtain ⟨v, hv⟩ : ∃ v ∈ shared, isHonestValidator system v = true := by
+        apply exists_honest_in_shared;
+        · assumption;
+        · linarith;
+        · grind;
+        · exact h_byz_bound;
+      obtain ⟨P, hP⟩ : ∃ P ∈ parents, P.author = v := by
+        simpa using hshared₂.2 v hv.1 |>.1
+      obtain ⟨C, hC⟩ : ∃ C ∈ certs, C.author = v := by
+        simpa using hshared₂.2 v hv.1 |>.2;
+      have hP_eq_C : P = C := by
+        grind +locals;
+      use C;
+      exact ⟨ hcerts₄ C hC.1, Reaches.step ( Reaches.refl _ ) ⟨ by aesop, by aesop, by aesop ⟩ ⟩;
+    · -- By the admission invariant, B' has parents with ≥ 2f+1 entries, each P at round B'.r - 1.
+      obtain ⟨parents, h_parents⟩ : ∃ parents : List Block, parents.length ≥ 2 * system.f + 1 ∧ (parents.map (·.author)).Nodup ∧ ∀ P ∈ parents, P ∈ SystemState.blocks state ∧ P.d ∈ B'.parents ∧ P.r = B'.r - 1 := by
+        have := h_admission B' hB' (by
+        grind);
+        exact ⟨ this.choose, this.choose_spec.1, this.choose_spec.2.1, fun P hP => ⟨ this.choose_spec.2.2 P hP |>.1, this.choose_spec.2.2 P hP |>.2.1, eq_tsub_of_add_eq <| this.choose_spec.2.2 P hP |>.2.2 ⟩ ⟩;
+      obtain ⟨P, hP⟩ : ∃ P ∈ parents, ∃ C, isCertificateFor state C B ∧ Reaches state P C := by
+        rcases parents <;> aesop;
+      obtain ⟨ C, hC₁, hC₂ ⟩ := hP.2;
+      exact ⟨ C, hC₁, Reaches.step ( Reaches.refl _ ) ⟨ h_parents.2.2 P hP.1 |>.2.1, h_parents.2.2 P hP.1 |>.1, hB' ⟩ |> Reaches.trans <| hC₂ ⟩;
+  exact h_ind ( B'.r - ( B.r + 2 ) ) ( Nat.zero_le _ ) B' h_in ( by rw [ add_tsub_cancel_of_le h_later ] )
 
 /-
 **Lemma 14 (paper Appendix D.3).**

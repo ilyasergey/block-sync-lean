@@ -434,6 +434,67 @@ new sorry is a *named* protocol invariant rather than an opaque body
 sorry. Per CLAUDE.md the structural decomposition is itself worth
 committing.
 
+## Project 9f17cf80-caba-4369-90b2-0a99a175e394 (admission-invariant round)
+
+| Field | Value |
+|---|---|
+| Submitted | 2026-04-26 03:00 SGT |
+| Returned | 2026-04-26 ~07:30 SGT (status `COMPLETE_WITH_ERRORS`) |
+| Result tarball | `/tmp/aristotle-radm.tar.gz` |
+| Prompt | Prove `belugaTrace_admissionWellFormed` (trace invariant) + the revised `lemma13_cert_persistence` (paper §D.3 argument with quorum-intersection derived inside, not assumed). |
+| Integration commit | (TBD; this commit) |
+
+### Theorems closed
+
+| Theorem | Strategy |
+|---|---|
+| `belugaTrace_admissionWellFormed` | Defined a compound `TraceInv` carrying *four* simultaneous properties: `AdmissionWellFormed`, every `block_propose` op has its block in state, validators-IDs match the system, and validators at round r > 0 satisfy `allProposedFor (r-1)`. Proved `TraceInv` at init (vacuously), preserved by each `tryActFor` branch, and projected to `AdmissionWellFormed`. The hardest case is `doPropose` at round r > 0: the compound invariant supplies `allProposedFor (r-1)`, which then yields ≥ n distinct-author blocks at round r-1 — the parent witness. |
+| `lemma13_cert_persistence` | Strong induction on `B'.r - (B.r + 2)`. Base case via `h_admission` + `Quorum.quorumIntersection` + `exists_honest_in_shared` (new helper) + `h_honest_unique` (new hypothesis: honest validator authors at most one block per (author, round) — standard BFT property). Inductive step via `h_admission` + IH + `Reaches.trans`. |
+
+### New auxiliaries / hypotheses
+
+- **New auxiliary `exists_honest_in_shared`**: pigeonhole — in a Nodup
+  list of ≥ f+1 registered validators, at least one is honest given
+  ≤ f Byzantine validators. Proved sorry-free.
+- **New hypothesis on L13: `h_honest_unique`**: honest validators
+  produce at most one block per `(author, round)` pair. This is
+  standard BFT (follows from digital signatures); needed to identify
+  the shared honest validator's parent block with their certificate
+  block in the base case.
+- **`set_option maxHeartbeats 800000`** at top of
+  `AdmissionInvariant.lean`: Aristotle's `TraceInv` preservation
+  proofs are deeply nested case-splits; the heartbeat bump is
+  necessary for them to typecheck.
+
+### Side effects
+
+- `AdmissionInvariant.lean`: ~6 helper lemmas added (init,
+  `hasProposedFor_append`, `allProposedFor_append`,
+  `allProposedFor_of_same_ops`, `updateValidator_map_fst`,
+  `admission_of_same_blocks`, `admission_of_cons_blocks`,
+  `allProposedFor_gives_blocks`). All sorry-free.
+- `Safety.lean`: `lemma13_cert_persistence`'s body filled; signature
+  gained `h_honest_unique` and dropped the dead old hypothesis name
+  references (signature otherwise as restructured).
+- `set_option linter.unusedSimpArgs false` already at top of Safety
+  (from earlier rounds); kept.
+- No `import Mathlib`; no `exact?`; standard axioms only.
+
+### Verifier confirmation
+
+`lake build` passes (6246 jobs). Both target files are now sorry-free.
+Sorry delta: −2 (the two we submitted to close); no new sorries added.
+
+### Notes
+
+- This round closes finding **F-5 (item 1)** entirely — the
+  DAG-admission well-formedness invariant is now a *theorem* about
+  `belugaTrace`, not a hypothesis. L13 specialised to `belugaTrace`
+  no longer surfaces it as a side condition.
+- Demonstrates the value of trace-invariant decomposition: the
+  compound `TraceInv` carrier was the right framing for both the
+  trace invariant and L13's quorum-intersection step.
+
 ## Future projects
 
 When a new Aristotle submission completes and is integrated, append

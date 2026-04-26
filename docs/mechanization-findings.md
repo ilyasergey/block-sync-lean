@@ -219,9 +219,14 @@ proofs forced these out:
    block's `2f+1` parents and the `2f+1` certificate set of `B`; at
    later rounds it uses the existence of a parent from the previous
    round to thread the inductive argument. The paper's prose elides
-   both steps. **Status:** surfaced as an explicit hypothesis; proof
-   that the Beluga trace satisfies it is queued (see commentary on
-   `belugaTrace_admissionWellFormed` in our model).
+   both steps. **Status: ✓ closed in our formalization** as a *trace
+   invariant theorem* on the executable trace (no longer a hypothesis):
+   the compound trace invariant simultaneously tracks four properties
+   (admission well-formedness, propose-op-implies-block-in-state,
+   validator-ID match, and round-r-implies-allProposedFor-(r-1)) and is
+   preserved by each `tryActFor` branch. We recommend the paper state
+   this as a named lemma alongside §D.3's L13 — it's the load-bearing
+   step of the proof.
 2. **View-traceback (used in L16).** *Every non-`Undecided`
    honest view on a digest `d` traces back to a leader block
    `B` with `B.d = d` whose `directDecide` is non-`Undecided`.*
