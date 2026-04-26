@@ -1,5 +1,17 @@
 # Stage 1 — Paper-side notes from the mechanization
 
+> The companion [`formalization.md`](../formalization.md) is the
+> paper→code map and per-item proof-status table — it shows
+> *which* paper definitions, lemmas, and theorems are mechanized
+> and *what state* each is in (✅ done · ◐ in progress · ☐ planned ·
+> ⊘ out of scope · ⏸ deferred · ⚠️ proved with paper-faithfulness
+> concerns). The present Stage 1 doc is the *paper-author-facing*
+> distillation of that map: only the ✅-status items, in paper
+> order, with a single-paragraph "what to add and why" per entry.
+> Read `formalization.md` first if you want the full picture of
+> what is and isn't proved; read this doc if you want the short
+> list of edits to consider for the manuscript.
+
 This document lists, in the order theorems appear in the paper,
 suggested additions to the *Beluga: Block Synchronization for BFT
 Consensus Protocols* manuscript that arose while formally verifying
