@@ -44,13 +44,14 @@ Status: ✅ done · ◐ in progress · ☐ planned · ⊘ out of scope · ⏸ de
 
 | Paper | Code | Status |
 |---|---|---|
-| §5 — **Lemma 1** — after GST, all honest validators reach the same round within 3Δ | [`Beluga/Theorems.lean :: lemma1_honest_round_entry`](BlockSynchroniser/Beluga/Theorems.lean#L253) | ◐ Stated with timing (`time k ≥ GST + 3Δ`) under `SchedulerFairness` (finding F-1); proof pending |
-| §5 — **Lemma 2** — round-to-round latency ≤ 3Δ in the happy case | [`Beluga/Theorems.lean :: lemma2_round_latency`](BlockSynchroniser/Beluga/Theorems.lean#L288) | ◐ Stated with timing (`time k' ≤ time k + 3Δ`) under `SchedulerFairness`; proof pending |
-| §5 — **Theorem 1** — Beluga ⊨ Block availability | [`Beluga/Theorems.lean :: theorem1_block_availability`](BlockSynchroniser/Beluga/Theorems.lean#L315) | ◐ Stated under `SchedulerFairness`; proof pending |
-| §5 — **Theorem 2** — Beluga ⊨ Causal availability | [`Beluga/Theorems.lean :: theorem2_causal_availability`](BlockSynchroniser/Beluga/Theorems.lean#L344) | ◐ Stated under `SchedulerFairness`; proof pending |
-| §5 — **Theorem 3** — Beluga ⊨ Round-Progression | [`Beluga/Theorems.lean :: theorem3_round_progression`](BlockSynchroniser/Beluga/Theorems.lean#L371) | ◐ Stated under `SchedulerFairness`; proof pending |
-| §5 — **Theorem 4** — Beluga ⊨ Round-Termination | [`Beluga/Theorems.lean :: theorem4_round_termination`](BlockSynchroniser/Beluga/Theorems.lean#L402) | ◐ Stated under `SchedulerFairness`; proof pending |
-| §5 corollary — Beluga is a block synchronizer (T1∧T2∧T3∧T4) | [`Beluga/Theorems.lean :: belugaTrace_isBlockSynchronizer`](BlockSynchroniser/Beluga/Theorems.lean#L418) | ◐ Conjunction proved trivially as `⟨T3, T4, T1, T2⟩`; gates on T1–T4 (still pending) |
+| §5 — **Lemma 1** — after GST, all honest validators reach the same round within 3Δ | [`Beluga/Theorems.lean :: lemma1_honest_round_entry`](BlockSynchroniser/Beluga/Theorems.lean#L364) | ◐ One-line projection of the `BelugaPostGSTLiveness` bundle (see below) |
+| §5 — **Lemma 2** — round-to-round latency ≤ 3Δ in the happy case | [`Beluga/Theorems.lean :: lemma2_round_latency`](BlockSynchroniser/Beluga/Theorems.lean#L382) | ◐ One-line projection of the bundle |
+| §5 — **Theorem 1** — Beluga ⊨ Block availability | [`Beluga/Theorems.lean :: theorem1_block_availability`](BlockSynchroniser/Beluga/Theorems.lean#L398) | ◐ One-line projection of the bundle |
+| §5 — **Theorem 2** — Beluga ⊨ Causal availability | [`Beluga/Theorems.lean :: theorem2_causal_availability`](BlockSynchroniser/Beluga/Theorems.lean#L415) | ✅ proved locally via `causallyClosed_trace` (no fairness needed) |
+| §5 — **Theorem 3** — Beluga ⊨ Round-Progression | [`Beluga/Theorems.lean :: theorem3_round_progression`](BlockSynchroniser/Beluga/Theorems.lean#L437) | ◐ One-line projection of the bundle |
+| §5 — **Theorem 4** — Beluga ⊨ Round-Termination | [`Beluga/Theorems.lean :: theorem4_round_termination`](BlockSynchroniser/Beluga/Theorems.lean#L447) | ◐ One-line projection of the bundle |
+| §5 — **Bundle**: `BelugaPostGSTLiveness` packaging L1, L2, T1, T3, T4 | [`Beluga/Theorems.lean :: BelugaPostGSTLiveness`](BlockSynchroniser/Beluga/Theorems.lean#L315) | ◐ Definition stated; proof of `belugaTrace_satisfies_post_gst_liveness` is the load-bearing pending obligation (in flight) |
+| §5 corollary — Beluga is a block synchronizer (T1∧T2∧T3∧T4) | [`Beluga/Theorems.lean :: belugaTrace_isBlockSynchronizer`](BlockSynchroniser/Beluga/Theorems.lean#L461) | ◐ Conjunction `⟨T3, T4, T1, T2⟩`; gates on the bundle (T1, T3, T4) |
 
 ### Appendix C — Performance bounds
 
