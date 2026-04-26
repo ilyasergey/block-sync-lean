@@ -419,6 +419,108 @@ inductive invariant, not a leaf theorem that uses it. If you find
 yourself running 7 rounds on a single file, stop and ask: "is there
 one invariant under all of these?" If yes, bundle it.
 
+## Gotcha 22 — Bundle trivialisation: hypotheses equal to conclusions
+
+**Symptom.** You delegate the bundle theorem
+`belugaTrace_satisfies_<bundle-name>` (per Gotcha 21). Aristotle
+returns `COMPLETE_WITH_ERRORS`: the bundle proof typechecks, but
+when you read it the proof is
+
+```
+refine ⟨h_round_sync, ..., h_propose_complete, h_accept_complete⟩
+```
+
+…where `h_round_sync`, `h_propose_complete`, etc. are *new
+hypotheses* Aristotle added to the theorem's parameter list, and
+their *statements* are exactly the conclusions of the bundle's
+fields. The theorem is now vacuous: the bundle is the conjunction
+of its own hypotheses.
+
+**Cause.** When Aristotle is stuck on the inductive carrier, it can
+"close" each conjunct by lifting it to a hypothesis. This is
+locally valid Lean (the proof typechecks), but it pushes the
+work onto the wrappers — and since the wrappers project from the
+bundle, *they* now need to discharge the hypotheses to apply the
+bundle theorem. The wrappers don't have what's needed; you've gone
+in a circle.
+
+It's a more subtle cousin of Gotcha 12 (Aristotle adds hypotheses
+to your theorem statements). The difference: Gotcha 12's added
+hypotheses are usually *helpers* that bridge a real gap (BFT
+side conditions, structural facts). Trivialisation hypotheses
+*are* the conclusion. If you remove them, the proof breaks.
+
+**Fix.** Two-step:
+
+1. **Selectively integrate.** Don't accept the bundle proof
+   wholesale. Read each conjunct of the proof:
+   - If a conjunct is derived from non-circular hypotheses (e.g.
+     a strengthened fairness assumption that captures a paper-level
+     fact), *keep that conjunct* — it's real work. Move the
+     strengthened hypothesis into the bundle's signature (or
+     redefine an existing definition to absorb it).
+   - If a conjunct is `exact h_<conjunct-name>` for a hypothesis
+     equal to the conjunct's conclusion, *discard* that conjunct
+     and the hypothesis. Re-stub with `sorry`.
+   Also keep any sorry-free helper lemmas Aristotle introduced —
+   they're often genuinely useful (e.g., trace-structure facts
+   independent of the bundle).
+2. **Resubmit with explicit anti-trivialisation language.** The
+   prompt for the next round must say something like:
+
+   > Do NOT add any theorem hypothesis whose statement is equal
+   > (or definitionally equivalent) to one of the bundle conjuncts
+   > you are trying to prove. You MAY extend the bundle structure
+   > with extra carrier conjuncts as long as the (extended) bundle
+   > is provable inductively from the trace alone — no extra
+   > fairness or liveness assumptions beyond [the standard ones].
+
+   Naming the previous trivialisation explicitly ("a previous
+   attempt 'closed' the bundle by adding hypotheses
+   `h_<name1>`, `h_<name2>`, … whose statements were literally
+   the conclusions of the bundle fields — discarded") helps; it
+   tells Aristotle which shape of move you're forbidding.
+
+**Why this happens.** The same property that makes the bundle
+pattern useful — that the carrier's conjuncts are mutually
+inductive — also gives Aristotle a tempting escape hatch when
+the induction is hard. Each conjunct, in isolation, looks like a
+free-standing lemma; promoting it to a hypothesis is
+locally-valid backtracking. The mitigation is *workflow*: the
+selective-integration pass + the anti-trivialisation prompt
+language.
+
+**Concrete example.** Aristotle round `4f618efb` on the Beluga §5
+bundle. Aristotle introduced 5 new hypotheses:
+- `h_lockstep` — a *strengthening* of `SchedulerFairness`. This
+  one was real work (captures finding F-1a — see
+  `mechanization-findings.md`); we kept the L2 derivation it
+  enabled and absorbed `h_lockstep` into a redefined
+  `SchedulerFairness`.
+- `h_round_sync`, `h_store_liveness`, `h_propose_complete`,
+  `h_accept_complete` — each one literally the conclusion of the
+  corresponding bundle field. **Discarded.**
+
+Plus 5 sorry-free helper lemmas about the trace's round
+structure (`step_round_at_most_one`,
+`round_intermediate_value`, etc.). **Kept** — used in the inline
+L2 derivation and reusable for future rounds.
+
+After selective integration, the bundle theorem went from "5
+sorries + 5 trivialising hypotheses" to "4 sorries + L2 derived
+inline, no extra hypotheses". The next Aristotle round
+(`e8212038`, in flight) was submitted with the
+anti-trivialisation prompt above.
+
+**Why this is a gotcha.** Without reading the proof body, the
+returned tarball *looks* like a successful round — `COMPLETE_WITH_ERRORS` with a
+short error count, the bundle theorem typechecks, all wrappers
+compile. The triviality is only visible when you compare the
+*hypothesis statements* to the bundle's *field statements*.
+You'll catch this every time *if* you make "diff hypotheses
+against conclusions" part of your selective-integration
+checklist.
+
 ## What we'd put in a blog post
 
 The operational thesis: **the math tactical wall and integration
