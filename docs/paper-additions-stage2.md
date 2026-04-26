@@ -90,6 +90,26 @@ The deviation from the paper's strict statement is recorded as
 finding **F-1b** in
 [`mechanization-findings.md`](mechanization-findings.md).
 
+### Audit: none of L1's six citations need the strict form
+
+We checked every site in the paper that cites Lemma 1:
+
+| Cite | What it needs |
+|---|---|
+| §4.2 — timeout `T_rd = 4Δ` setting | "all reach round `≥ r + 1` in 3Δ" (slowest validator covers the timeout) |
+| §5 L2 proof — "2f+1 honest proposed for r" | "all reach `≥ r + 1`" + protocol's propose-before-advance gate |
+| Happy-case timing analysis (§5) | same as L2 |
+| §D.2 L8 proof — "honest leader **able to enter** round r" | reachability claim — explicit phrasing in the proof |
+| §D.2 block-reception bound | reach round → propose at that round → blocks received |
+| Lemma 4 proof — "call the common round r" | naming convention; downstream uses "everyone proposed for r-1" |
+
+**None requires gap-0 simultaneity.** The strict same-round
+phrasing is rhetorical — it reads cleanly but doesn't pull weight
+in any downstream argument. Restating L1 in the lockstep-progress
+form would make L1 *both* provable from the cited assumptions
+*and* a tighter match to the paper's actual usage; the existing
+prose in §5 / §D.2 would not need to change.
+
 ---
 
 ## Outlook

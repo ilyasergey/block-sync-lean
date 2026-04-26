@@ -201,11 +201,64 @@ is a one-line `h_fair` call. The deviation from the paper is that
 we conclude `≥ r + 1` rather than `= r + 1` (i.e., gap ≤ 1
 rather than gap = 0).
 
-**Suggested fix for the paper.** Either restate L1 in the
-lockstep-progress form (matching what's actually used by
-downstream proofs in §5), or, if the strict form is intended,
-add a paragraph explaining how it follows from the model's
-atomic round-transition behaviour or from a gap-0 argument.
+**Suggested fix for the paper.** Restate L1 in the
+lockstep-progress form. The strict same-round wording is
+rhetorical convenience that doesn't reflect what L1's downstream
+consumers actually need — see the analysis below.
+
+### F-1b cont. — L1's six paper citations only need the lockstep form
+
+Auditing every cite-site of Lemma 1 in the paper:
+
+1. **§4.2 — setting the per-round timeout `T_rd = 4Δ`.** "*the
+   per-round timeout `T_rd`, which is set to 4Δ to ensure all
+   honest blocks are received (Lemma 1)*". The justification is
+   "round-entry in 3Δ + 1Δ block delivery = 4Δ". Needs only "all
+   reach round `≥ r + 1` within 3Δ" — the timeout has to cover
+   the slowest validator; whether all are at exactly `r + 1` or
+   some at `r + 2` doesn't matter.
+
+2. **§5 Lemma 2 proof** uses L1 to establish "2f+1 honest validators
+   have proposed for round `r`". By the protocol's
+   propose-before-advance gate (`tryActFor` priority), every
+   validator reaching `≥ r + 1` has proposed for `r`. Weaker L1
+   suffices.
+
+3. **Happy-case timing analysis (§5)** — same shape as (2): L1
+   gives "all at round r within 3Δ"; the downstream needs "all
+   created round-r blocks", which follows from the weaker form.
+
+4. **§D.2 Lemma 8 proof** — "*After GST, if an honest validator
+   enters a round r, then the honest leader validator (and every
+   other honest validator) will **be able to enter** the same
+   round r within 3Δ (Lemma 1).*" The phrasing **"be able to
+   enter"** is a *reachability* claim, not a simultaneity claim:
+   every honest reaches round `r` at some point, which is exactly
+   the weaker L1's content (every honest passes through `r` on
+   the way to `≥ r + 1`).
+
+5. **§D.2 block-reception bound** — "*By Lemma 1, every honest
+   validator can receive 2f+1 honest blocks from round r+1 within
+   4Δ*". Same pattern: reach round → propose at that round →
+   blocks received. Weaker L1 suffices.
+
+6. **Lemma 4 proof** — "*By Lemma 1, all honest validators enter
+   a common round within 3Δ after GST; w.l.o.g. call this round r
+   and let `t_r := GST + 3Δ`*". L1 is used as a *naming
+   convention* — the round `r` is just "the common round all are
+   at". The downstream argument uses "everyone has proposed for
+   `r - 1` by `t_r`", which the weaker L1 delivers.
+
+**None of L1's six citations require the strict same-round form.**
+The strict wording simplifies the prose ("the same round")
+relative to the lockstep-progress form ("at round `≥ r + 1` with
+gap ≤ 1") but doesn't pull weight in any downstream argument.
+Restating L1 in the lockstep-progress form would (a) make L1
+provable from the cited assumptions, (b) match the operational
+content the paper's own proofs consume, and (c) reduce the
+risk of confusion for readers who try to use L1 in a context
+that does need simultaneity (no such context appears in the
+present paper, but the strict wording invites mis-application).
 
 ---
 
