@@ -246,7 +246,7 @@ private lemma authorsValid_trace
 
 /-- The Beluga trace satisfies the Mysticeti safety invariant bundle.
 
-All four conjuncts are sorry-free:
+All four conjuncts are proved:
 - `admission` ← `belugaTrace_admissionWellFormed`,
 - `uniqueByAuthorRound` ← `blockInv_trace` + `BlockInv.uniquePropose`,
 - `noEquivocation` ← `blockInv_trace` + `BlockInv.uniquePropose`,
