@@ -22,7 +22,7 @@ import BlockSynchroniser.Trace
 namespace BlockSynchroniser
 
 /-- A wall-clock time map. `time i` is the timestamp of step `i`. -/
-def TimeMap := Nat → Nat
+abbrev TimeMap := Nat → Nat
 
 namespace TimeMap
 

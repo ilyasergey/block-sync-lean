@@ -20,12 +20,13 @@ import BlockSynchroniser.Properties
 import BlockSynchroniser.Timing
 import BlockSynchroniser.Beluga.Protocol
 import BlockSynchroniser.Beluga.AdmissionInvariant
+import BlockSynchroniser.Beluga.Network.Fairness
 
 namespace BlockSynchroniser
 namespace Beluga
 namespace Theorems
 
-open Properties
+open Properties Network
 
 /-! ## Section 5 — Main theorems
 
@@ -1419,10 +1420,18 @@ via `proposed_for_lt_currentRound` and counts via `toFinset.card`. -/
 private lemma round_progression_aux
     (system : BlockSynchroniserSystem)
     (time : TimeMap) (h_time : time.WellFormed)
-    (h_fair : SchedulerFairness system time)
+    (h_delivery : Network.NetworkDelivery system time)
+    (h_scheduling : Network.ActionScheduling system time)
     (hHonest : HonestBFTBound system)
     (h_sys_nodup : ValidatorsNodup system) :
     RoundProgression system (belugaTrace system) := by
+  have h_fair : SchedulerFairness system time := by
+    have h := Network.belugaTrace_schedulerFairness system time h_time.1 h_delivery h_scheduling
+    -- SchedulerFairness and Network.SchedulerFairness_belugaTrace have
+    -- definitionally identical bodies (3Δ-bounded, about belugaTrace).
+    unfold SchedulerFairness
+    unfold Network.SchedulerFairness_belugaTrace at h
+    exact h
   intro round
   unfold HonestBFTBound at hHonest
   set honest_pairs := system.validators.filter (fun p => p.2 = true) with h_hp_def
@@ -1529,10 +1538,18 @@ lemma round_termination_aux
     (system : BlockSynchroniserSystem)
     (hids : ValidIds system)
     (time : TimeMap) (h_time : time.WellFormed)
-    (h_fair : SchedulerFairness system time)
+    (h_delivery : Network.NetworkDelivery system time)
+    (h_scheduling : Network.ActionScheduling system time)
     (hHonest : HonestBFTBound system)
     (h_sys_nodup : ValidatorsNodup system) :
     RoundTermination system (belugaTrace system) := by
+  have h_fair : SchedulerFairness system time := by
+    have h := Network.belugaTrace_schedulerFairness system time h_time.1 h_delivery h_scheduling
+    -- SchedulerFairness and Network.SchedulerFairness_belugaTrace have
+    -- definitionally identical bodies (3Δ-bounded, about belugaTrace).
+    unfold SchedulerFairness
+    unfold Network.SchedulerFairness_belugaTrace at h
+    exact h
   intro round vid h_honest
   unfold HonestBFTBound at hHonest
   obtain ⟨k₀, hk₀_gst⟩ := h_time.2 system.GST
@@ -1769,10 +1786,21 @@ theorem belugaTrace_satisfies_post_gst_liveness
     (time : TimeMap)
     (h_time : time.WellFormed)
     (_h_sync : PartiallySynchronous system (belugaTrace system) time)
-    (h_fair : SchedulerFairness system time)
+    (h_delivery : Network.NetworkDelivery system time)
+    (h_scheduling : Network.ActionScheduling system time)
     (hHonest : HonestBFTBound system)
     (h_sys_nodup : ValidatorsNodup system) :
     BelugaPostGSTLiveness system time := by
+  -- Derive scheduler fairness for `belugaTrace` from the paper §2 + §4.2
+  -- primitives via the network-aware refinement (Network/Fairness.lean).
+  -- This is the load-bearing replacement of the previous
+  -- `(h_fair : SchedulerFairness system time)` axiomatic parameter.
+  have h_fair_belugaTrace : Network.SchedulerFairness_belugaTrace system time :=
+    Network.belugaTrace_schedulerFairness system time h_time.1 h_delivery h_scheduling
+  -- The local `SchedulerFairness` definition matches
+  -- `SchedulerFairness_belugaTrace` (both are 5Δ since the migration); use
+  -- as `h_fair`.
+  have h_fair : SchedulerFairness system time := h_fair_belugaTrace
   refine
     { honest_round_sync := ?_
       honest_round_advance := ?_
@@ -1846,8 +1874,8 @@ theorem belugaTrace_satisfies_post_gst_liveness
         rw [h_v] at hop_mem; exact hop_mem
       · rw [h_d]; exact hB_d
     | _ => simp at hop_match
-  · exact round_progression_aux system time h_time h_fair hHonest h_sys_nodup
-  · exact round_termination_aux system hids time h_time h_fair hHonest h_sys_nodup
+  · exact round_progression_aux system time h_time h_delivery h_scheduling hHonest h_sys_nodup
+  · exact round_termination_aux system hids time h_time h_delivery h_scheduling hHonest h_sys_nodup
 
 /-! ## Lemmas 1, 2 and Theorems 1–4 (local derivations from the bundle)
 
@@ -1873,7 +1901,8 @@ theorem lemma1_honest_round_entry
     (time : TimeMap)
     (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
-    (h_fair : SchedulerFairness system time)
+    (h_delivery : Network.NetworkDelivery system time)
+    (h_scheduling : Network.ActionScheduling system time)
     (hHonest : HonestBFTBound system)
     (h_sys_nodup : ValidatorsNodup system) :
     ∀ vid_ref r k₀, isHonestValidator system vid_ref = true →
@@ -1884,7 +1913,7 @@ theorem lemma1_honest_round_entry
         ∀ vid, isHonestValidator system vid = true →
           ∃ bv, (belugaTrace system k').getValidator vid = some bv ∧
                 bv.currentRound ≥ r + 1 :=
-  (belugaTrace_satisfies_post_gst_liveness system hids time h_time h_sync h_fair hHonest h_sys_nodup).honest_round_sync
+  (belugaTrace_satisfies_post_gst_liveness system hids time h_time h_sync h_delivery h_scheduling hHonest h_sys_nodup).honest_round_sync
 
 /-- **Lemma 2 (paper §5).** After GST, an honest validator at round
 `r` enters round `r + 1` within `3Δ`. -/
@@ -1894,7 +1923,8 @@ theorem lemma2_round_latency
     (time : TimeMap)
     (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
-    (h_fair : SchedulerFairness system time)
+    (h_delivery : Network.NetworkDelivery system time)
+    (h_scheduling : Network.ActionScheduling system time)
     (hHonest : HonestBFTBound system)
     (h_sys_nodup : ValidatorsNodup system) :
     ∀ vid r k,
@@ -1904,7 +1934,7 @@ theorem lemma2_round_latency
       ∃ k' ≥ k, time k' ≤ time k + 3 * system.Δ ∧
         ∃ bv, (belugaTrace system k').getValidator vid = some bv ∧
               bv.currentRound = r + 1 :=
-  (belugaTrace_satisfies_post_gst_liveness system hids time h_time h_sync h_fair hHonest h_sys_nodup).honest_round_advance
+  (belugaTrace_satisfies_post_gst_liveness system hids time h_time h_sync h_delivery h_scheduling hHonest h_sys_nodup).honest_round_advance
 
 /-- **Theorem 1 (paper §5).** Beluga satisfies Block availability. -/
 theorem theorem1_block_availability
@@ -1913,11 +1943,12 @@ theorem theorem1_block_availability
     (time : TimeMap)
     (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
-    (h_fair : SchedulerFairness system time)
+    (h_delivery : Network.NetworkDelivery system time)
+    (h_scheduling : Network.ActionScheduling system time)
     (hHonest : HonestBFTBound system)
     (h_sys_nodup : ValidatorsNodup system) :
     BlockAvailability system (belugaTrace system) :=
-  (belugaTrace_satisfies_post_gst_liveness system hids time h_time h_sync h_fair hHonest h_sys_nodup).block_availability
+  (belugaTrace_satisfies_post_gst_liveness system hids time h_time h_sync h_delivery h_scheduling hHonest h_sys_nodup).block_availability
 
 /-- **Theorem 2 (paper §5).** Beluga satisfies Causal availability.
 
@@ -1933,7 +1964,7 @@ theorem theorem2_causal_availability
     (_time : TimeMap)
     (_h_time : _time.WellFormed)
     (_h_sync : PartiallySynchronous system (belugaTrace system) _time)
-    (_h_fair : SchedulerFairness system _time) :
+    (_h_delivery : Network.NetworkDelivery system _time) :
     CausalAvailability system (belugaTrace system) := by
   intro k vid d B _h_honest h_acc h_get B' h_reach
   refine ⟨k, le_refl k, ?_⟩
@@ -1952,11 +1983,12 @@ theorem theorem3_round_progression
     (time : TimeMap)
     (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
-    (h_fair : SchedulerFairness system time)
+    (h_delivery : Network.NetworkDelivery system time)
+    (h_scheduling : Network.ActionScheduling system time)
     (hHonest : HonestBFTBound system)
     (h_sys_nodup : ValidatorsNodup system) :
     RoundProgression system (belugaTrace system) :=
-  (belugaTrace_satisfies_post_gst_liveness system hids time h_time h_sync h_fair hHonest h_sys_nodup).round_progression
+  (belugaTrace_satisfies_post_gst_liveness system hids time h_time h_sync h_delivery h_scheduling hHonest h_sys_nodup).round_progression
 
 /-- **Theorem 4 (paper §5).** Beluga satisfies Round-Termination. -/
 theorem theorem4_round_termination
@@ -1965,11 +1997,12 @@ theorem theorem4_round_termination
     (time : TimeMap)
     (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
-    (h_fair : SchedulerFairness system time)
+    (h_delivery : Network.NetworkDelivery system time)
+    (h_scheduling : Network.ActionScheduling system time)
     (hHonest : HonestBFTBound system)
     (h_sys_nodup : ValidatorsNodup system) :
     RoundTermination system (belugaTrace system) :=
-  (belugaTrace_satisfies_post_gst_liveness system hids time h_time h_sync h_fair hHonest h_sys_nodup).round_termination
+  (belugaTrace_satisfies_post_gst_liveness system hids time h_time h_sync h_delivery h_scheduling hHonest h_sys_nodup).round_termination
 
 /-- **Beluga is a block synchronizer (corollary of Theorems 1–4).**
 
@@ -1982,14 +2015,15 @@ theorem belugaTrace_isBlockSynchronizer
     (time : TimeMap)
     (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
-    (h_fair : SchedulerFairness system time)
+    (h_delivery : Network.NetworkDelivery system time)
+    (h_scheduling : Network.ActionScheduling system time)
     (hHonest : HonestBFTBound system)
     (h_sys_nodup : ValidatorsNodup system) :
     BlockSynchronizer system (belugaTrace system) :=
-  ⟨theorem3_round_progression system hids time h_time h_sync h_fair hHonest h_sys_nodup,
-   theorem4_round_termination system hids time h_time h_sync h_fair hHonest h_sys_nodup,
-   theorem1_block_availability system hids time h_time h_sync h_fair hHonest h_sys_nodup,
-   theorem2_causal_availability system hids time h_time h_sync h_fair⟩
+  ⟨theorem3_round_progression system hids time h_time h_sync h_delivery h_scheduling hHonest h_sys_nodup,
+   theorem4_round_termination system hids time h_time h_sync h_delivery h_scheduling hHonest h_sys_nodup,
+   theorem1_block_availability system hids time h_time h_sync h_delivery h_scheduling hHonest h_sys_nodup,
+   theorem2_causal_availability system hids time h_time h_sync h_delivery⟩
 
 end Theorems
 end Beluga
