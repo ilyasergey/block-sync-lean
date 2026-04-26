@@ -732,6 +732,48 @@ theorem networkTryActFor_round_at_most_one
             rw [h] at h'; injection h' with h_eq'; rw [← h_eq']; exact Nat.le_succ _
         · contradiction
 
+/-- One `networkStep` never decreases any validator's `currentRound`.
+Requires a `nodup` hypothesis on the validator IDs to identify the
+actor of the `findSome?` step uniquely. -/
+theorem networkStep_round_monotone
+    (system : BlockSynchroniserSystem) (s : NetworkState) (newTime : Nat)
+    (h_nodup : (s.base.validators.map Prod.fst).Nodup)
+    (vid : ValidatorId) (bv bv' : BelugaValidator)
+    (h : s.base.getValidator vid = some bv)
+    (h' : (networkStep system s newTime).base.getValidator vid = some bv') :
+    bv.currentRound ≤ bv'.currentRound := by
+  unfold networkStep at h'
+  -- Step 1: deliverPending preserves base.
+  have h_del_base :
+      ({ s with currentTime := newTime } : NetworkState).deliverPending.base = s.base := by
+    rw [NetworkState.deliverPending_preserves_base]
+  have h_del_nodup :
+      (({ s with currentTime := newTime } : NetworkState).deliverPending.base.validators.map
+        Prod.fst).Nodup := by
+    rw [h_del_base]; exact h_nodup
+  have h_del_get :
+      ({ s with currentTime := newTime } : NetworkState).deliverPending.base.getValidator vid
+        = some bv := by
+    rw [h_del_base]; exact h
+  simp only at h'
+  split at h'
+  case _ s'' h_fs =>
+    rw [List.findSome?_eq_some_iff] at h_fs
+    obtain ⟨_, ⟨vid_a, bv_a⟩, _, h_l_split, h_act, _⟩ := h_fs
+    have h_a_mem : (vid_a, bv_a) ∈
+        ({ s with currentTime := newTime } : NetworkState).deliverPending.base.validators := by
+      rw [h_l_split]; simp
+    have h_a_get :
+        ({ s with currentTime := newTime } : NetworkState).deliverPending.base.getValidator vid_a
+          = some bv_a := by
+      unfold BelugaState.getValidator
+      rw [Option.map_eq_some_iff]
+      exact ⟨(vid_a, bv_a), find?_of_mem_nodup _ vid_a bv_a h_a_mem h_del_nodup, rfl⟩
+    exact networkTryActFor_round_monotone system _ vid_a bv_a h_a_get s'' h_act
+      vid bv bv' h_del_get h'
+  case _ _ =>
+    rw [h_del_get] at h'; injection h' with h_eq; rw [h_eq]
+
 /-- The trace invariant: at every step of `networkTrace`, every
 validator's `roundEntryTime` is bounded by the state's
 `currentTime`. -/
