@@ -813,6 +813,55 @@ theorem networkStep_round_at_most_one
   case _ _ =>
     rw [h_del_get] at h'; injection h' with h_eq; rw [h_eq]; exact Nat.le_succ _
 
+/-- Round-monotonicity across `networkTrace`. -/
+theorem network_round_monotone_trace
+    (system : BlockSynchroniserSystem) (time : Nat → Nat) (vid : ValidatorId)
+    (k₁ : Nat) (bv₁ : BelugaValidator)
+    (h₁ : (networkTrace system time k₁).base.getValidator vid = some bv₁) :
+    ∀ k₂, k₁ ≤ k₂ → ∀ bv₂,
+      (networkTrace system time k₂).base.getValidator vid = some bv₂ →
+      bv₁.currentRound ≤ bv₂.currentRound := by
+  intro k₂ h_le
+  induction h_le with
+  | refl =>
+    intro bv₂ h₂; rw [h₁] at h₂; injection h₂ with h_eq; rw [h_eq]
+  | @step k_mid _ ih =>
+    intro bv₂ h₂
+    -- networkTrace at k_mid + 1 = networkStep applied to networkTrace at k_mid.
+    have h_step : (networkTrace system time (k_mid + 1)).base =
+        (networkStep system (networkTrace system time k_mid)
+          (time (k_mid + 1))).base := rfl
+    have h_succ_ids := networkTrace_validators_ids system time (k_mid + 1)
+    have h_mid_ids := networkTrace_validators_ids system time k_mid
+    have h_match : ∀ p ∈ (networkTrace system time (k_mid + 1)).base.validators,
+        (p.1 == vid) = true → p.1 = vid := fun _ _ h => by simpa using h
+    have h_vid_in_succ : vid ∈
+        (networkTrace system time (k_mid + 1)).base.validators.map Prod.fst := by
+      unfold BelugaState.getValidator at h₂
+      rw [Option.map_eq_some_iff] at h₂
+      obtain ⟨p, h_p_mem, _⟩ := h₂
+      have h_p_in := List.mem_of_find?_eq_some h_p_mem
+      have h_match_eq := List.find?_some h_p_mem
+      have h_p1 : p.1 = vid := by
+        match p, h_match_eq with
+        | (_, _), h => simpa using h
+      rw [← h_p1]; exact List.mem_map.mpr ⟨p, h_p_in, rfl⟩
+    have h_vid_in_mid : vid ∈ (networkTrace system time k_mid).base.validators.map Prod.fst := by
+      rw [h_mid_ids, ← h_succ_ids]; exact h_vid_in_succ
+    -- Extract bv_mid
+    obtain ⟨bv_mid, h_mid⟩ : ∃ bv_mid,
+        (networkTrace system time k_mid).base.getValidator vid = some bv_mid := by
+      obtain ⟨p, h_p_mem, h_p_eq⟩ := List.mem_map.mp h_vid_in_mid
+      refine ⟨p.2, ?_⟩
+      have h_pair : p = (vid, p.2) := Prod.ext h_p_eq rfl
+      rw [h_pair] at h_p_mem
+      exact networkTrace_getValidator_of_mem system time k_mid vid p.2 h_p_mem
+    have ih' := ih bv_mid h_mid
+    have h_mono := networkStep_round_monotone system (networkTrace system time k_mid)
+        (time (k_mid + 1)) (networkTrace_validators_nodup system time k_mid)
+        vid bv_mid bv₂ h_mid (h_step ▸ h₂)
+    exact le_trans ih' h_mono
+
 /-- The trace invariant: at every step of `networkTrace`, every
 validator's `roundEntryTime` is bounded by the state's
 `currentTime`. -/
