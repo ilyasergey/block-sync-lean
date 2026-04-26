@@ -26,19 +26,36 @@ Mirrors paper L1's optimistic-path argument, against `networkTrace`:
 
 Where paper §4 mechanisms appear:
 
-- **NetworkDelivery (paper §2)**: stated primitive in the signature;
-  not directly invoked (the round-arithmetic argument suffices for
-  the 3Δ bound), but threaded through the §5 wrappers as available.
 - **ActionScheduling (F-1, paper §4.2)**: per-validator Δ-bounded
-  round advance. Used twice in the proof.
+  round advance. Used twice in the proof body — load-bearing.
 - **BoundedRoundSpread (F-1b, paper §4.2)**: gap-1 invariant.
-- **ImPoA (paper §4.3)**: structurally encoded in `networkTrace`'s
-  `canAcceptBlock` (consults `parentsAcceptableImPoA`). Consumed by
-  `networkTryActFor_preserves_roundEntry_bound`'s case analysis on
-  the accept branch.
-- **Timeout `T_rd = 4Δ` (paper §4.2)**: encoded in
-  `networkTryActFor`'s advance branch (`s.timeoutFired`); makes
-  `ActionScheduling` derivable from the protocol model.
+  Used once in the proof body — load-bearing.
+- **NetworkDelivery (paper §2)**: stated primitive in the
+  signature, not invoked in the proof body. Threaded through as a
+  hypothesis the §5 wrappers can pass on for any tighter
+  refinement.
+- **ImPoA (paper §4.3)**: defined in `Network/Protocol.lean`
+  (`parentsAcceptableImPoA`), invoked by `canAcceptBlock` and
+  thence by `networkTryActFor`'s accept branch. **NOT
+  load-bearing in the fairness proofs**:
+  `schedulerFairness_holds`'s body does pure round arithmetic over
+  F-1 + F-1b and never inspects ImPoA;
+  `networkTryActFor_preserves_roundEntry_bound`'s accept-branch
+  case analysis only needs `doAccept` to preserve `roundEntryTime`,
+  not why `canAcceptBlock` returned true. The proof would still
+  close if `parentsAcceptableImPoA` were defined as a constant.
+- **Timeout `T_rd = 4Δ` (paper §4.2)**: defined in
+  `Network/Protocol.lean` (`timeoutFired`), invoked in
+  `networkTryActFor`'s advance branch. NOT load-bearing in the
+  fairness proofs (same reason as ImPoA — the proofs treat F-1 as
+  a primitive rather than deriving it from the timeout mechanism).
+
+ImPoA's and the timeout's load-bearing role would appear in a
+proof of F-1 (`ActionScheduling`) from `networkTrace`: the
+optimistic case (ImPoA + push delivery → `allProposedFor` fires
+within Δ) and pessimistic case (timeout fires) of the round
+advance argument. We don't have that proof — F-1 is a stated
+primitive.
 
 ## Why omega failed (and the fix)
 
@@ -68,8 +85,11 @@ uses `omega`.
   nodup, `roundEntryTime ≤ currentTime`, timeout-fires past 4Δ —
   all proved sorry-free. ✓
 - Layer 3 (`schedulerFairness_holds` for networkTrace): proved.
-  ImPoA + timeout structurally appear; ActionScheduling +
-  BoundedRoundSpread are the load-bearing inputs. ✓
+  ActionScheduling + BoundedRoundSpread are the load-bearing
+  inputs. ImPoA and the `T_rd = 4Δ` timeout are *defined* in the
+  trace's transition relation but not load-bearing in the
+  fairness proofs themselves — they would be load-bearing in a
+  proof of F-1 (which we don't have). ✓
 - Layer 4 (§5 wrappers): take F-1 + F-1b (paper primitives), use
   `belugaTrace_schedulerFairness` to derive `SchedulerFairness`. ✓
 

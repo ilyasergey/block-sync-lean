@@ -94,13 +94,20 @@ The proof structure (against `networkTrace`):
    (when ImPoA's f+1-availability path doesn't fire fast enough,
    the timeout forces advance).
 
-ImPoA appears in the proof's implementation backbone:
-- `canAcceptBlock` consults `parentsAcceptableImPoA` (the f+1
-  references rule of paper §4.3).
-- `networkTryActFor` calls `canAcceptBlock` when deciding the
-  accept action; `networkTryActFor_preserves_roundEntry_bound`
-  case-analyzes through the accept branch (which factors via
-  `canAcceptBlock`, hence via ImPoA structurally).
+ImPoA's role: defined in `Network/Protocol.lean` and invoked by
+`canAcceptBlock`, but **not load-bearing in the fairness proofs**.
+`schedulerFairness_holds`'s body never inspects
+`parentsAcceptableImPoA`; `networkTryActFor_preserves_roundEntry_bound`
+case-analyzes through the accept branch but only needs that
+`doAccept` preserves `roundEntryTime`, not why `canAcceptBlock`
+returned true. The proof would still close if
+`parentsAcceptableImPoA` were defined as a constant.
+
+Where ImPoA *would* be load-bearing: in a proof of F-1
+(`ActionScheduling`) from `networkTrace`, where the Δ-bounded
+advance argument splits into an optimistic case (ImPoA + push
+delivery → `allProposedFor` within Δ) and a pessimistic case
+(timeout `T_rd = 4Δ` fires). That proof is not done.
 
 ### Layer 4: §5 wrappers in `Theorems.lean`
 
