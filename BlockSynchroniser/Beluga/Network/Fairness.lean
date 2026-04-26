@@ -1068,6 +1068,194 @@ private lemma networkStep_preserves_none (system : BlockSynchroniserSystem)
   apply h y hy_mem
   grind
 
+/-! ## Phase 2: networkStep advance inversion -/
+
+/-- If `vid`'s round increased by 1 across one `networkStep`, then
+the advance branch of `networkTryActFor` fired for `vid`. From this
+we extract: (1) `vid` had proposed for its round, (2) every
+accepted block was already stored, (3) the advance gate fired
+(`allProposedFor` or timeout). -/
+private lemma networkStep_advance_inversion
+    (system : BlockSynchroniserSystem) (s : NetworkState) (newTime : Nat)
+    (vid : ValidatorId) (bv bv' : BelugaValidator)
+    (h_nodup : (s.base.validators.map Prod.fst).Nodup)
+    (h : s.base.getValidator vid = some bv)
+    (h' : (networkStep system s newTime).base.getValidator vid = some bv')
+    (h_advance : bv'.currentRound = bv.currentRound + 1) :
+    hasProposedFor s.base vid bv.currentRound = true ∧
+    (∀ B ∈ s.base.blocks,
+      hasAcceptedDigest s.base vid B.d = true →
+      hasStoredDigest s.base vid B.d = true) ∧
+    (allProposedFor system s.base bv.currentRound = true ∨
+     ({ s with currentTime := newTime } : NetworkState).deliverPending.timeoutFired
+        system bv = true) := by
+  have h_del_base :
+      ({ s with currentTime := newTime } : NetworkState).deliverPending.base = s.base := by
+    rw [NetworkState.deliverPending_preserves_base]
+  have h_del_nodup :
+      (({ s with currentTime := newTime } : NetworkState).deliverPending.base.validators.map
+        Prod.fst).Nodup := by rw [h_del_base]; exact h_nodup
+  have h_del_get :
+      ({ s with currentTime := newTime } : NetworkState).deliverPending.base.getValidator vid
+        = some bv := by rw [h_del_base]; exact h
+  unfold networkStep at h'
+  simp only at h'
+  split at h'
+  case _ s_post h_fs =>
+    rw [List.findSome?_eq_some_iff] at h_fs
+    obtain ⟨_, ⟨vid_a, bv_a⟩, _, h_split, h_act, _⟩ := h_fs
+    have h_a_mem : (vid_a, bv_a) ∈
+        ({ s with currentTime := newTime } : NetworkState).deliverPending.base.validators := by
+      rw [h_split]; simp
+    have h_a_get :
+        ({ s with currentTime := newTime } : NetworkState).deliverPending.base.getValidator vid_a
+          = some bv_a := by
+      unfold BelugaState.getValidator
+      rw [Option.map_eq_some_iff]
+      exact ⟨(vid_a, bv_a), find?_of_mem_nodup _ vid_a bv_a h_a_mem h_del_nodup, rfl⟩
+    unfold networkTryActFor at h_act
+    simp only at h_act
+    split at h_act
+    case isTrue h_prop_neg =>
+      -- Propose branch fired: doPropose preserves currentRound → contradiction.
+      injection h_act with h_eq
+      have h_base_post : s_post.base = doPropose system
+          ({ s with currentTime := newTime } : NetworkState).deliverPending.base
+          vid_a bv_a.currentRound := by rw [← h_eq]
+      rw [h_base_post] at h'
+      rw [doPropose_getValidator'] at h'
+      rw [h_del_get] at h'
+      have h_eq_bv : bv = bv' := Option.some.inj h'
+      exfalso
+      rw [h_eq_bv] at h_advance
+      exact absurd h_advance (Nat.lt_succ_self _).ne
+    case isFalse h_prop_pos =>
+      have h_hpr_a : hasProposedFor
+          ({ s with currentTime := newTime } : NetworkState).deliverPending.base
+          vid_a bv_a.currentRound = true := by
+        cases h_b : hasProposedFor
+            ({ s with currentTime := newTime } : NetworkState).deliverPending.base
+            vid_a bv_a.currentRound with
+        | true => rfl
+        | false => exfalso; apply h_prop_pos; simp [h_b]
+      split at h_act
+      case h_1 B_acc h_findAcc =>
+        -- Accept branch fired: doAccept preserves currentRound → contradiction.
+        injection h_act with h_eq
+        have h_base_post : s_post.base = doAccept
+            ({ s with currentTime := newTime } : NetworkState).deliverPending.base
+            vid_a B_acc := by rw [← h_eq]
+        rw [h_base_post] at h'
+        obtain ⟨bv_post, h_post_get, h_eq_round⟩ :=
+          doAccept_round'
+            ({ s with currentTime := newTime } : NetworkState).deliverPending.base
+            vid vid_a B_acc bv h_del_get
+        have h_eq_bv : bv_post = bv' := Option.some.inj (h_post_get.symm.trans h')
+        subst h_eq_bv
+        exfalso
+        rw [h_eq_round] at h_advance
+        exact absurd h_advance (Nat.lt_succ_self _).ne
+      case h_2 h_findAcc =>
+        split at h_act
+        case h_1 B_sto h_findSto =>
+          -- Store branch fired.
+          injection h_act with h_eq
+          have h_base_post : s_post.base = doStore
+              ({ s with currentTime := newTime } : NetworkState).deliverPending.base
+              vid_a B_sto := by rw [← h_eq]
+          rw [h_base_post] at h'
+          obtain ⟨bv_post, h_post_get, h_eq_round⟩ :=
+            doStore_round'
+              ({ s with currentTime := newTime } : NetworkState).deliverPending.base
+              vid vid_a B_sto bv h_del_get
+          have h_eq_bv : bv_post = bv' := Option.some.inj (h_post_get.symm.trans h')
+          subst h_eq_bv
+          exfalso
+          rw [h_eq_round] at h_advance
+          exact absurd h_advance (Nat.lt_succ_self _).ne
+        case h_2 h_findSto =>
+          -- Advance branch.
+          split at h_act
+          case isTrue h_gate =>
+            injection h_act with h_eq
+            set s_del : NetworkState :=
+              ({ s with currentTime := newTime } : NetworkState).deliverPending with h_s_del_def
+            have h_base_post : s_post.base = updateValidator s_del.base
+                vid_a (fun bv0 => { bv0 with currentRound := bv0.currentRound + 1,
+                                              roundEntryTime := s_del.currentTime }) := by
+              rw [← h_eq]
+            rw [h_base_post] at h'
+            by_cases h_eq_vid : vid = vid_a
+            · subst h_eq_vid
+              have h_bv_eq : bv = bv_a := by
+                rw [h_del_get] at h_a_get; injection h_a_get
+              rw [h_bv_eq]
+              refine ⟨?_, ?_, ?_⟩
+              · rw [← h_del_base]; exact h_hpr_a
+              · intro B hB h_acc
+                rw [List.find?_eq_none] at h_findSto
+                have hB' : B ∈ s_del.base.blocks := h_del_base.symm ▸ hB
+                have h_no := h_findSto B hB'
+                rw [h_del_base] at h_no
+                rw [h_acc] at h_no; simp at h_no
+                cases h_sto : hasStoredDigest s.base vid B.d with
+                | true => rfl
+                | false => exfalso; rw [h_sto] at h_no; simp at h_no
+              · rw [Bool.or_eq_true] at h_gate
+                rcases h_gate with h_apf | h_tof
+                · left; rw [← h_del_base]; exact h_apf
+                · right; exact h_tof
+            · -- vid ≠ vid_a: round didn't change → contradiction.
+              rw [updateValidator_getValidator_ne' _ _ _ _ h_eq_vid] at h'
+              rw [h_del_get] at h'
+              have h_eq_bv : bv = bv' := Option.some.inj h'
+              exfalso
+              rw [h_eq_bv] at h_advance
+              exact absurd h_advance (Nat.lt_succ_self _).ne
+          case isFalse h_gate => simp at h_act
+  case _ h_fs =>
+    rw [h_del_get] at h'
+    have h_eq_bv : bv = bv' := Option.some.inj h'
+    exfalso
+    rw [h_eq_bv] at h_advance
+    exact absurd h_advance (Nat.lt_succ_self _).ne
+
+/-- Projection: if round advanced, vid had proposed for its round. -/
+private lemma networkStep_advance_implies_hasProposedFor
+    (system : BlockSynchroniserSystem) (s : NetworkState) (newTime : Nat)
+    (vid : ValidatorId) (bv bv' : BelugaValidator)
+    (h_nodup : (s.base.validators.map Prod.fst).Nodup)
+    (h : s.base.getValidator vid = some bv)
+    (h' : (networkStep system s newTime).base.getValidator vid = some bv')
+    (h_advance : bv'.currentRound = bv.currentRound + 1) :
+    hasProposedFor s.base vid bv.currentRound = true :=
+  (networkStep_advance_inversion system s newTime vid bv bv' h_nodup h h' h_advance).1
+
+/-- Projection: if round advanced, every accepted block was already stored. -/
+private lemma networkStep_advance_implies_stored
+    (system : BlockSynchroniserSystem) (s : NetworkState) (newTime : Nat)
+    (vid : ValidatorId) (bv bv' : BelugaValidator)
+    (h_nodup : (s.base.validators.map Prod.fst).Nodup)
+    (h : s.base.getValidator vid = some bv)
+    (h' : (networkStep system s newTime).base.getValidator vid = some bv')
+    (h_advance : bv'.currentRound = bv.currentRound + 1) :
+    ∀ B ∈ s.base.blocks,
+      hasAcceptedDigest s.base vid B.d = true → hasStoredDigest s.base vid B.d = true :=
+  (networkStep_advance_inversion system s newTime vid bv bv' h_nodup h h' h_advance).2.1
+
+/-- Projection: if round advanced, the advance gate fired. -/
+private lemma networkStep_advance_implies_gate
+    (system : BlockSynchroniserSystem) (s : NetworkState) (newTime : Nat)
+    (vid : ValidatorId) (bv bv' : BelugaValidator)
+    (h_nodup : (s.base.validators.map Prod.fst).Nodup)
+    (h : s.base.getValidator vid = some bv)
+    (h' : (networkStep system s newTime).base.getValidator vid = some bv')
+    (h_advance : bv'.currentRound = bv.currentRound + 1) :
+    allProposedFor system s.base bv.currentRound = true ∨
+    ({ s with currentTime := newTime } : NetworkState).deliverPending.timeoutFired
+        system bv = true :=
+  (networkStep_advance_inversion system s newTime vid bv bv' h_nodup h h' h_advance).2.2
+
 /-- The trace invariant: at every step of `networkTrace`, every
 validator's `roundEntryTime` is bounded by the state's
 `currentTime`. -/
