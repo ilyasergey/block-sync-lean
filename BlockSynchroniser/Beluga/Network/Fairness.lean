@@ -866,21 +866,52 @@ def BoundedRoundSpread
     (belugaTrace system k).getValidator vid₂ = some bv₂ →
     bv₁.currentRound ≤ bv₂.currentRound + 1
 
-/-! ## `SchedulerFairness` for `belugaTrace` from paper primitives
+/-! ## `SchedulerFairness` for `belugaTrace` from network-trace primitives
 
 `Theorems.lean`'s `SchedulerFairness` is stated against `belugaTrace`,
-not `networkTrace`. We provide a `belugaTrace`-flavored fairness
-derivation here, parametric in the same paper primitives
-(`ActionScheduling_belugaTrace` = F-1 + paper §4.2 protocol-execution,
-`BoundedRoundSpread` = F-1b + paper §4.2 timeout/push synchronization).
-This gives the §5 wrappers a clean route through paper-stated
-mechanisms without rewriting all of Theorems.lean against
-`networkTrace`.
+not `networkTrace`. To route the §5 wrappers through
+`schedulerFairness_holds` (which produces `networkTrace`-flavored
+fairness), we need a bridge between the two traces.
 
-The matching `networkTrace` derivation is `schedulerFairness_holds`
-above; its proof exercises the same round-arithmetic argument on the
-network-aware trace where ImPoA is encoded in `canAcceptBlock` and
-the timeout `T_rd = 4Δ` is in `networkTryActFor`'s advance branch. -/
+**The bridge problem.** `belugaTrace` and `networkTrace.base` evolve
+under different transition rules: `step` (used by `belugaTrace`)
+advances on `allProposedFor` only and accepts when parents are
+directly accepted, while `networkStep` (used by `networkTrace`) has
+the additional ImPoA accept path (paper §4.3 f+1 references) and
+the timeout-fired advance path (paper §4.2 `T_rd = 4Δ`). A direct
+refinement does not exist in either direction: `networkTrace` can
+advance via the timeout where `belugaTrace` is still waiting,
+making round-state divergence possible.
+
+**Resolution.** We expose the bridge as an explicit `Prop`-level
+hypothesis `NetworkBelugaCoherence`: at every step, the round
+state of `belugaTrace` agrees with the round state of
+`networkTrace.base`. This is the load-bearing piece the paper
+hand-waves when saying "the protocol's two-trace abstraction is
+equivalent." Making it a typed hypothesis surfaces the missing
+derivation as paper-side feedback rather than burying it. -/
+
+/-- **`NetworkBelugaCoherence`** — for every step `k` and honest
+validator `vid`, the round (and presence) of `vid` agree across
+`belugaTrace` and `networkTrace.base`. This Prop is the explicit
+form of the paper's implicit assumption that the `belugaTrace`
+abstraction (no inboxes, no timeout, no ImPoA) and the
+`networkTrace` model (with all paper §4 mechanisms) coincide on
+the round-progression slice the §5 theorems care about.
+
+The Prop is *not* derivable from the network primitives
+(`NetworkDelivery`, `ActionScheduling`, `BoundedRoundSpread_networkTrace`)
+alone — `networkTrace` is strictly more permissive than `belugaTrace`
+(timeout + ImPoA give it extra advance/accept paths), so a refinement
+in either direction can fail. The coherence assumption captures the
+specific protocol regime in which the two traces' rounds align. -/
+def NetworkBelugaCoherence
+    (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
+  ∀ k vid bv,
+    isHonestValidator system vid = true →
+    (belugaTrace system k).getValidator vid = some bv →
+    ∃ bv', (networkTrace system time k).base.getValidator vid = some bv' ∧
+           bv.currentRound = bv'.currentRound
 
 /-- The `SchedulerFairness` predicate for `belugaTrace` (the existing
 shape used by `Theorems.lean`'s §5 wrappers). Restated here so this
@@ -899,66 +930,63 @@ def SchedulerFairness_belugaTrace
         ∃ bv, (belugaTrace system k').getValidator vid = some bv ∧
               bv.currentRound ≥ r + 1
 
-/-- **`belugaTrace_schedulerFairness`** — under
-`ActionScheduling_belugaTrace` (paper §4.2 + finding F-1) and
-`BoundedRoundSpread` (paper §4.2 timeout/push synchronization +
-finding F-1b), `belugaTrace` satisfies the SchedulerFairness
-lockstep-progress claim.
+/-- **`belugaTrace_schedulerFairness`** — derived from the
+`networkTrace` fairness theorem `schedulerFairness_holds` plus the
+explicit `NetworkBelugaCoherence` bridge.
 
-The `time` map is required to be monotone; that's already part of
-`time.WellFormed`'s `Monotone` clause.
+**Hypothesis set** matches `schedulerFairness_holds` (the four
+network-trace primitives) plus `NetworkBelugaCoherence`:
 
-**Proof structure** (3Δ bound):
-1. Witness honest vid_w is at round `r` at step `k`.
-2. By `BoundedRoundSpread`, every honest vid at step `k` is at
-   round in `[r - 1, r + 1]`.
-3. Each honest vid needs at most 2 advances to reach round `r + 1`
-   (worst case: at round `r - 1`).
-4. By `ActionScheduling_belugaTrace`, each advance takes ≤ Δ.
-5. By round monotonicity, once a validator reaches round `r + 1`,
-   it stays there. So at the latest 2Δ-step, all honest are at
-   round ≥ r + 1. The 3Δ bound is preserved (paper compatibility). -/
+- `NetworkDelivery` (paper §2): `Δ`-bounded honest-honest delivery.
+- `ActionScheduling` (paper §4.2 + finding F-1): per-validator
+  Δ-bounded round advance against `networkTrace`.
+- `BoundedRoundSpread_networkTrace` (paper §4.2 + finding F-1b):
+  gap-1 invariant against `networkTrace`.
+- `h_persistent_network`: every honest validator is present at
+  every step of `networkTrace`.
+- `h_persistent_beluga`: same, for `belugaTrace`.
+- `NetworkBelugaCoherence`: round-state agreement between the
+  two traces.
+
+**Proof structure**:
+1. Apply `schedulerFairness_holds` → fairness for `networkTrace`.
+2. Apply `NetworkBelugaCoherence` to lift to `belugaTrace`.
+
+Step 2 is the load-bearing bridge; the network primitives alone
+do not justify `belugaTrace`-flavored fairness. -/
 theorem belugaTrace_schedulerFairness
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
     (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
-    (h_action : ActionScheduling_belugaTrace system time)
-    (h_spread : BoundedRoundSpread system time)
-    (h_persistent : ∀ vid k, isHonestValidator system vid = true →
-      ∃ bv, (belugaTrace system k).getValidator vid = some bv) :
+    (h_delivery : NetworkDelivery system time)
+    (h_scheduling : ActionScheduling system time)
+    (h_spread : BoundedRoundSpread_networkTrace system time)
+    (h_persistent_network : ∀ vid k, isHonestValidator system vid = true →
+      ∃ bv, (networkTrace system time k).base.getValidator vid = some bv)
+    (h_persistent_beluga : ∀ vid k, isHonestValidator system vid = true →
+      ∃ bv, (belugaTrace system k).getValidator vid = some bv)
+    (h_coherence : NetworkBelugaCoherence system time) :
     SchedulerFairness_belugaTrace system time := by
   intro k r h_post_gst ⟨vid_w, bv_w, h_w_honest, h_w_get, h_w_round⟩
-  -- Step 1: Apply h_action to vid_w to advance once.
-  obtain ⟨k₁, bv_w₁, hk₁_le, hk₁_time, h_w₁_get, h_w₁_round⟩ :=
-    h_action k vid_w bv_w h_w_honest h_post_gst h_w_get
-  -- Step 2: Apply h_action again to advance vid_w to ≥ r + 2.
-  have h_post_gst₁ : time k₁ ≥ system.GST :=
-    le_trans h_post_gst (h_mono k k₁ hk₁_le)
-  obtain ⟨k₂, bv_w₂, hk₂_le, hk₂_time, h_w₂_get, h_w₂_round⟩ :=
-    h_action k₁ vid_w bv_w₁ h_w_honest h_post_gst₁ h_w₁_get
-  have h_w₂_ge : bv_w₂.currentRound ≥ r + 2 := by
-    have h1 : bv_w₁.currentRound > bv_w.currentRound := h_w₁_round
-    have h2 : bv_w₂.currentRound > bv_w₁.currentRound := h_w₂_round
-    grind
-  have h_post_gst₂ : time k₂ ≥ system.GST :=
-    le_trans h_post_gst₁ (h_mono k₁ k₂ hk₂_le)
-  refine ⟨k₂, le_trans hk₁_le hk₂_le, ?_, ?_⟩
-  · -- Time: time k₂ ≤ time k₁ + Δ ≤ (time k + Δ) + Δ = time k + 2Δ ≤ time k + 3Δ.
-    have h_t1 : time k₁ ≤ time k + system.Δ := hk₁_time
-    have h_t2 : time k₂ ≤ time k₁ + system.Δ := hk₂_time
-    calc time k₂
-        ≤ time k₁ + system.Δ := h_t2
-      _ ≤ (time k + system.Δ) + system.Δ := Nat.add_le_add_right h_t1 _
-      _ ≤ time k + 3 * system.Δ := by ring_nf; omega
-  · intro vid h_vid_honest
-    obtain ⟨bv_vid, h_vid_get⟩ := h_persistent vid k₂ h_vid_honest
-    refine ⟨bv_vid, h_vid_get, ?_⟩
-    have h_sp : bv_w₂.currentRound ≤ bv_vid.currentRound + 1 :=
-      h_spread k₂ vid_w vid bv_w₂ bv_vid h_post_gst₂ h_w_honest h_vid_honest
-        h_w₂_get h_vid_get
-    have h_lower : r + 2 ≤ bv_w₂.currentRound := h_w₂_ge
-    have h_chain : r + 2 ≤ bv_vid.currentRound + 1 := le_trans h_lower h_sp
-    -- r + 2 ≤ bv_vid.currentRound + 1 implies r + 1 ≤ bv_vid.currentRound.
-    exact Nat.le_of_succ_le_succ h_chain
+  -- Step 1: Lift the witness from belugaTrace to networkTrace via coherence.
+  obtain ⟨bv_w_n, h_w_get_n, h_w_round_eq⟩ :=
+    h_coherence k vid_w bv_w h_w_honest h_w_get
+  have h_w_round_n : bv_w_n.currentRound = r := by rw [← h_w_round_eq]; exact h_w_round
+  -- Step 2: Apply networkTrace fairness.
+  obtain ⟨k', hk'_le, hk'_time, hk'_all⟩ :=
+    schedulerFairness_holds system time h_mono h_delivery h_scheduling h_spread
+      h_persistent_network k r h_post_gst
+      ⟨vid_w, bv_w_n, h_w_honest, h_w_get_n, h_w_round_n⟩
+  -- Step 3: Lift the conclusion from networkTrace back to belugaTrace.
+  refine ⟨k', hk'_le, hk'_time, ?_⟩
+  intro vid h_vid_honest
+  obtain ⟨bv_vid_b, h_vid_get_b⟩ := h_persistent_beluga vid k' h_vid_honest
+  refine ⟨bv_vid_b, h_vid_get_b, ?_⟩
+  obtain ⟨bv_vid_n, h_vid_get_n, h_vid_round_eq⟩ :=
+    h_coherence k' vid bv_vid_b h_vid_honest h_vid_get_b
+  obtain ⟨bv_vid_n', h_vid_get_n', h_vid_round_n_ge⟩ := hk'_all vid h_vid_honest
+  -- networkTrace witnesses are unique (by ID) so bv_vid_n = bv_vid_n'.
+  have : bv_vid_n = bv_vid_n' := by rw [h_vid_get_n] at h_vid_get_n'; injection h_vid_get_n'
+  rw [h_vid_round_eq, this]; exact h_vid_round_n_ge
 
 end Network
 end Beluga
