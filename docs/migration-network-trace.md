@@ -34,9 +34,7 @@ effect on `base`:
 - [x] `networkTryActFor_round_at_most_one` — round increases ≤ 1 (commit `fea1f3b`)
 - [x] `networkStep_round_monotone` (commit `aa8bb53`)
 - [x] `networkStep_round_at_most_one` (commit `be42b5a`)
-- [ ] `network_round_monotone_trace` — trace-level k₁ ≤ k₂ ⇒ round monotone
-      (attempted, induction structure needs `bv₂` generalized inside the induction;
-       use `intro k₂ h_le; induction h_le with ...` rather than fixing bv₂ outside)
+- [x] `network_round_monotone_trace` — trace-level k₁ ≤ k₂ ⇒ round monotone (commit `5233197`)
 - [ ] `networkStep_advance_inversion` — inverse: if round
       advanced, the advance branch fired
 - [ ] `networkStep_advance_implies_*` — projections of inversion
