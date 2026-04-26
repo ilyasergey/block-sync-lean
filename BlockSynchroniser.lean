@@ -21,6 +21,7 @@ import BlockSynchroniser.Beluga.Pull
 import BlockSynchroniser.Beluga.Protocol
 import BlockSynchroniser.Beluga.StepPreservation
 import BlockSynchroniser.Beluga.AdmissionInvariant
+import BlockSynchroniser.Beluga.MysticetiSafetyInvariant
 import BlockSynchroniser.Beluga.Order
 import BlockSynchroniser.Beluga.Examples
 import BlockSynchroniser.Beluga.Theorems

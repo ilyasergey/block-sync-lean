@@ -13,6 +13,7 @@ import BlockSynchroniser.Causal
 import BlockSynchroniser.Quorum
 import BlockSynchroniser.Beluga.Patterns
 import BlockSynchroniser.Beluga.AdmissionInvariant
+import BlockSynchroniser.Beluga.MysticetiSafetyInvariant
 import BlockSynchroniser.Mysticeti.Consensus
 
 set_option linter.unusedSimpArgs false
@@ -460,6 +461,78 @@ theorem theorem7_consensus_safety
   · by_cases h₂ : view vid₂ d = Decision.Undecided
     · exact absurd (h_complete.mpr h₂) h₁
     · exact h_view_consistent d vid₁ vid₂ h_honest₁ h_honest₂ h₁ h₂
+
+/-! ## belugaTrace-specialised wrappers
+
+For the executable `belugaTrace` instantiation, the four
+protocol-invariant hypotheses on L13 / L15
+(`AdmissionWellFormed`, `NoEquivocationInParents`, the
+honest-author uniqueness assumption, the authors-are-registered side
+condition) are not assumptions: they are bundled in
+`Beluga.MysticetiSafetyInv` and proved sorry-free by
+`Beluga.belugaTrace_satisfies_mysticetiSafetyInv` (modulo the
+`authorsValid` conjunct, queued for delegation).
+
+These wrappers consume the bundle and re-state L13 / L15 against
+`belugaTrace`, leaving only the genuine BFT side conditions (`hN`,
+`h_byz_bound`, `hids`) — paper assumptions that cannot be derived
+from the executable trace. -/
+
+/-- **Lemma 13 (paper Appendix D.3) for the Beluga trace.**
+
+belugaTrace specialisation of `lemma13_cert_persistence`. The four
+protocol-invariant hypotheses (`h_no_eq`, `h_admission`,
+`h_authors_valid`, `h_honest_unique`) are discharged from
+[`Beluga.belugaTrace_satisfies_mysticetiSafetyInv`](../Beluga/MysticetiSafetyInvariant.lean). -/
+theorem lemma13_cert_persistence_belugaTrace
+    (system : BlockSynchroniserSystem)
+    (hids : ValidIds system)
+    (hN : system.n = 3 * system.f + 1)
+    (h_byz_bound : (system.validators.filter (fun p => p.2 = false)).length
+      ≤ system.f)
+    (k : Nat)
+    (B : Block) (h_B : B ∈ (Beluga.belugaTrace system k).blocks)
+    (h_cert : ∃ certs : List Block,
+                certs.length ≥ 2 * system.f + 1 ∧
+                certs.Nodup ∧
+                (certs.map (·.author)).Nodup ∧
+                ∀ C ∈ certs, isCertificateFor (Beluga.belugaTrace system k) C B)
+    (B' : Block) (h_in : B' ∈ (Beluga.belugaTrace system k).blocks)
+    (h_later : B'.r > B.r + 1) :
+    ∃ C, isCertificateFor (Beluga.belugaTrace system k) C B ∧
+         Reaches (Beluga.belugaTrace system k) B' C := by
+  have h_inv := Beluga.belugaTrace_satisfies_mysticetiSafetyInv system hids k
+  exact lemma13_cert_persistence system (Beluga.belugaTrace system k)
+    h_inv.noEquivocation h_inv.admission hN h_inv.authorsValid h_byz_bound
+    (fun B₁ hB₁ B₂ hB₂ _ => h_inv.uniqueByAuthorRound B₁ hB₁ B₂ hB₂)
+    B h_B h_cert B' h_in h_later
+
+/-- **Lemma 15 (paper Appendix D.3) for the Beluga trace.**
+
+belugaTrace specialisation of `lemma15_unique_cert`. The four
+protocol-invariant hypotheses (`h_no_eq`, `h_authors_valid`,
+`h_byz_bound` is kept since it is a system-wide BFT side condition)
+are discharged from
+[`Beluga.belugaTrace_satisfies_mysticetiSafetyInv`](../Beluga/MysticetiSafetyInvariant.lean). -/
+theorem lemma15_unique_cert_belugaTrace
+    (system : BlockSynchroniserSystem)
+    (hids : ValidIds system)
+    (hN : system.n = 3 * system.f + 1)
+    (h_byz_bound : (system.validators.filter (fun p => p.2 = false)).length
+      ≤ system.f)
+    (k : Nat)
+    (B₁ B₂ : Block)
+    (h_lead₁ : isLeaderBlock system B₁) (h_lead₂ : isLeaderBlock system B₂)
+    (h_same_round : B₁.r = B₂.r)
+    (h_cert₁ : Beluga.certified system (Beluga.belugaTrace system k) B₁)
+    (h_cert₂ : Beluga.certified system (Beluga.belugaTrace system k) B₂)
+    (h_B₁_in : B₁ ∈ (Beluga.belugaTrace system k).blocks)
+    (h_B₂_in : B₂ ∈ (Beluga.belugaTrace system k).blocks) :
+    B₁ = B₂ := by
+  have h_inv := Beluga.belugaTrace_satisfies_mysticetiSafetyInv system hids k
+  exact lemma15_unique_cert system (Beluga.belugaTrace system k)
+    h_inv.noEquivocation B₁ B₂ h_lead₁ h_lead₂ h_same_round
+    h_cert₁ h_cert₂ hN h_B₁_in h_B₂_in h_inv.authorsValid h_byz_bound
 
 end Safety
 end Mysticeti
