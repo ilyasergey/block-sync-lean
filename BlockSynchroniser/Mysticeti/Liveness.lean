@@ -66,6 +66,166 @@ private lemma belugaTrace_blocks_monotone
       unfold doPropose doAccept doStore doAdvance at h₂; aesop
     exact fun n hn h => h_step_preserves_blocks _ _ h
 
+/-! ## The Mysticeti-Beluga post-GST liveness invariant
+
+The 11 sorry-bottoming helpers below all require post-GST liveness
+properties of `belugaTrace` that aren't entailed by `step` alone.
+Each sorry corresponds to either:
+
+- a **standard BFT side condition** (`hN`, `hHonest`, `h_ids`, the
+  Byzantine-count bound), or
+- an **action-level liveness fact** (honest leader proposes, blocks
+  disseminate, parents are selected, blocks are accepted, ImPoA
+  pull works, decisions propagate, transaction order is faithful).
+
+Following the same template as
+[`Beluga/AdmissionInvariant.lean`](../Beluga/AdmissionInvariant.lean)
+and [`Beluga/Theorems.lean :: BelugaPostGSTLiveness`](../Beluga/Theorems.lean),
+we package these into a single bundle predicate, prove each helper
+locally as a one-line projection from the bundle, and defer the joint
+inductive proof of the bundle (which threads a compound trace carrier
+through the four `tryActFor` branches) to a single load-bearing
+theorem `belugaTrace_satisfies_mysticeti_post_gst_liveness`.
+
+Aristotle is free to introduce additional conjuncts to
+`MysticetiPostGSTLiveness` during the proof of the load-bearing
+theorem, as long as the resulting structure is preserved by `step`. -/
+
+/-- **Mysticeti-Beluga post-GST liveness bundle.**
+
+Bundles every protocol-fact + post-GST-liveness conjunct that the
+Mysticeti-Beluga liveness proofs in this file rely on. Each field
+corresponds either to a standard BFT side condition (paper §2 model)
+or to the conclusion of one of the helper lemmas below.
+
+Aristotle may add fields when proving the bundle's existence theorem,
+provided the additions are also preserved by `step`. -/
+structure MysticetiPostGSTLiveness
+    (system : BlockSynchroniserSystem) (time : TimeMap) : Prop where
+  -- Standard BFT side conditions (paper §2 + finding F-2, F-8(a)).
+  hN : system.n = 3 * system.f + 1
+  hHonest : (system.validators.filter (fun p => p.2 = true)).length
+              = 2 * system.f + 1
+  h_ids : ∀ i < system.n, ∃ pair ∈ system.validators, pair.1 = i
+  -- Byzantine-count bound: in any nodup author list, ≤ f authors are Byzantine.
+  byz_bound :
+    ∀ authors : List ValidatorId,
+      (authors.filter (fun vid => !isHonestValidator system vid)).length ≤ system.f
+  -- Round advance: post-GST, every honest validator catches up to round r within 3Δ.
+  honest_round_entry :
+    ∀ (r : Round) (vid : ValidatorId) (k : ℕ),
+      isHonestValidator system vid = true → time k ≥ system.GST →
+      ∀ vid', isHonestValidator system vid' = true →
+        ∃ k', time k' ≤ time k + 3 * system.Δ ∧
+          (∃ bv ∈ (belugaTrace system k').validators,
+            bv.1 = vid' ∧ bv.2.currentRound ≥ r)
+  -- Leader propose: post-GST, honest leader at round r emits its block within Δ.
+  leader_propose :
+    ∀ (r : Round) (vid_leader : ValidatorId) (k : ℕ),
+      isHonestValidator system vid_leader = true →
+      vid_leader = leaderOf system r → time k ≥ system.GST →
+      ∃ k', time k' ≤ time k + system.Δ ∧
+        ∃ B_L ∈ (belugaTrace system k').blocks,
+          B_L.author = vid_leader ∧ B_L.r = r
+  -- Honest references leader: post-GST, honest validator's round-(r+1) block
+  -- references the round-r honest leader within 4Δ.
+  honest_ref_leader :
+    ∀ (r : Round) (vid_leader vid_referencer : ValidatorId) (k : ℕ),
+      isHonestValidator system vid_leader = true →
+      isHonestValidator system vid_referencer = true →
+      vid_leader = leaderOf system r → time k ≥ system.GST →
+      ∃ k', time k' ≤ time k + 4 * system.Δ ∧
+        (∃ B ∈ (belugaTrace system k').blocks,
+          B.author = vid_referencer ∧ B.r = r + 1 ∧
+          ∃ B_L ∈ (belugaTrace system k').blocks,
+            B_L.author = vid_leader ∧ B_L.r = r ∧
+            B_L.d ∈ B.parents)
+  -- Honest validators certify the leader: post-GST, the round-r honest
+  -- leader's block exists and becomes `certified` within 4Δ.
+  honest_certify_leader :
+    ∀ (r : Round) (vid_leader : ValidatorId) (k : ℕ),
+      isHonestValidator system vid_leader = true →
+      vid_leader = leaderOf system r → time k ≥ system.GST →
+      ∃ k', time k' ≤ time k + 4 * system.Δ ∧
+        (∃ B_L ∈ (belugaTrace system k').blocks,
+          isLeaderBlock system B_L ∧ B_L.r = r ∧
+          certified system (belugaTrace system k') B_L)
+  -- Three-consecutive-honest direct commit: with 3 consecutive honest leaders,
+  -- their leader blocks are all decided as ToCommit.
+  three_consec_commit :
+    ∀ (startRound : Round) (k₀ : ℕ), time k₀ ≥ system.GST →
+      ∃ r₁ ≥ startRound, ∃ k' ≥ k₀,
+        (∀ B_L ∈ (belugaTrace system k').blocks,
+          isLeaderBlock system B_L →
+          (B_L.r = r₁ ∨ B_L.r = r₁ + 1 ∨ B_L.r = r₁ + 2) →
+          directDecide system (belugaTrace system k') B_L = Decision.ToCommit)
+  -- Backward induction: with 3 consecutive committed leaders, every earlier
+  -- leader block at round r < r₁ is decided (non-Undecided).
+  backward_induction :
+    ∀ (r : Round) (r₁ : Round) (k' : ℕ),
+      r₁ > r + 2 →
+      (∀ B_L ∈ (belugaTrace system k').blocks,
+        isLeaderBlock system B_L →
+        (B_L.r = r₁ ∨ B_L.r = r₁ + 1 ∨ B_L.r = r₁ + 2) →
+        directDecide system (belugaTrace system k') B_L = Decision.ToCommit) →
+      (∀ B_L ∈ (belugaTrace system k').blocks,
+        isLeaderBlock system B_L → B_L.r = r →
+        directDecide system (belugaTrace system k') B_L ≠ Decision.Undecided)
+  -- Block pull liveness: post-GST, an honest validator with f+1 honest
+  -- references for digest d eventually accepts d.
+  block_pull_liveness :
+    ∀ (vid : ValidatorId) (d : BlockDigest) (k₀ : ℕ),
+      isHonestValidator system vid = true → time k₀ ≥ system.GST →
+      (∃ honest_refs : List ValidatorId,
+        honest_refs.length ≥ system.f + 1 ∧
+        ∀ v ∈ honest_refs, isHonestValidator system v = true ∧
+          ∃ B' ∈ (belugaTrace system k₀).blocks,
+            B'.author = v ∧ B'.parents.contains d = true) →
+      ∃ k' ≥ k₀, HasAccepted (belugaTrace system k') vid d
+  -- Honest validator eventually accepts: post-GST, if one honest accepts d,
+  -- every honest eventually accepts d.
+  honest_eventually_accepts :
+    ∀ (vid_acc vid_h : ValidatorId) (B : Block) (k : ℕ),
+      isHonestValidator system vid_acc = true →
+      isHonestValidator system vid_h = true →
+      time k ≥ system.GST →
+      HasAccepted (belugaTrace system k) vid_acc B.d →
+      ∃ k' ≥ k, HasAccepted (belugaTrace system k') vid_h B.d
+
+/-- The Beluga trace satisfies the Mysticeti-Beluga post-GST liveness bundle.
+
+Same proof template as `belugaTrace_admissionWellFormed`: a private
+compound trace invariant carrying conjuncts for action-progression,
+round-synchronisation, and view-derivation, preserved by every
+`tryActFor` branch, projected to each conjunct of the bundle.
+
+Currently a stub — the inductive proof is the load-bearing pending
+obligation for paper §D.2. -/
+theorem belugaTrace_satisfies_mysticeti_post_gst_liveness
+    (system : BlockSynchroniserSystem)
+    (time : TimeMap)
+    (_h_time : time.WellFormed)
+    (_h_sync : PartiallySynchronous system (belugaTrace system) time) :
+    MysticetiPostGSTLiveness system time := by
+  sorry
+
+/-- Standalone axiom-style claim: if an honest validator has accepted a
+block, the block's payload transactions appear in that validator's
+TransactionOrder output. **Not** part of `MysticetiPostGSTLiveness` —
+this is an F-7-style "TransactionOrder ↔ HasAccepted" link that lives
+outside the inductive trace invariant (see `mechanization-findings.md`
+F-7). Sorry'd as a separate obligation. -/
+theorem accepted_implies_in_order_axiom
+    (system : BlockSynchroniserSystem)
+    (order : TransactionOrder)
+    (vid_h : ValidatorId)
+    (_h_honest : isHonestValidator system vid_h = true)
+    (B : Block) (tx : Transaction)
+    (_h_tx : tx ∈ B.payload) (k' : ℕ)
+    (_h_accepted : HasAccepted (belugaTrace system k') vid_h B.d) :
+    tx ∈ order vid_h := by
+  sorry
+
 /-- After GST, honest validators enter the same round within `3Δ` (paper
 Lemma 1 applied to Beluga). -/
 lemma honest_round_entry_within_3delta
@@ -79,27 +239,7 @@ lemma honest_round_entry_within_3delta
       ∃ k', time k' ≤ time k + 3 * system.Δ ∧
         (∃ bv ∈ (belugaTrace system k').validators,
           bv.1 = vid' ∧ bv.2.currentRound ≥ r) := by
-  intro vid' h_honest'
-  -- Paper Lemma 1: After GST, each round takes at most Δ for block
-  -- dissemination. Within 3Δ, all honest validators advance to round ≥ r.
-  --
-  -- Step 1: Within Δ, honest validators in round ≥ r-2 disseminate blocks.
-  have h_step1 : ∃ k₁, time k₁ ≤ time k + system.Δ ∧
-      (∃ bv ∈ (belugaTrace system k₁).validators,
-        bv.1 = vid' ∧ bv.2.currentRound ≥ r - 2) := by
-    -- Protocol invariant: step semantics + PartiallySynchronous timing.
-    sorry
-  -- Step 2: With round-(r-2) blocks available, advance to round ≥ r-1 (total 2Δ).
-  have h_step2 : ∃ k₂, time k₂ ≤ time k + 2 * system.Δ ∧
-      (∃ bv ∈ (belugaTrace system k₂).validators,
-        bv.1 = vid' ∧ bv.2.currentRound ≥ r - 1) := by
-    obtain ⟨k₁, hk₁, _⟩ := h_step1
-    -- Protocol invariant: quorum advancement within next Δ.
-    sorry
-  -- Step 3: Advance to round ≥ r (total 3Δ).
-  obtain ⟨k₂, hk₂, _⟩ := h_step2
-  -- Protocol invariant: final round advancement within 3Δ.
-  sorry
+  exact (belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync).honest_round_entry r vid k h_honest h_gst
 
 /-- After GST, the honest leader's round-`r` block is created and
 disseminated within `Δ` (paper §4.2). -/
@@ -114,17 +254,7 @@ lemma leader_block_disseminated_within_delta
     ∃ k', time k' ≤ time k + system.Δ ∧
       ∃ B_L ∈ (belugaTrace system k').blocks,
         B_L.author = vid_leader ∧ B_L.r = r := by
-  -- Paper §4.2: The honest leader creates its round-r block via doPropose
-  -- immediately upon entering round r. Post-GST, this block is disseminated
-  -- to all honest validators within Δ (one message delay).
-  --
-  -- The belugaTrace step function creates a block when hasProposedFor is false
-  -- for the validator's current round. The PartiallySynchronous constraint
-  -- ensures this occurs within Δ.
-  --
-  -- Protocol invariant: honest leader proposes upon entering round r,
-  -- and the block appears in belugaTrace within Δ of GST.
-  sorry
+  exact (belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync).leader_propose r vid_leader k h_honest h_leader h_gst
 
 /-- After GST, an honest validator references the leader block within `4Δ`
 (combines round-entry + leader dissemination + parent selection). -/
@@ -143,26 +273,7 @@ lemma honest_references_leader_within_4delta
         ∃ B_L ∈ (belugaTrace system k').blocks,
           B_L.author = vid_leader ∧ B_L.r = r ∧
           B_L.d ∈ B.parents) := by
-  -- Composition of leader_block_disseminated_within_delta and
-  -- honest_round_entry_within_3delta.
-  --
-  -- Step 1: Leader block B_L^r is created and disseminated within Δ.
-  obtain ⟨k_L, hk_L_time, B_L, hB_L_mem, hB_L_auth, hB_L_round⟩ :=
-    leader_block_disseminated_within_delta system time h_time h_sync
-      r vid_leader h_leader_honest h_leader k h_gst
-  -- Step 2: vid_referencer enters round ≥ r+1 within 3Δ (Lemma 1).
-  have h_entry := honest_round_entry_within_3delta system time h_time h_sync
-    (r + 1) vid_leader h_leader_honest k h_gst vid_referencer h_ref_honest
-  obtain ⟨k_R, hk_R_time, bv_R, hbv_R_mem, hbv_R_id, hbv_R_round⟩ := h_entry
-  -- Step 3: vid_referencer creates round-(r+1) block referencing B_L within 4Δ.
-  -- By belugaTrace_blocks_monotone, B_L persists to the later step.
-  -- By parent selection (paper Appendix D.1.2), honest validators include
-  -- available leader blocks as parents. Since T_live = 4Δ, B_L arrives before
-  -- vid_referencer times out.
-  --
-  -- Protocol invariant: parent selection includes leader blocks; vid_referencer
-  -- creates round-(r+1) block within Δ of entering round r+1.
-  sorry
+  exact (belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync).honest_ref_leader r vid_leader vid_referencer k h_leader_honest h_ref_honest h_leader h_gst
 
 /--
 **Lemma 8 (paper Appendix D.2).**
@@ -214,25 +325,7 @@ lemma honest_validators_certify_leader
       (∃ B_L ∈ (belugaTrace system k').blocks,
         isLeaderBlock system B_L ∧ B_L.r = r ∧
         certified system (belugaTrace system k') B_L) := by
-  -- Paper Lemma 9: By Lemma 8, every honest validator references B_L^r
-  -- within 4Δ. Since ≥ 2f+1 honest validators exist, B_L^r gets > 2f
-  -- distinct references = certified.
-  --
-  -- Step 1: The leader block B_L^r exists (from leader_block_disseminated_within_delta).
-  obtain ⟨k_L, hk_L, B_L, hB_L_mem, hB_L_auth, hB_L_round⟩ :=
-    leader_block_disseminated_within_delta system time h_time h_sync
-      r vid_leader h_honest h_leader k h_gst
-  -- Step 2: Every honest validator references B_L^r within 4Δ.
-  -- For each honest vid', honest_references_leader_within_4delta gives us
-  -- a step k'_{vid'} where vid' has a round-(r+1) block referencing B_L^r.
-  --
-  -- Step 3: At the latest such step, all ≥ 2f+1 honest references coexist
-  -- (by belugaTrace_blocks_monotone). The set of distinct reference authors
-  -- has size > 2f, so B_L^r is certified.
-  --
-  -- Protocol invariant: honest validator count ≥ 2f+1 (from
-  -- system.honestMajority), and all references coexist at the latest step.
-  sorry
+  exact (belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync).honest_certify_leader r vid_leader k h_honest h_leader h_gst
 
 /--
 **Lemma 9 (paper Appendix D.2).**
@@ -286,35 +379,14 @@ lemma three_consecutive_honest_direct_commit
         isLeaderBlock system B_L →
         (B_L.r = r₁ ∨ B_L.r = r₁ + 1 ∨ B_L.r = r₁ + 2) →
         directDecide system (belugaTrace system k') B_L = Decision.ToCommit) := by
-  -- Step 1: By Lemma 10 (pigeonhole), find 3 consecutive rounds r₁, r₁+1, r₁+2
-  -- with honest leaders.
-  obtain ⟨r₁, hr₁_ge, _, h_honest₁, h_honest₂, h_honest₃⟩ :=
-    Safety.lemma10_round_robin_pigeonhole system startRound hN hHonest h_ids
-  refine ⟨r₁, hr₁_ge, ?_⟩
-  -- Step 2: By Lemma 9 (honest_validators_certify_leader), each honest leader
-  -- block is certified within 4Δ post-GST.
-  -- Use honest_validators_certify_leader for each of the 3 rounds.
-  have h_cert₁ := honest_validators_certify_leader system time h_time h_sync
-    r₁ (leaderOf system r₁) h_honest₁ rfl k₀ h_gst
-  have h_cert₂ := honest_validators_certify_leader system time h_time h_sync
-    (r₁ + 1) (leaderOf system (r₁ + 1)) h_honest₂ rfl k₀ h_gst
-  have h_cert₃ := honest_validators_certify_leader system time h_time h_sync
-    (r₁ + 2) (leaderOf system (r₁ + 2)) h_honest₃ rfl k₀ h_gst
-  -- Step 3: Certification → directDecide = ToCommit.
-  -- A certified leader block has certificatePatternAtB at round B.r + 2,
-  -- which triggers the first branch of directDecide.
-  -- Use the latest step among the three certifications; by
-  -- belugaTrace_blocks_monotone, all blocks coexist at that step.
-  --
-  -- Protocol invariant: certified blocks satisfy certificatePatternAtB
-  -- (structural connection between certificatePattern and certificatePatternAtB);
-  -- the certification step index ≥ k₀.
-  sorry
+  exact (belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync).three_consec_commit startRound k₀ h_gst
 
 /-- Backward induction: once three consecutive honest leaders are committed,
 earlier undecided leader blocks get decided via the indirect decision rule. -/
 lemma backward_induction_decides_earlier_rounds
     (system : BlockSynchroniserSystem)
+    (time : TimeMap) (h_time : time.WellFormed)
+    (h_sync : PartiallySynchronous system (belugaTrace system) time)
     (r : Round) (r₁ : Round) (k' : ℕ)
     (h_r₁_gt : r₁ > r + 2)
     (h_committed : ∀ B_L ∈ (belugaTrace system k').blocks,
@@ -323,26 +395,8 @@ lemma backward_induction_decides_earlier_rounds
       directDecide system (belugaTrace system k') B_L = Decision.ToCommit) :
     ∀ B_L ∈ (belugaTrace system k').blocks,
       isLeaderBlock system B_L → B_L.r = r →
-      directDecide system (belugaTrace system k') B_L ≠ Decision.Undecided := by
-  -- Paper backward induction argument:
-  -- Given committed (ToCommit) leaders at rounds r₁, r₁+1, r₁+2 with r₁ > r+2,
-  -- show every leader block at round r has directDecide ≠ Undecided.
-  --
-  -- directDecide checks:
-  --   (1) certificatePatternAtB at B.r+2 → ToCommit
-  --   (2) skipPatternB → ToSkip
-  --   (3) else → Undecided
-  --
-  -- For B_L at round r: either B_L has a certificate pattern (→ ToCommit) or
-  -- a skip pattern (→ ToSkip). Case C (Undecided) is impossible because the
-  -- DAG structure forced by committed leaders at r₁..r₁+2 resolves B_L's
-  -- status through quorum overlap.
-  intro B_L h_B_L_mem h_B_L_leader h_B_L_round
-  -- Protocol invariant: the DAG connectivity invariant (every round has
-  -- ≥ 2f+1 blocks) + quorum intersection + certificate persistence (Lemma 13)
-  -- ensures that B_L at round r < r₁ - 2 is either certified or skipped.
-  -- Uses h_committed, h_r₁_gt, h_B_L_round.
-  sorry
+      directDecide system (belugaTrace system k') B_L ≠ Decision.Undecided :=
+  (belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync).backward_induction r r₁ k' h_r₁_gt h_committed
 
 /-
 After GST, any round-`r` leader block eventually has a non-Undecided
@@ -359,28 +413,11 @@ lemma eventual_decision_core
       (∀ B_L ∈ (belugaTrace system k').blocks,
         isLeaderBlock system B_L → B_L.r = r →
         directDecide system (belugaTrace system k') B_L ≠ Decision.Undecided) := by
-  -- Composition of three_consecutive_honest_direct_commit + backward_induction.
-  -- Need system parameters hN and hHonest for Lemma 10.
-  have hN : system.n = 3 * system.f + 1 := by
-    -- From system.honestMajority (n ≥ 3f+1) and the standard BFT assumption
-    -- that n = 3f+1 (minimum quorum size).
-    sorry
-  have hHonest : (system.validators.filter (fun p => p.2 = true)).length
-                  = 2 * system.f + 1 := by
-    -- From hN and the BFT model: honest count = n - f = 2f+1.
-    sorry
-  have h_ids : ∀ i < system.n, ∃ pair ∈ system.validators, pair.1 = i := by
-    -- Structural invariant: validator IDs are {0, ..., n-1} (paper §D.1.2;
-    -- finding F-8 in mechanization-findings.md).
-    sorry
-  -- Step 1: Find 3 consecutive committed leaders after round r+3.
-  obtain ⟨r₁, hr₁_ge, k', hk'_ge, h_committed⟩ :=
-    three_consecutive_honest_direct_commit system time h_time h_sync
-      hN hHonest h_ids (r + 3) k₀ h_gst
-  -- Step 2: By backward induction, B_L at round r is decided.
+  -- Composition of three_consec_commit + backward_induction from the bundle.
+  have mli := belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync
+  obtain ⟨r₁, hr₁_ge, k', hk'_ge, h_committed⟩ := mli.three_consec_commit (r + 3) k₀ h_gst
   have h_r₁_gt : r₁ > r + 2 := Nat.lt_of_succ_le hr₁_ge
-  exact ⟨k', hk'_ge, backward_induction_decides_earlier_rounds system r r₁ k'
-    h_r₁_gt h_committed⟩
+  exact ⟨k', hk'_ge, mli.backward_induction r r₁ k' h_r₁_gt h_committed⟩
 
 /--
 **Lemma 11 (paper Appendix D.2).**
@@ -419,6 +456,8 @@ theorem lemma11_eventual_decision
 (quorum argument: at most `f` are Byzantine). -/
 lemma at_least_f_plus_one_honest_referencers
     (system : BlockSynchroniserSystem)
+    (time : TimeMap) (h_time : time.WellFormed)
+    (h_sync : PartiallySynchronous system (belugaTrace system) time)
     (B : Block) (k₀ : ℕ)
     (h_refs : ((((belugaTrace system k₀).blocks).filter (fun B' =>
         decide (B'.r > B.r) && B'.parents.contains B.d)
@@ -440,11 +479,8 @@ lemma at_least_f_plus_one_honest_referencers
   · -- Show |honest_authors| ≥ f+1.
     -- |authors| ≥ 2f+1 and at most f are Byzantine → ≥ f+1 honest.
     have h_byzantine_bound : (authors.filter (fun vid =>
-        !isHonestValidator system vid)).length ≤ system.f := by
-      -- The system has at most f Byzantine validators (from honestMajority:
-      -- n ≥ 3f+1, so Byzantine count ≤ f). Each Byzantine author in `authors`
-      -- is a distinct registered Byzantine validator.
-      sorry
+        !isHonestValidator system vid)).length ≤ system.f :=
+      (belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync).byz_bound authors
     have h_partition : honest_authors.length +
         (authors.filter (fun vid => !isHonestValidator system vid)).length
         = authors.length := by
@@ -484,18 +520,7 @@ lemma honest_blocks_eventually_received
         ∃ B' ∈ (belugaTrace system k₀).blocks,
           B'.author = v ∧ B'.parents.contains d = true) :
     ∃ k' ≥ k₀, HasAccepted (belugaTrace system k') vid d := by
-  -- Paper §4.3 (ImPoA-based pull protocol):
-  -- f+1 honest validators reference block with digest d. These honest blocks
-  -- are delivered to vid within Δ post-GST. Upon receiving f+1 honest
-  -- references, vid has an ImPoA certificate and outputs block_accept for d.
-  obtain ⟨honest_refs, h_count, h_props⟩ := h_available
-  -- Step 1: The f+1 honest references are already in the blocks at k₀.
-  -- By belugaTrace_blocks_monotone, they persist to all k' ≥ k₀.
-  -- Step 2: vid eventually processes these blocks and accepts d via doAccept.
-  -- Protocol invariant: the step function's doAccept creates block_accept when
-  -- the block's parents are accepted (parentsAccepted). With f+1 honest
-  -- references forming an ImPoA certificate, vid accepts d within Δ.
-  sorry
+  exact (belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync).block_pull_liveness vid d k₀ h_honest h_gst h_available
 
 /--
 **Lemma 12 (paper Appendix D.2).**
@@ -526,7 +551,7 @@ theorem lemma12_referenced_accepted
   intro B vid h_honest k₀ h_gst h_refs
   -- Step 1: At least f+1 honest validators reference B (quorum argument).
   obtain ⟨honest_refs, h_count, h_props⟩ :=
-    at_least_f_plus_one_honest_referencers system B k₀ h_refs
+    at_least_f_plus_one_honest_referencers system time h_time h_sync B k₀ h_refs
   -- Step 2: These f+1 honest blocks form an ImPoA certificate.
   have h_available : ∃ honest_refs' : List ValidatorId,
       honest_refs'.length ≥ system.f + 1 ∧
@@ -586,14 +611,7 @@ lemma honest_validator_eventually_accepts
     (B : Block) (k : ℕ) (h_gst : time k ≥ system.GST)
     (h_accepted : HasAccepted (belugaTrace system k) vid_acc B.d) :
     ∃ k' ≥ k, HasAccepted (belugaTrace system k') vid_h B.d := by
-  -- Paper §4.3: Beluga availability propagation.
-  -- vid_acc has accepted B.d → vid_acc has block_accept in the trace.
-  -- Post-GST, honest validators' blocks are delivered within Δ.
-  -- vid_h receives the ImPoA evidence and also accepts B.d.
-  --
-  -- Protocol invariant: belugaTrace step semantics (doAccept) + post-GST
-  -- delivery guarantees eventual acceptance by all honest validators.
-  sorry
+  exact (belugaTrace_satisfies_mysticeti_post_gst_liveness system time h_time h_sync).honest_eventually_accepts vid_acc vid_h B k h_acc_honest h_h_honest h_gst h_accepted
 
 /-- Once an honest validator has accepted a block, the block's payload
 transactions are in that validator's ordered output (paper §4.3 +
@@ -606,17 +624,10 @@ lemma accepted_implies_in_order
     (B : Block) (tx : Transaction)
     (h_tx : tx ∈ B.payload) (k' : ℕ)
     (h_accepted : HasAccepted (belugaTrace system k') vid_h B.d) :
-    tx ∈ order vid_h := by
-  -- Paper §4.3 + consensus ordering:
-  -- Once vid_h has accepted B.d, the consensus layer includes B in the
-  -- ordered sequence of committed blocks. B's payload transactions are
-  -- added to vid_h's TransactionOrder output.
-  --
-  -- Protocol invariant: TransactionOrder faithfully reflects consensus
-  -- decisions — all accepted blocks' payloads appear in order. This
-  -- invariant connects the abstract TransactionOrder parameter to the
-  -- HasAccepted predicate and is not yet axiomatized.
-  sorry
+    tx ∈ order vid_h :=
+  -- Direct application of `accepted_implies_in_order_axiom` (the F-7-style
+  -- "TransactionOrder ↔ HasAccepted" axiom; not part of the inductive bundle).
+  accepted_implies_in_order_axiom system order vid_h h_honest B tx h_tx k' h_accepted
 
 /--
 **Theorem 6 (paper Appendix D.2) — Mysticeti-Beluga consensus liveness.**
