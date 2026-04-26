@@ -41,14 +41,44 @@ effect on `base`:
 - [x] `networkStep_preserves_none` (commit `5d747da`)
 - [x] `networkStep_advance_inversion` + 3 projections (commit `7672509`)
 
-### Phase 2 — Block / Accept / Causal invariants for `networkTrace`
+### Phase 2 — networkStep advance inversion (DONE)
 
-The invariant chain in `Beluga/Protocol.lean`:
+- [x] `networkStep_advance_inversion` (commit `7672509`)
+- [x] `networkStep_advance_implies_hasProposedFor` / `_stored` / `_gate`
 
-- [ ] `NetworkBlockInv` — analog of `BlockInv` on `NetworkState.base`
-- [ ] `networkBlockInv_trace` — invariant holds at every step
-- [ ] `NetworkAcceptInv` + `networkAcceptInv_trace`
-- [ ] `NetworkCausallyClosed` + `networkCausallyClosed_trace`
+### Phase 3 — Block / Accept / Causal invariants for `networkTrace` — REVISED SCOPE
+
+**Status of `AcceptInv` migration**: `AcceptInv.acceptedParents` is
+**not preserved** by `networkStep` because the accept branch fires
+on `canAcceptBlock` which includes the ImPoA path (paper §4.3 f+1
+references). When ImPoA fires, `vid` accepts a block whose parents
+are not necessarily directly accepted by `vid`. So `acceptedParents`
+fails for `networkTrace`.
+
+This is a *paper-faithful* finding: `AcceptInv.acceptedParents`
+captures the strong invariant of the simpler `belugaTrace` model
+(no ImPoA); under the ImPoA-aware `networkTrace`, only the weaker
+invariant holds — vid has either accepted or has implicit
+availability of every parent.
+
+**Consequences for §5 conclusions**:
+- T1 (block availability) needs only `acceptedBlockExists`, not
+  `acceptedParents`. We extract this as a standalone invariant
+  `network_acceptedBlockExists_trace` (a single conjunct of
+  `AcceptInv` that does survive ImPoA).
+- T2 (causal availability) **requires the full** `CausallyClosed`,
+  which doesn't survive ImPoA. T2 under `networkTrace` is genuinely
+  weaker than under `belugaTrace`: the paper §5 T2 prose proof
+  invokes a liveness argument (the validator eventually pulls /
+  accepts all causal ancestors), which is downstream of paper
+  §4.3 ImPoA + the pull mechanism. Mechanizing this requires a
+  separate liveness argument; not a structural inductive invariant.
+  See [`docs/mechanization-findings.md` § F-1c](mechanization-findings.md)
+  for the broader paper-implicit assumption issue.
+
+So Phase 3 reduces to:
+
+- [ ] `network_acceptedBlockExists_trace` (1 conjunct of full AcceptInv)
 
 ### Phase 3 — Trace-level helpers
 
