@@ -19,24 +19,41 @@ fully-closed proof) see [`mechanization-findings.md`](mechanization-findings.md)
 
 ## 1. §2 — Model: pin `n = 3f + 1` (or scale quorums)
 
-The paper writes the BFT condition as `f < n / 3` and uses fixed
-`2f + 1` quorums uniformly. The quorum-intersection bound
+The paper writes the BFT condition as `f < n / 3` (suggesting `n`
+ranges freely above `3f`) and *separately* fixes the quorum size
+at `2f + 1` throughout the protocol description. The standard
+quorum-intersection bound
 
-> `|A ∩ B| ≥ |A| + |B| − n = (2f + 1) + (2f + 1) − n`,
+> `|A ∩ B| ≥ |A| + |B| − n = (2f + 1) + (2f + 1) − n = 4f + 2 − n`
 
-which is needed to find at least `f + 1` honest validators in any
-quorum intersection (and which underlies Lemmas 10, 13, 15, and
-Theorem 7), is `f + 1` only when `n = 3f + 1` *exactly*. For
-`n > 3f + 1` (still satisfying `f < n / 3`) the bound becomes
-`4f + 2 − n`, which can drop below `f + 1`.
+requires `|A ∩ B| ≥ f + 1` to guarantee an honest validator in any
+intersection — i.e., requires `n ≤ 3f + 1`. The two choices are
+therefore consistent only at `n = 3f + 1` exactly.
 
-**Add:** Pin `n = 3f + 1` explicitly in the model, *or* replace
-`2f + 1` with `n − f` throughout the protocol description so the
-quorum-intersection bound holds for all `n ≥ 3f + 1`.
+The protocol *concept* works for any `n ≥ 3f + 1` provided the
+quorum size scales with `n` (taking `n − f` instead of `2f + 1`):
+intersection then becomes `(n − f) + (n − f) − n = n − 2f ≥ f + 1`,
+and the safety arguments go through. But a literal reading of the
+paper at, say, `n = 3f + 2` instantiates the protocol with quorums
+of size `2f + 1 < n − f`, and the quorum-intersection step in
+Lemmas 10, 13, 15 (and the proof of Theorem 7) no longer goes
+through.
 
-**Why:** Without one of these fixes, the paper's quorum-based
-proofs fail in any model with a strict inequality `n > 3f + 1`,
-even though the prose suggests the protocol works in that regime.
+**Add:** State the convention. Either:
+1. Pin `n = 3f + 1` exactly — then `2f + 1 = n − f` and the literal
+   text is consistent; *or*
+2. Replace `2f + 1` with `n − f` throughout — then the literal
+   protocol scales with `n` and the safety arguments hold for any
+   `n ≥ 3f + 1`.
+
+**Why:** As written, the paper is consistent only at the boundary
+case `n = 3f + 1`. A reader instantiating the protocol literally
+at any larger `n` (which the `f < n / 3` notation invites) would
+get a protocol whose quorum size is too small to satisfy the
+intersection bound the safety proofs require. This is a
+notational fix, not a protocol fix; the protocol concept is
+correct for all `n ≥ 3f + 1`. The paper just needs to make the
+intended quorum convention explicit.
 
 ---
 
