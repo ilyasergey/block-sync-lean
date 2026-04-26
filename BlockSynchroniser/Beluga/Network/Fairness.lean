@@ -888,6 +888,78 @@ theorem network_honest_validator_persistent_trace
   rw [h_pair] at h_p_in
   exact networkTrace_getValidator_of_mem system time k vid p.2 h_p_in
 
+/-- Intermediate value theorem for `networkTrace` rounds: if `vid`'s
+round goes from `≤ r` to `≥ r` between steps `k₁` and `k₂`, there's
+some intermediate step where the round equals `r` exactly. -/
+theorem network_round_intermediate_value
+    (system : BlockSynchroniserSystem) (time : Nat → Nat) (vid : ValidatorId)
+    (k₁ k₂ : Nat) (r : Nat)
+    (hle : k₁ ≤ k₂)
+    (bv₁ bv₂ : BelugaValidator)
+    (h₁ : (networkTrace system time k₁).base.getValidator vid = some bv₁)
+    (h₂ : (networkTrace system time k₂).base.getValidator vid = some bv₂)
+    (hr₁ : bv₁.currentRound ≤ r)
+    (hr₂ : r ≤ bv₂.currentRound) :
+    ∃ k, k₁ ≤ k ∧ k ≤ k₂ ∧
+      ∃ bv, (networkTrace system time k).base.getValidator vid = some bv ∧
+            bv.currentRound = r := by
+  induction hle generalizing bv₁ bv₂ with
+  | refl =>
+    -- k₂ = k₁; bv₁ = bv₂; round must equal r.
+    have h_eq : bv₁ = bv₂ := by rw [h₁] at h₂; injection h₂
+    rw [h_eq] at hr₁
+    refine ⟨k₁, le_rfl, le_rfl, bv₂, h₂, ?_⟩
+    exact Nat.le_antisymm hr₁ hr₂
+  | @step k₂ hk ih =>
+    -- networkTrace at k₂ + 1 = networkStep applied to networkTrace at k₂.
+    -- Need bv_prev at k₂.
+    have h_step_eq : (networkTrace system time (k₂ + 1)).base =
+        (networkStep system (networkTrace system time k₂)
+          (time (k₂ + 1))).base := rfl
+    -- Get bv_prev at k₂ via id-preservation.
+    have h_succ_ids := networkTrace_validators_ids system time (k₂ + 1)
+    have h_mid_ids := networkTrace_validators_ids system time k₂
+    have h_vid_in_succ : vid ∈
+        (networkTrace system time (k₂ + 1)).base.validators.map Prod.fst := by
+      unfold BelugaState.getValidator at h₂
+      rw [Option.map_eq_some_iff] at h₂
+      obtain ⟨p, h_p_mem, _⟩ := h₂
+      have h_p_in := List.mem_of_find?_eq_some h_p_mem
+      have h_match := List.find?_some h_p_mem
+      have h_p1 : p.1 = vid := by
+        match p, h_match with
+        | (_, _), h => simpa using h
+      rw [← h_p1]; exact List.mem_map.mpr ⟨p, h_p_in, rfl⟩
+    have h_vid_in_mid : vid ∈ (networkTrace system time k₂).base.validators.map Prod.fst := by
+      rw [h_mid_ids, ← h_succ_ids]; exact h_vid_in_succ
+    obtain ⟨bv_prev, hbv_prev⟩ : ∃ bv_prev,
+        (networkTrace system time k₂).base.getValidator vid = some bv_prev := by
+      obtain ⟨p, h_p_mem, h_p_eq⟩ := List.mem_map.mp h_vid_in_mid
+      refine ⟨p.2, ?_⟩
+      have h_pair : p = (vid, p.2) := Prod.ext h_p_eq rfl
+      rw [h_pair] at h_p_mem
+      exact networkTrace_getValidator_of_mem system time k₂ vid p.2 h_p_mem
+    -- bv₂ ≤ bv_prev + 1 by networkStep_round_at_most_one.
+    have h_step_bound : bv₂.currentRound ≤ bv_prev.currentRound + 1 := by
+      apply networkStep_round_at_most_one system (networkTrace system time k₂)
+        (time (k₂ + 1)) (networkTrace_validators_nodup system time k₂) vid bv_prev bv₂
+        hbv_prev (h_step_eq ▸ h₂)
+    -- Case on whether bv_prev.currentRound ≥ r.
+    by_cases h_prev_ge : bv_prev.currentRound ≥ r
+    · -- Use ih on k₁ ≤ k₂ with bv_prev.
+      obtain ⟨k, hk_lo, hk_hi, bv_int, h_int, h_int_round⟩ := ih bv₁ bv_prev h₁ hbv_prev hr₁ h_prev_ge
+      exact ⟨k, hk_lo, le_trans hk_hi (Nat.le_succ _), bv_int, h_int, h_int_round⟩
+    · -- bv_prev.currentRound < r ≤ bv₂.currentRound = bv_prev.currentRound + 1, so bv₂.currentRound = r.
+      have h_lt : bv_prev.currentRound < r := Nat.not_le.mp h_prev_ge
+      have h_le_succ : r ≤ bv_prev.currentRound + 1 := le_trans hr₂ h_step_bound
+      have h_eq_r : bv₂.currentRound = r := by
+        -- r ≤ bv₂.currentRound (hr₂); bv₂.currentRound ≤ bv_prev.currentRound + 1 (h_step_bound)
+        -- bv_prev.currentRound < r, so bv_prev.currentRound + 1 ≤ r
+        have : bv_prev.currentRound + 1 ≤ r := h_lt
+        have h_upper : bv₂.currentRound ≤ r := le_trans h_step_bound this
+        exact Nat.le_antisymm h_upper hr₂
+      refine ⟨k₂ + 1, Nat.le_succ_of_le hk, le_rfl, bv₂, h₂, h_eq_r⟩
+
 /-- The trace invariant: at every step of `networkTrace`, every
 validator's `roundEntryTime` is bounded by the state's
 `currentTime`. -/
