@@ -1256,6 +1256,69 @@ private lemma networkStep_advance_implies_gate
         system bv = true :=
   (networkStep_advance_inversion system s newTime vid bv bv' h_nodup h h' h_advance).2.2
 
+/-! ## Phase 4: Trace-level helpers -/
+
+/-- Find the step where vid's round transitioned from r to r+1. -/
+private lemma network_find_advance_step
+    (system : BlockSynchroniserSystem) (time : Nat → Nat) (vid : ValidatorId) (r : Round) :
+    ∀ {k₀ k_target}, k₀ ≤ k_target →
+    ∀ bv₀ bv_t,
+    (networkTrace system time k₀).base.getValidator vid = some bv₀ →
+    (networkTrace system time k_target).base.getValidator vid = some bv_t →
+    bv₀.currentRound = r →
+    bv_t.currentRound ≥ r + 1 →
+    ∃ k_a bv bv',
+      k₀ ≤ k_a ∧ k_a < k_target ∧
+      (networkTrace system time k_a).base.getValidator vid = some bv ∧
+      (networkTrace system time (k_a + 1)).base.getValidator vid = some bv' ∧
+      bv.currentRound = r ∧ bv'.currentRound = r + 1 := by
+  intros k₀ k_target hle
+  induction hle with
+  | refl =>
+    intros bv₀ bv_t h₀ h_t hr₀ hr_t
+    rw [h₀] at h_t
+    have h_eq : bv₀ = bv_t := Option.some.inj h_t
+    exfalso
+    rw [h_eq] at hr₀
+    rw [hr₀] at hr_t
+    exact absurd hr_t (Nat.lt_irrefl _ ∘ Nat.lt_of_succ_le)
+  | @step k_target' h ih =>
+    intros bv₀ bv_t h₀ h_t hr₀ hr_t
+    have h_persistent_prev :
+        ∃ bv_prev, (networkTrace system time k_target').base.getValidator vid = some bv_prev := by
+      by_contra h_none
+      push_neg at h_none
+      have h_get_none : (networkTrace system time k_target').base.getValidator vid = none :=
+        Option.eq_none_iff_forall_ne_some.mpr h_none
+      have h_succ_none :
+          (networkTrace system time (k_target' + 1)).base.getValidator vid = none := by
+        show (networkStep system (networkTrace system time k_target')
+                (time (k_target' + 1))).base.getValidator vid = none
+        exact networkStep_preserves_none system _ _ vid h_get_none
+      rw [h_succ_none] at h_t; contradiction
+    obtain ⟨bv_prev, h_prev⟩ := h_persistent_prev
+    have h_step_at_most : bv_t.currentRound ≤ bv_prev.currentRound + 1 := by
+      apply networkStep_round_at_most_one system (networkTrace system time k_target')
+        (time (k_target' + 1)) (networkTrace_validators_nodup system time k_target')
+        vid bv_prev bv_t h_prev
+      show (networkStep system (networkTrace system time k_target')
+              (time (k_target' + 1))).base.getValidator vid = some bv_t
+      exact h_t
+    by_cases h_case : bv_prev.currentRound ≥ r + 1
+    · obtain ⟨k_a, bv_a, bv_a', h_le, h_lt, h_a, h_a', h_eq_r, h_eq_r1⟩ :=
+        ih bv₀ bv_prev h₀ h_prev hr₀ h_case
+      exact ⟨k_a, bv_a, bv_a', h_le, Nat.lt_succ_of_lt h_lt, h_a, h_a', h_eq_r, h_eq_r1⟩
+    · push_neg at h_case
+      have hbp_le_r : bv_prev.currentRound ≤ r := Nat.le_of_lt_succ h_case
+      have hbp_ge_r : bv_prev.currentRound ≥ r := by
+        have : r + 1 ≤ bv_prev.currentRound + 1 := le_trans hr_t h_step_at_most
+        exact Nat.le_of_succ_le_succ this
+      have hbp_eq : bv_prev.currentRound = r := le_antisymm hbp_le_r hbp_ge_r
+      have hbt_eq : bv_t.currentRound = r + 1 := by
+        have h1 : bv_t.currentRound ≤ r + 1 := by rw [← hbp_eq]; exact h_step_at_most
+        exact le_antisymm h1 hr_t
+      exact ⟨k_target', bv_prev, bv_t, h, Nat.lt_succ_self _, h_prev, h_t, hbp_eq, hbt_eq⟩
+
 /-- The trace invariant: at every step of `networkTrace`, every
 validator's `roundEntryTime` is bounded by the state's
 `currentTime`. -/

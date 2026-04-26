@@ -38,14 +38,8 @@ effect on `base`:
 - [x] `network_honest_validator_persistent_trace` (commit `1dd5432`)
 - [x] `network_round_intermediate_value` (commit `b75c03a`)
 - [x] `networkStep_emittedOperations_monotone` + `networkTryActFor_emittedOperations_monotone` (commit `6a2e482`)
-- [ ] `networkStep_advance_inversion` — inverse: if round
-      advanced, the advance branch fired (NOTE: conclusion needs adjusting:
-      advance-gate becomes `allProposedFor ∨ timeoutFired`,
-      accept-disabled becomes "no canAcceptBlock-acceptable block",
-      i.e., neither directly-receivable nor ImPoA-available)
-- [ ] `networkStep_advance_implies_*` — projections of inversion
-      (`hasProposedFor`, `stored`, `acceptComplete`)
-- [ ] `networkStep_preserves_none` — absence is preserved
+- [x] `networkStep_preserves_none` (commit `5d747da`)
+- [x] `networkStep_advance_inversion` + 3 projections (commit `7672509`)
 
 ### Phase 2 — Block / Accept / Causal invariants for `networkTrace`
 
