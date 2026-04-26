@@ -22,6 +22,7 @@ and `lemma15_unique_cert_belugaTrace` whose only remaining hypotheses
 are the genuine BFT side conditions (`hN`, `h_byz_bound`, `hids`) —
 paper assumptions that cannot be derived from the executable trace.
 -/
+import Mathlib.Tactic
 import BlockSynchroniser.Beluga.Patterns
 import BlockSynchroniser.Beluga.AdmissionInvariant
 import BlockSynchroniser.Beluga.Protocol
@@ -82,17 +83,175 @@ private lemma noEquivocation_of_blockInv
   intro B₁ B₂ p₁ p₂ _ _ _ _ hp₁_in hp₂_in _ _ ha hr
   exact uniqueByAuthorRound_of_blockInv h_inv p₁ hp₁_in p₂ hp₂_in ha hr
 
+/-! ## Helper lemmas for `authorsValid` -/
+
+-- proof: aristotle (project c2ca4a2e) — mysticeti-safety-authorsValid round
+/-- `updateValidator` preserves the list of validator IDs (first
+components). -/
+lemma updateValidator_validators_map_fst (s : BelugaState) (vid : ValidatorId)
+    (f : BelugaValidator → BelugaValidator) :
+    (updateValidator s vid f).validators.map Prod.fst = s.validators.map Prod.fst := by
+  unfold updateValidator; aesop
+
+-- proof: aristotle (project c2ca4a2e) — mysticeti-safety-authorsValid round
+/-- `doAccept` preserves validator IDs. -/
+lemma doAccept_validators_map_fst (s : BelugaState) (vid : ValidatorId) (B : Block) :
+    (doAccept s vid B).validators.map Prod.fst = s.validators.map Prod.fst := by
+  apply updateValidator_validators_map_fst
+
+-- proof: aristotle (project c2ca4a2e) — mysticeti-safety-authorsValid round
+/-- `doStore` preserves validator IDs. -/
+lemma doStore_validators_map_fst (s : BelugaState) (vid : ValidatorId) (B : Block) :
+    (doStore s vid B).validators.map Prod.fst = s.validators.map Prod.fst := by
+  convert updateValidator_validators_map_fst s vid
+    (fun bv => { bv with storedBlocks := B.d :: bv.storedBlocks }) using 1
+
+-- proof: aristotle (project c2ca4a2e) — mysticeti-safety-authorsValid round
+/-- `doAdvance` preserves validator IDs. -/
+lemma doAdvance_validators_map_fst (s : BelugaState) (vid : ValidatorId) :
+    (doAdvance s vid).validators.map Prod.fst = s.validators.map Prod.fst := by
+  convert updateValidator_validators_map_fst s vid
+    (fun bv => { bv with currentRound := bv.currentRound + 1 }) using 1
+
+/-- `doAccept` does not change the block list. -/
+lemma doAccept_blocks (s : BelugaState) (vid : ValidatorId) (B : Block) :
+    (doAccept s vid B).blocks = s.blocks := by
+  unfold doAccept updateValidator; rfl
+
+/-- `doStore` does not change the block list. -/
+lemma doStore_blocks (s : BelugaState) (vid : ValidatorId) (B : Block) :
+    (doStore s vid B).blocks = s.blocks := by
+  unfold doStore updateValidator; rfl
+
+/-- `doAdvance` does not change the block list. -/
+lemma doAdvance_blocks (s : BelugaState) (vid : ValidatorId) :
+    (doAdvance s vid).blocks = s.blocks := by
+  unfold doAdvance updateValidator; rfl
+
+-- proof: aristotle (project c2ca4a2e) — mysticeti-safety-authorsValid round
+/-- `doPropose` prepends exactly one block with `author = vid`, leaving
+the rest of the block list unchanged. -/
+lemma doPropose_blocks (system : BlockSynchroniserSystem) (s : BelugaState)
+    (vid : ValidatorId) (r : Round) :
+    ∃ B, (doPropose system s vid r).blocks = B :: s.blocks ∧ B.author = vid := by
+  exact ⟨_, rfl, rfl⟩
+
+-- proof: aristotle (project c2ca4a2e) — mysticeti-safety-authorsValid round
+/-- `doPropose` does not change validator IDs. -/
+lemma doPropose_validators_map_fst (system : BlockSynchroniserSystem) (s : BelugaState)
+    (vid : ValidatorId) (r : Round) :
+    (doPropose system s vid r).validators.map Prod.fst = s.validators.map Prod.fst := by
+  unfold doPropose; aesop
+
+-- proof: aristotle (project c2ca4a2e) — mysticeti-safety-authorsValid round
+set_option maxHeartbeats 800000 in
+/-- Every block in `step system s` is either already in `s.blocks` or has
+its author among the first components of `s.validators`. -/
+lemma step_blocks_mem (system : BlockSynchroniserSystem) (s : BelugaState) (B : Block) :
+    B ∈ (step system s).blocks →
+    B ∈ s.blocks ∨ B.author ∈ s.validators.map Prod.fst := by
+  unfold step
+  cases h : List.findSome? (fun x => tryActFor system s x.1 x.2) s.validators <;>
+    simp_all +decide
+  rw [List.findSome?_eq_some_iff] at h
+  obtain ⟨l₁, a, l₂, h₁, h₂, h₃⟩ := h
+  unfold tryActFor at h₂
+  cases h : List.find? (fun B => !hasAcceptedDigest s a.1 B.d &&
+      B.parents.all fun pd => hasAcceptedDigest s a.1 pd) s.blocks <;>
+    simp_all +decide
+  · cases h : List.find? (fun B => hasAcceptedDigest s a.1 B.d &&
+        !hasStoredDigest s a.1 B.d) s.blocks <;> simp_all +decide
+    · split_ifs at h₂ <;> simp_all +decide [doPropose, doAccept, doStore, doAdvance]
+      · grind
+      · unfold updateValidator at h₂; aesop
+    · split_ifs at h₂ <;> simp_all +decide [doPropose, doStore]
+      · grind
+      · unfold updateValidator at h₂; aesop
+  · split_ifs at h₂ <;> simp_all +decide [doPropose, doAccept]
+    · grind
+    · unfold updateValidator at h₂; aesop
+
+/-- The validator IDs of the initial state correspond to entries in
+`system.validators`. -/
+lemma init_validators_ids (system : BlockSynchroniserSystem) :
+    ∀ vid ∈ (BelugaState.init system).validators.map Prod.fst,
+      ∃ p ∈ system.validators, p.1 = vid := by
+  intro vid hvid
+  unfold BelugaState.init at hvid
+  simp only [List.map_map, Function.comp, List.mem_map] at hvid
+  obtain ⟨pair, hpair_mem, hpair_eq⟩ := hvid
+  exact ⟨pair, hpair_mem, hpair_eq⟩
+
+-- proof: aristotle (project c2ca4a2e) — mysticeti-safety-authorsValid round
+/-- The `authorsValid` conjunct holds for every step of the Beluga
+trace; jointly with the validator-IDs-stable invariant, this is the
+right inductive carrier. -/
+private lemma authorsValid_trace
+    (system : BlockSynchroniserSystem) (k : Nat) :
+    (∀ B ∈ (belugaTrace system k).blocks, ∃ p ∈ system.validators, p.1 = B.author) ∧
+    (∀ vid ∈ (belugaTrace system k).validators.map Prod.fst,
+      ∃ p ∈ system.validators, p.1 = vid) := by
+  induction' k with k ih
+  · exact ⟨by tauto, init_validators_ids system⟩
+  · have h_step_validators :
+        (step system (belugaTrace system k)).validators.map Prod.fst =
+          (belugaTrace system k).validators.map Prod.fst := by
+      unfold step
+      cases h : List.findSome? (fun x =>
+          tryActFor system (belugaTrace system k) x.1 x.2)
+          (belugaTrace system k).validators <;>
+        simp +decide [h]
+      have h_step_validators :
+          ∀ (s : BelugaState) (vid : ValidatorId) (bv : BelugaValidator),
+            (tryActFor system (belugaTrace system k) vid bv = some s) →
+            (s.validators.map Prod.fst =
+              (belugaTrace system k).validators.map Prod.fst) := by
+        intros s vid bv hact
+        unfold tryActFor at hact
+        cases h : List.find? (fun B =>
+            !hasAcceptedDigest (belugaTrace system k) vid B.d &&
+            B.parents.all fun pd =>
+              hasAcceptedDigest (belugaTrace system k) vid pd)
+            (belugaTrace system k).blocks <;>
+          simp +decide [h] at hact ⊢
+        · cases h' : List.find? (fun B =>
+              hasAcceptedDigest (belugaTrace system k) vid B.d &&
+              !hasStoredDigest (belugaTrace system k) vid B.d)
+              (belugaTrace system k).blocks <;>
+            simp +decide [h'] at hact ⊢
+          · split_ifs at hact <;>
+              simp_all +decide [doPropose_validators_map_fst,
+                doAdvance_validators_map_fst]
+            · exact hact ▸ doPropose_validators_map_fst _ _ _ _
+            · exact hact ▸ doAdvance_validators_map_fst _ _
+          · split_ifs at hact <;>
+              simp_all +decide [doPropose_validators_map_fst,
+                doStore_validators_map_fst]
+            · exact hact ▸ doPropose_validators_map_fst _ _ _ _
+            · exact hact ▸ doStore_validators_map_fst _ _ _
+        · split_ifs at hact <;>
+            simp_all +decide [doPropose_validators_map_fst,
+              doAccept_validators_map_fst]
+          · exact hact ▸ doPropose_validators_map_fst _ _ _ _
+          · exact hact ▸ doAccept_validators_map_fst _ _ _
+      rw [List.findSome?_eq_some_iff] at h
+      aesop
+    refine ⟨?_, ?_⟩
+    · intro B hB
+      have := step_blocks_mem system (belugaTrace system k) B hB
+      aesop
+    · exact fun x hx => ih.2 x <| h_step_validators ▸ hx
+
 /-- The Beluga trace satisfies the Mysticeti safety invariant bundle.
 
-Three of four conjuncts are discharged from existing trace invariants:
+All four conjuncts are sorry-free:
 - `admission` ← `belugaTrace_admissionWellFormed`,
 - `uniqueByAuthorRound` ← `blockInv_trace` + `BlockInv.uniquePropose`,
-- `noEquivocation` ← `blockInv_trace` + `BlockInv.uniquePropose`.
-
-The `authorsValid` conjunct is currently a stub queued for
-delegation: it requires a separate trace invariant about emitted
-operations (every `block_propose vid B r` op has `vid` registered in
-`system.validators`). -/
+- `noEquivocation` ← `blockInv_trace` + `BlockInv.uniquePropose`,
+- `authorsValid` ← Nat induction via `authorsValid_trace`, which
+  threads a joint blocks-+-validator-IDs carrier (only `doPropose`
+  adds blocks, and the validator-ID list is preserved by every
+  `tryActFor` branch). -/
 theorem belugaTrace_satisfies_mysticetiSafetyInv
     (system : BlockSynchroniserSystem)
     (hids : ValidIds system)
@@ -103,8 +262,7 @@ theorem belugaTrace_satisfies_mysticetiSafetyInv
     { admission := belugaTrace_admissionWellFormed system k
       uniqueByAuthorRound := uniqueByAuthorRound_of_blockInv h_blockInv
       noEquivocation := noEquivocation_of_blockInv h_blockInv
-      authorsValid := ?_ }
-  sorry
+      authorsValid := (authorsValid_trace system k).1 }
 
 end Beluga
 end BlockSynchroniser

@@ -720,6 +720,105 @@ This pattern is added to
 [`docs/blog-aristotle-integration-gotchas.md`](blog-aristotle-integration-gotchas.md)
 (Gotcha 21 sequel).
 
+## Project c2ca4a2e-8323-448c-9c47-61bf28aa7f6e (mysticeti-safety-authorsValid round)
+
+**Submitted.** 2026-04-26 ~17:30 SGT.
+**Result.** `COMPLETE` (clean) ~1h05m later. The single sorry'd
+`authorsValid` conjunct of `belugaTrace_satisfies_mysticetiSafetyInv`
+was closed by Nat induction on `k` using the **right inductive
+carrier strengthening**: the carrier is the *joint* invariant
+combining `authorsValid` with "every validator ID in the state's
+validator list comes from `system.validators`". Aristotle saw that
+proving `authorsValid` alone was not inductively self-sufficient —
+the inductive step needed to know that the validator-ID list
+matched the system's, which required strengthening the
+hypothesis. This is exactly the bundle-pattern strengthening the
+prompt explicitly invited, and Aristotle did it correctly.
+
+### Theorem closed
+
+- `belugaTrace_satisfies_mysticetiSafetyInv` is now **fully
+  sorry-free**: the `authorsValid` field is discharged via
+  `(authorsValid_trace system k).1`. The bundle is the foundation
+  for `lemma13_cert_persistence_belugaTrace` and
+  `lemma15_unique_cert_belugaTrace`, which by transitive closure
+  also become "the only remaining BFT side conditions are
+  `hN`, `h_byz_bound`, `hids`" — exactly as the design intended.
+
+### New auxiliaries (11 helper lemmas)
+
+All marked `-- proof: aristotle (project c2ca4a2e)`:
+- `updateValidator_validators_map_fst` — `updateValidator`
+  preserves the validator-ID list.
+- `doAccept_validators_map_fst`, `doStore_validators_map_fst`,
+  `doAdvance_validators_map_fst`, `doPropose_validators_map_fst`
+  — per-action specialisations.
+- `doAccept_blocks`, `doStore_blocks`, `doAdvance_blocks` —
+  these three Aristotle left as `exact?` placeholders; replaced
+  during integration with concrete `unfold ...; rfl` proofs.
+- `doPropose_blocks` — `doPropose` prepends one block with
+  `author = vid`.
+- `step_blocks_mem` — every block in `step system s` is either
+  already in `s.blocks` or has its author in
+  `s.validators.map Prod.fst`. The load-bearing case-analysis
+  lemma over `tryActFor`'s four branches.
+- `init_validators_ids` — Aristotle left an `exact?` for the
+  base case of `authorsValid_trace`'s validators conjunct; replaced
+  during integration with a concrete `unfold BelugaState.init`
+  + `simp` + destructuring proof.
+
+### Carrier choice — `authorsValid_trace` private lemma
+
+The right inductive shape (per Gotcha 21 + 22): instead of trying
+to prove `authorsValid` directly, Aristotle introduced a private
+auxiliary `authorsValid_trace` that pairs `authorsValid` with the
+validator-IDs invariant inside an `And`. The induction goes
+through because the validator-IDs invariant is preserved by every
+`tryActFor` branch (via the `*_validators_map_fst` family) — and
+that's enough to discharge the `doPropose` block-addition case
+(the new block's author is `vid`, which came from
+`s.validators`, which by the validators invariant comes from
+`system.validators`). The bundle theorem extracts via `.1`.
+
+### Side effects
+
+- **`MysticetiSafetyInv` bundle is now fully sorry-free.** `Beluga/MysticetiSafetyInvariant.lean`
+  contains 0 sorries.
+- `Mysticeti/Safety.lean`'s belugaTrace-specialised wrappers
+  `lemma13_cert_persistence_belugaTrace` and
+  `lemma15_unique_cert_belugaTrace` are now end-to-end sorry-free
+  for their derivations (modulo the underlying generic L13/L15
+  proofs which were already closed).
+- `import Mathlib` added by Aristotle in the returned file was
+  narrowed to `import Mathlib.Tactic` during integration (Gotcha 1).
+- 4 `exact?` placeholders (Gotcha 2) were replaced with concrete
+  proofs during integration: 3 of `doAccept_blocks` /
+  `doStore_blocks` / `doAdvance_blocks` (each `unfold ...; rfl`)
+  + 1 in `init_validators_ids` (a concrete simp+destructure).
+
+### Verifier confirmation
+
+`lake build` passes (6250 jobs). Sorry count for the file is now 0.
+Project sorry total dropped from 6 to 5 (the remaining 5 are 4 in
+`Beluga/Theorems.lean`'s in-flight bundle + 1 in
+`Mysticeti/Liveness.lean`'s in-flight bundle).
+
+### Notes — pattern: anti-trivialisation prompt language works
+
+This was the first round to use the anti-trivialisation prompt
+language documented in Gotcha 22 ("Do NOT add any theorem
+hypothesis whose statement is equal to one of the bundle
+conjuncts. You MAY extend the bundle structure with extra carrier
+conjuncts as long as inductively provable from `belugaTrace`
+alone"). The result was textbook: Aristotle correctly
+distinguished the two cases — kept the theorem signature
+hypothesis-free, but introduced a private auxiliary lemma whose
+statement was *strictly stronger* than the conjunct (added a
+second invariant). That's the right pattern. Recommend
+embedding this prompt language in
+[`docs/aristotle-workflow.md`](aristotle-workflow.md) as the
+default for bundle-style delegations going forward.
+
 ## Future projects
 
 When a new Aristotle submission completes and is integrated, append
