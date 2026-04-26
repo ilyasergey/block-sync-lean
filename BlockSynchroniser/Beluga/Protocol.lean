@@ -815,7 +815,8 @@ private lemma acceptInv_step (system : BlockSynchroniserSystem)
         (List.mem_of_find?_eq_some hfindAcc) hp2.2 using 1
       exact hact.symm
 
-private lemma acceptInv_trace (system : BlockSynchroniserSystem)
+/-- The `AcceptInv` invariant holds at every trace step. -/
+theorem acceptInv_trace (system : BlockSynchroniserSystem)
     (vid : ValidatorId) (hids : ValidIds system) (k : Nat) :
     AcceptInv (belugaTrace system k) vid := by
   induction k with

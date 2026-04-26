@@ -798,6 +798,135 @@ private lemma step_advance_implies_hasProposedFor
         subst h_eq
         grind
 
+/-
+If `vid`'s `currentRound` advances by 1 in a single `step` (from `bv`
+at `s` to `bv'` at `step system s`), then for every block `B ∈ s.blocks`,
+`hasAcceptedDigest s vid B.d → hasStoredDigest s vid B.d` — the
+store-before-advance gate of `tryActFor` (action 3 has higher priority
+than action 4). Mirror of `step_advance_implies_hasProposedFor` for
+the store gate.
+-/
+set_option maxHeartbeats 800000 in
+private lemma step_advance_implies_stored
+    (system : BlockSynchroniserSystem) (s : BelugaState) (vid : ValidatorId)
+    (bv bv' : BelugaValidator)
+    (_h_nodup : (s.validators.map Prod.fst).Nodup)
+    (h : s.getValidator vid = some bv)
+    (h' : (step system s).getValidator vid = some bv')
+    (h_advance : bv'.currentRound = bv.currentRound + 1) :
+    ∀ B ∈ s.blocks,
+      hasAcceptedDigest s vid B.d = true → hasStoredDigest s vid B.d = true := by
+  unfold step at h'
+  rcases h_fs : List.findSome? (fun x => tryActFor system s x.1 x.2) s.validators
+    with _ | s_post
+  · rw [h_fs] at h'
+    simp only at h'
+    rw [h] at h'
+    have h_eq : bv = bv' := Option.some.inj h'
+    exfalso
+    have : bv.currentRound = bv'.currentRound := by rw [h_eq]
+    grind
+  · rw [h_fs] at h'
+    simp only at h'
+    rw [List.findSome?_eq_some_iff] at h_fs
+    obtain ⟨_, a, _, h_split, h_act, _⟩ := h_fs
+    have h_a_mem : a ∈ s.validators := by rw [h_split]; simp +decide
+    unfold tryActFor at h_act
+    simp only at h_act
+    rcases h_findAcc : List.find?
+        (fun B => !hasAcceptedDigest s a.1 B.d &&
+          B.parents.all fun pd => hasAcceptedDigest s a.1 pd) s.blocks
+      with _ | B_acc
+    · rw [h_findAcc] at h_act
+      simp only at h_act
+      rcases h_findSto : List.find?
+          (fun B => hasAcceptedDigest s a.1 B.d &&
+            !hasStoredDigest s a.1 B.d) s.blocks
+        with _ | B_sto
+      · rw [h_findSto] at h_act
+        simp only at h_act
+        by_cases h_prop_gate : (!hasProposedFor s a.1 a.2.currentRound) = true
+        · rw [if_pos h_prop_gate] at h_act
+          have h_post_eq : s_post = doPropose system s a.1 a.2.currentRound :=
+            (Option.some.inj h_act).symm
+          rw [h_post_eq] at h'
+          rw [doPropose_getValidator system s vid a.1 a.2.currentRound] at h'
+          rw [h] at h'
+          have h_eq : bv = bv' := Option.some.inj h'
+          exfalso
+          have : bv.currentRound = bv'.currentRound := by rw [h_eq]
+          grind
+        · rw [if_neg h_prop_gate] at h_act
+          by_cases h_all : allProposedFor system s a.2.currentRound = true
+          · rw [if_pos h_all] at h_act
+            have h_post_eq : s_post = doAdvance s a.1 :=
+              (Option.some.inj h_act).symm
+            rw [h_post_eq] at h'
+            -- vid = a.1 (else doAdvance preserves vid's round → contradicts advance).
+            by_cases h_eq_vid : vid = a.1
+            · -- vid is the actor. h_findSto = none gives the conclusion for vid.
+              intro B hB h_acc
+              rw [List.find?_eq_none] at h_findSto
+              have h_no := h_findSto B hB
+              -- h_no : ¬(hasAcceptedDigest s a.1 B.d && !hasStoredDigest s a.1 B.d)
+              rw [h_eq_vid] at h_acc
+              by_cases h_sto : hasStoredDigest s a.1 B.d = true
+              · rw [h_eq_vid]; exact h_sto
+              · exfalso; apply h_no
+                simp [h_acc, h_sto]
+            · -- vid ≠ a.1: doAdvance preserves vid's state → no advance.
+              rw [doAdvance] at h'
+              rw [updateValidator_getValidator_ne s vid a.1 _ h_eq_vid] at h'
+              rw [h] at h'
+              have h_eq : bv = bv' := Option.some.inj h'
+              exfalso
+              have : bv.currentRound = bv'.currentRound := by rw [h_eq]
+              grind
+          · rw [if_neg h_all] at h_act
+            simp at h_act
+      · rw [h_findSto] at h_act
+        simp only at h_act
+        by_cases h_prop_gate : (!hasProposedFor s a.1 a.2.currentRound) = true
+        · rw [if_pos h_prop_gate] at h_act
+          have h_post_eq : s_post = doPropose system s a.1 a.2.currentRound :=
+            (Option.some.inj h_act).symm
+          rw [h_post_eq] at h'
+          rw [doPropose_getValidator system s vid a.1 a.2.currentRound] at h'
+          rw [h] at h'
+          have h_eq : bv = bv' := Option.some.inj h'
+          exfalso
+          have : bv.currentRound = bv'.currentRound := by rw [h_eq]
+          grind
+        · rw [if_neg h_prop_gate] at h_act
+          have h_post_eq : s_post = doStore s a.1 B_sto :=
+            (Option.some.inj h_act).symm
+          rw [h_post_eq] at h'
+          obtain ⟨bv_post, h_post_get, h_eq_round⟩ := doStore_round s vid a.1 B_sto bv h
+          have h_eq : bv_post = bv' := Option.some.inj (h_post_get.symm.trans h')
+          subst h_eq
+          grind
+    · rw [h_findAcc] at h_act
+      simp only at h_act
+      by_cases h_prop_gate : (!hasProposedFor s a.1 a.2.currentRound) = true
+      · rw [if_pos h_prop_gate] at h_act
+        have h_post_eq : s_post = doPropose system s a.1 a.2.currentRound :=
+          (Option.some.inj h_act).symm
+        rw [h_post_eq] at h'
+        rw [doPropose_getValidator system s vid a.1 a.2.currentRound] at h'
+        rw [h] at h'
+        have h_eq : bv = bv' := Option.some.inj h'
+        exfalso
+        have : bv.currentRound = bv'.currentRound := by rw [h_eq]
+        grind
+      · rw [if_neg h_prop_gate] at h_act
+        have h_post_eq : s_post = doAccept s a.1 B_acc :=
+          (Option.some.inj h_act).symm
+        rw [h_post_eq] at h'
+        obtain ⟨bv_post, h_post_get, h_eq_round⟩ := doAccept_round s vid a.1 B_acc bv h
+        have h_eq : bv_post = bv' := Option.some.inj (h_post_get.symm.trans h')
+        subst h_eq
+        grind
+
 /- `step` preserves "absent": if vid isn't in `s.validators`, it isn't
 in `(step system s).validators` either. -/
 private lemma step_preserves_none (system : BlockSynchroniserSystem)
@@ -873,6 +1002,62 @@ private lemma proposed_for_lt_currentRound
             h_nodup_k h_prev h_get h_advance
         exact hasProposedFor_monotone system vid bv_prev.currentRound k (k+1)
           (Nat.le_succ k) h_prop_k
+
+/- Find the step at which `vid` first advances from round `r` to `r + 1`,
+given a starting step at round `r` and an ending step at round ≥ `r + 1`.
+The witness step `k_a` satisfies `bv at trace k_a = r` and
+`bv' at trace (k_a + 1) = r + 1`. -/
+private lemma find_advance_step
+    (system : BlockSynchroniserSystem) (vid : ValidatorId) (r : Round) :
+    ∀ {k₀ k_target}, k₀ ≤ k_target →
+    ∀ bv₀ bv_t,
+    (belugaTrace system k₀).getValidator vid = some bv₀ →
+    (belugaTrace system k_target).getValidator vid = some bv_t →
+    bv₀.currentRound = r →
+    bv_t.currentRound ≥ r + 1 →
+    ∃ k_a bv bv',
+      k₀ ≤ k_a ∧ k_a < k_target ∧
+      (belugaTrace system k_a).getValidator vid = some bv ∧
+      (belugaTrace system (k_a + 1)).getValidator vid = some bv' ∧
+      bv.currentRound = r ∧ bv'.currentRound = r + 1 := by
+  intros k₀ k_target hle
+  induction hle with
+  | refl =>
+    intros bv₀ bv_t h₀ h_t hr₀ hr_t
+    rw [h₀] at h_t
+    have h_eq : bv₀ = bv_t := Option.some.inj h_t
+    exfalso
+    have h_round_eq : bv₀.currentRound = bv_t.currentRound := by rw [h_eq]
+    grind
+  | @step k_target' h ih =>
+    intros bv₀ bv_t h₀ h_t hr₀ hr_t
+    have h_persistent_prev :
+        ∃ bv_prev, (belugaTrace system k_target').getValidator vid = some bv_prev := by
+      by_contra h_none
+      push_neg at h_none
+      have h_get_none : (belugaTrace system k_target').getValidator vid = none :=
+        Option.eq_none_iff_forall_ne_some.mpr h_none
+      have h_succ_none : (belugaTrace system (k_target' + 1)).getValidator vid = none :=
+        step_preserves_none system _ vid h_get_none
+      rw [h_succ_none] at h_t
+      contradiction
+    obtain ⟨bv_prev, h_prev⟩ := h_persistent_prev
+    have h_step_at_most : bv_t.currentRound ≤ bv_prev.currentRound + 1 :=
+      step_round_at_most_one system _ vid bv_prev bv_t h_prev h_t
+    by_cases h_case : bv_prev.currentRound ≥ r + 1
+    · obtain ⟨k_a, bv_a, bv_a', h_le, h_lt, h_a, h_a', h_eq_r, h_eq_r1⟩ :=
+        ih bv₀ bv_prev h₀ h_prev hr₀ h_case
+      exact ⟨k_a, bv_a, bv_a', h_le, Nat.lt_succ_of_lt h_lt, h_a, h_a', h_eq_r, h_eq_r1⟩
+    · push_neg at h_case
+      have hbp_le_r : bv_prev.currentRound ≤ r := Nat.le_of_lt_succ h_case
+      have hbp_ge_r : bv_prev.currentRound ≥ r := by
+        have : r + 1 ≤ bv_prev.currentRound + 1 := le_trans hr_t h_step_at_most
+        exact Nat.le_of_succ_le_succ this
+      have hbp_eq : bv_prev.currentRound = r := le_antisymm hbp_le_r hbp_ge_r
+      have hbt_eq : bv_t.currentRound = r + 1 := by
+        have h1 : bv_t.currentRound ≤ r + 1 := by rw [← hbp_eq] at hr_t ⊢; exact h_step_at_most
+        exact le_antisymm h1 hr_t
+      exact ⟨k_target', bv_prev, bv_t, h, Nat.lt_succ_self _, h_prev, h_t, hbp_eq, hbt_eq⟩
 
 /-
 Iterated `SchedulerFairness`: starting from a post-GST step, every
@@ -1169,6 +1354,7 @@ The other four conjuncts (L1 `honest_round_sync`, T1
 `round_termination`) are stubs queued for delegation. -/
 theorem belugaTrace_satisfies_post_gst_liveness
     (system : BlockSynchroniserSystem)
+    (hids : ValidIds system)
     (time : TimeMap)
     (h_time : time.WellFormed)
     (_h_sync : PartiallySynchronous system (belugaTrace system) time)
@@ -1200,8 +1386,65 @@ theorem belugaTrace_satisfies_post_gst_liveness
     have htime_kc : time kc ≤ time k + 3 * system.Δ :=
       le_trans (h_time.1 kc k' hkc_hi) hk'time
     exact ⟨kc, hkc_lo, htime_kc, bvc, hbvc, hrnd_eq⟩
-  · -- T1 (block_availability) — queued for delegation.
-    sorry
+  · -- T1 (block_availability): vid has accepted d at step k. Take a
+    -- post-GST step, advance vid by one round via h_fair, locate the
+    -- advance step k_a (vid at round r at trace k_a, at round r+1 at
+    -- trace (k_a+1)). At trace k_a, the store action is disabled (else
+    -- doStore would have fired with higher priority than doAdvance);
+    -- so every B ∈ (trace k_a).blocks with hasAcceptedDigest vid B.d
+    -- has hasStoredDigest vid B.d. AcceptInv (via hids) gives such a
+    -- B for d. Hence vid has stored some block with digest d.
+    intro k vid d h_honest h_acc
+    obtain ⟨k_post, hk_post_le, hk_post_gst⟩ : ∃ k', k ≤ k' ∧ time k' ≥ system.GST := by
+      obtain ⟨k', hk'⟩ := h_time.2 system.GST
+      exact ⟨max k k', le_max_left _ _, le_trans hk' (h_time.1 _ _ (le_max_right _ _))⟩
+    obtain ⟨bv_post, h_bv_post⟩ :=
+      honest_validator_persistent_trace system vid h_honest k_post
+    set r := bv_post.currentRound with hr_def
+    obtain ⟨k_target, hk_target_le, _, h_target_all⟩ :=
+      h_fair k_post r hk_post_gst ⟨vid, bv_post, h_honest, h_bv_post, hr_def.symm⟩
+    obtain ⟨bv_target, h_bv_target, hbv_target_rnd⟩ := h_target_all vid h_honest
+    obtain ⟨k_a, bv_a, bv_a', hk_a_le, hk_a_lt, h_a, h_a', h_a_eq, h_a'_eq⟩ :=
+      find_advance_step system vid r hk_target_le bv_post bv_target h_bv_post h_bv_target
+        hr_def.symm hbv_target_rnd
+    have h_nodup_a := belugaTrace_validators_nodup system h_sys_nodup k_a
+    have h_advance : bv_a'.currentRound = bv_a.currentRound + 1 := by rw [h_a_eq, h_a'_eq]
+    have h_stored_gate :=
+      step_advance_implies_stored system (belugaTrace system k_a) vid bv_a bv_a'
+        h_nodup_a h_a (by show (belugaTrace system (k_a + 1)).getValidator vid = some bv_a'
+                          exact h_a') h_advance
+    have h_acc_at_a : HasAccepted (belugaTrace system k_a) vid d := by
+      have h_le : k ≤ k_a := le_trans hk_post_le hk_a_le
+      have h_mono : ∀ op ∈ (belugaTrace system k).emittedOperations,
+          op ∈ (belugaTrace system k_a).emittedOperations := by
+        clear * - h_le
+        induction h_le with
+        | refl => intro _ h; exact h
+        | step _ ih => intro op hop; exact step_emittedOperations_monotone system _ op (ih op hop)
+      exact h_mono _ h_acc
+    have h_acc_bool : hasAcceptedDigest (belugaTrace system k_a) vid d = true := by
+      unfold hasAcceptedDigest
+      rw [List.any_eq_true]
+      exact ⟨_, h_acc_at_a, by simp +decide⟩
+    have h_ai := acceptInv_trace system vid hids k_a
+    obtain ⟨B, hB_mem, hB_d⟩ := h_ai.acceptedBlockExists d h_acc_at_a
+    have h_acc_B : hasAcceptedDigest (belugaTrace system k_a) vid B.d = true := by
+      rw [hB_d]; exact h_acc_bool
+    have h_sto_B : hasStoredDigest (belugaTrace system k_a) vid B.d = true :=
+      h_stored_gate B hB_mem h_acc_B
+    unfold hasStoredDigest at h_sto_B
+    rw [List.any_eq_true] at h_sto_B
+    obtain ⟨op, hop_mem, hop_match⟩ := h_sto_B
+    refine ⟨k_a, le_trans hk_post_le hk_a_le, ?_⟩
+    cases op with
+    | block_store v B' =>
+      simp at hop_match
+      obtain ⟨h_v, h_d⟩ := hop_match
+      refine ⟨B', ?_, ?_⟩
+      · show ValidatorOperation.block_store vid B' ∈ (belugaTrace system k_a).emittedOperations
+        rw [h_v] at hop_mem; exact hop_mem
+      · rw [h_d]; exact hB_d
+    | _ => simp at hop_match
   · exact round_progression_aux system time h_time h_fair hHonest h_sys_nodup
   · -- T4 (round_termination) — queued for delegation.
     sorry
@@ -1226,6 +1469,7 @@ invariant we don't currently have. See finding **F-1b** in
 doc for the full discussion. -/
 theorem lemma1_honest_round_entry
     (system : BlockSynchroniserSystem)
+    (hids : ValidIds system)
     (time : TimeMap)
     (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
@@ -1240,12 +1484,13 @@ theorem lemma1_honest_round_entry
         ∀ vid, isHonestValidator system vid = true →
           ∃ bv, (belugaTrace system k').getValidator vid = some bv ∧
                 bv.currentRound ≥ r + 1 :=
-  (belugaTrace_satisfies_post_gst_liveness system time h_time h_sync h_fair hHonest h_sys_nodup).honest_round_sync
+  (belugaTrace_satisfies_post_gst_liveness system hids time h_time h_sync h_fair hHonest h_sys_nodup).honest_round_sync
 
 /-- **Lemma 2 (paper §5).** After GST, an honest validator at round
 `r` enters round `r + 1` within `3Δ`. -/
 theorem lemma2_round_latency
     (system : BlockSynchroniserSystem)
+    (hids : ValidIds system)
     (time : TimeMap)
     (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
@@ -1259,11 +1504,12 @@ theorem lemma2_round_latency
       ∃ k' ≥ k, time k' ≤ time k + 3 * system.Δ ∧
         ∃ bv, (belugaTrace system k').getValidator vid = some bv ∧
               bv.currentRound = r + 1 :=
-  (belugaTrace_satisfies_post_gst_liveness system time h_time h_sync h_fair hHonest h_sys_nodup).honest_round_advance
+  (belugaTrace_satisfies_post_gst_liveness system hids time h_time h_sync h_fair hHonest h_sys_nodup).honest_round_advance
 
 /-- **Theorem 1 (paper §5).** Beluga satisfies Block availability. -/
 theorem theorem1_block_availability
     (system : BlockSynchroniserSystem)
+    (hids : ValidIds system)
     (time : TimeMap)
     (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
@@ -1271,7 +1517,7 @@ theorem theorem1_block_availability
     (hHonest : HonestBFTBound system)
     (h_sys_nodup : ValidatorsNodup system) :
     BlockAvailability system (belugaTrace system) :=
-  (belugaTrace_satisfies_post_gst_liveness system time h_time h_sync h_fair hHonest h_sys_nodup).block_availability
+  (belugaTrace_satisfies_post_gst_liveness system hids time h_time h_sync h_fair hHonest h_sys_nodup).block_availability
 
 /-- **Theorem 2 (paper §5).** Beluga satisfies Causal availability.
 
@@ -1305,6 +1551,7 @@ theorem theorem2_causal_availability
 /-- **Theorem 3 (paper §5).** Beluga satisfies Round-Progression. -/
 theorem theorem3_round_progression
     (system : BlockSynchroniserSystem)
+    (hids : ValidIds system)
     (time : TimeMap)
     (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
@@ -1312,11 +1559,12 @@ theorem theorem3_round_progression
     (hHonest : HonestBFTBound system)
     (h_sys_nodup : ValidatorsNodup system) :
     RoundProgression system (belugaTrace system) :=
-  (belugaTrace_satisfies_post_gst_liveness system time h_time h_sync h_fair hHonest h_sys_nodup).round_progression
+  (belugaTrace_satisfies_post_gst_liveness system hids time h_time h_sync h_fair hHonest h_sys_nodup).round_progression
 
 /-- **Theorem 4 (paper §5).** Beluga satisfies Round-Termination. -/
 theorem theorem4_round_termination
     (system : BlockSynchroniserSystem)
+    (hids : ValidIds system)
     (time : TimeMap)
     (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
@@ -1324,7 +1572,7 @@ theorem theorem4_round_termination
     (hHonest : HonestBFTBound system)
     (h_sys_nodup : ValidatorsNodup system) :
     RoundTermination system (belugaTrace system) :=
-  (belugaTrace_satisfies_post_gst_liveness system time h_time h_sync h_fair hHonest h_sys_nodup).round_termination
+  (belugaTrace_satisfies_post_gst_liveness system hids time h_time h_sync h_fair hHonest h_sys_nodup).round_termination
 
 /-- **Beluga is a block synchronizer (corollary of Theorems 1–4).**
 
@@ -1341,9 +1589,9 @@ theorem belugaTrace_isBlockSynchronizer
     (hHonest : HonestBFTBound system)
     (h_sys_nodup : ValidatorsNodup system) :
     BlockSynchronizer system (belugaTrace system) :=
-  ⟨theorem3_round_progression system time h_time h_sync h_fair hHonest h_sys_nodup,
-   theorem4_round_termination system time h_time h_sync h_fair hHonest h_sys_nodup,
-   theorem1_block_availability system time h_time h_sync h_fair hHonest h_sys_nodup,
+  ⟨theorem3_round_progression system hids time h_time h_sync h_fair hHonest h_sys_nodup,
+   theorem4_round_termination system hids time h_time h_sync h_fair hHonest h_sys_nodup,
+   theorem1_block_availability system hids time h_time h_sync h_fair hHonest h_sys_nodup,
    theorem2_causal_availability system hids time h_time h_sync h_fair⟩
 
 end Theorems
