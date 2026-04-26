@@ -39,6 +39,44 @@ namespace BlockSynchroniser
 namespace Beluga
 namespace Network
 
+/-! ## State-update helpers (mirrors of `Beluga/Theorems.lean`)
+
+These lemmas are duplicated from `Beluga/Theorems.lean` to avoid a
+prospective circular import once `Theorems.lean` itself migrates to
+`networkTrace` (Phase F). The proofs are identical; future
+refactoring can move them to `Beluga/Protocol.lean` (their natural
+home) and remove this duplicate block. -/
+
+private lemma updateValidator_getValidator_ne'
+    (s : BelugaState) (vid vid' : ValidatorId)
+    (f : BelugaValidator → BelugaValidator) (h : vid ≠ vid') :
+    (updateValidator s vid' f).getValidator vid = s.getValidator vid := by
+  unfold updateValidator BelugaState.getValidator
+  induction s.validators <;> simp +decide [*]
+  grind
+
+private lemma updateValidator_getValidator_eq'
+    (s : BelugaState) (vid : ValidatorId)
+    (f : BelugaValidator → BelugaValidator) (bv : BelugaValidator)
+    (h : s.getValidator vid = some bv) :
+    (updateValidator s vid f).getValidator vid = some (f bv) := by
+  unfold BelugaState.getValidator at *
+  unfold updateValidator; simp +decide
+  rw [Option.map_eq_some_iff] at h
+  grind +suggestions
+
+private lemma doPropose_getValidator'
+    (system : BlockSynchroniserSystem) (s : BelugaState)
+    (vid vid' : ValidatorId) (r : Round) :
+    (doPropose system s vid' r).getValidator vid = s.getValidator vid := by
+  exact (Option.map_inj_right fun x y a => a).mp rfl
+
+private lemma getValidator_emittedOperations_irrelevant'
+    (s : BelugaState) (ops : List ValidatorOperation) (vid : ValidatorId) :
+    ({ s with emittedOperations := ops } : BelugaState).getValidator vid =
+      s.getValidator vid := by
+  unfold BelugaState.getValidator; aesop
+
 /-! ## Paper §2 primitive: `Δ`-bounded delivery -/
 
 /-- **`NetworkDelivery`** — paper §2's primitive: post-GST, every
@@ -241,6 +279,17 @@ theorem networkTryActFor_preserves_roundEntry_bound
     (h_act : networkTryActFor system s vid_a bv_a = some s') :
     ∀ vid bv,
       s'.base.getValidator vid = some bv → bv.roundEntryTime ≤ s'.currentTime := by
+  -- Discharge plan (next session): branch-by-branch with the four
+  -- private helpers above (`updateValidator_getValidator_eq'`,
+  -- `updateValidator_getValidator_ne'`, `doPropose_getValidator'`,
+  -- `getValidator_emittedOperations_irrelevant'`). Propose: trivial via
+  -- `doPropose_getValidator'`. Accept/store: case on `vid = vid_a`; the
+  -- non-actor case uses `updateValidator_getValidator_ne'`; the actor
+  -- case uses `updateValidator_getValidator_eq'`. The advance branch
+  -- needs an additional helper showing the validator-list `.map` (which
+  -- preserves all non-actor entries) preserves `getValidator` modulo
+  -- the actor's `roundEntryTime := s.currentTime`. See the resumption
+  -- note in `docs/resumption-note-network-fairness.md`.
   sorry
 
 /-- The trace invariant: at every step of `networkTrace`, every
