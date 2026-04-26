@@ -77,6 +77,30 @@ private lemma getValidator_emittedOperations_irrelevant'
       s.getValidator vid := by
   unfold BelugaState.getValidator; aesop
 
+/-- `doAccept` preserves `currentRound` for all validators. -/
+private lemma doAccept_round' (s : BelugaState) (vid vid' : ValidatorId) (B : Block)
+    (bv : BelugaValidator) (h : s.getValidator vid = some bv) :
+    ∃ bv', (doAccept s vid' B).getValidator vid = some bv' ∧
+           bv'.currentRound = bv.currentRound := by
+  by_cases h' : vid = vid' <;> simp_all +decide [doAccept]
+  · exact ⟨_, updateValidator_getValidator_eq' _ _ _ _ h, rfl⟩
+  · rw [updateValidator_getValidator_ne']; aesop
+    assumption
+
+/-- `doStore` preserves `currentRound` for all validators. -/
+private lemma doStore_round' (s : BelugaState) (vid vid' : ValidatorId) (B : Block)
+    (bv : BelugaValidator) (h : s.getValidator vid = some bv) :
+    ∃ bv', (doStore s vid' B).getValidator vid = some bv' ∧
+           bv'.currentRound = bv.currentRound := by
+  by_cases h' : vid = vid'
+  · subst h'
+    exact ⟨_, updateValidator_getValidator_eq' _ _ _ bv h, rfl⟩
+  · unfold doStore
+    refine ⟨bv, ?_, rfl⟩
+    rw [updateValidator_getValidator_ne' _ _ _ _ h',
+        getValidator_emittedOperations_irrelevant']
+    exact h
+
 
 /-! ## Paper §2 primitive: `Δ`-bounded delivery -/
 
