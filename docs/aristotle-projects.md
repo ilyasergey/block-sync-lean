@@ -11,12 +11,14 @@ Status legend: 🟡 IN_PROGRESS · ✅ COMPLETE (integrated) · ⚠️ COMPLETE_
 | Project ID | Round | Submitted | Status | Target file(s) | Theorem(s) | Result |
 |---|---|---|---|---|---|---|
 | `03f5fe3f-72f3-447f-a3e5-96f532b8a77f` | mysticeti-liveness-bundle | 2026-04-26 ~14:30 SGT | 🟡 IN_PROGRESS | [`Mysticeti/Liveness.lean`](../BlockSynchroniser/Mysticeti/Liveness.lean) | `belugaTrace_satisfies_mysticeti_post_gst_liveness` — Mysticeti-Beluga §D.2 bundle theorem packaging the 12 conjuncts (BFT side conditions + action-level liveness). | pending |
+| `e8212038-0992-451e-b143-227eaea7f9bc` | beluga-§5-bundle-noncircular | 2026-04-26 ~17:00 SGT | 🟡 IN_PROGRESS | [`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) | `belugaTrace_satisfies_post_gst_liveness` — 4 remaining conjuncts (L1, T1, T3, T4) of the Beluga §5 post-GST liveness bundle, after the partial integration of `4f618efb` (5 helpers + L2 inline). Stricter prompt: NO circular hypotheses, MAY extend the bundle structure with extra carrier conjuncts as long as inductively provable from `belugaTrace`. | pending |
 
-**1 project in flight.** Aristotle accepts concurrent submissions;
+**2 projects in flight.** Aristotle accepts concurrent submissions;
 they will process as capacity allows.
 
 Frozen files (do not edit until corresponding rounds complete):
 - `Mysticeti/Liveness.lean` (mysticeti-liveness-bundle round)
+- `Beluga/Theorems.lean` (beluga-§5-bundle-noncircular round)
 
 Freely-editable files: `Lib/`, all base modules
 (`Block`/`Validator`/`Operations`/`System`/`State`/`Causal`/`Trace`/`Properties`),
