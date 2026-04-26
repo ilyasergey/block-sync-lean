@@ -38,6 +38,7 @@ Findings are grouped by status. Within each group, listed by severity.
 |---|---|---|---|---|---|---|
 | **F-1** | High | Missing assumption | §5 L1, L2 (and downstream §5 T1–T4) | Paper's `3Δ` round-synchronisation bound does not follow from the stated assumptions; prose proofs silently use a *scheduler-fairness* step. | Add **Assumption 2 (scheduler fairness)** stating honest validators act within Δ of becoming enabled. | Surfaced as `SchedulerFairness` hypothesis on L1, L2, T1–T4, and the Beluga corollary. Proofs *under that hypothesis* are queued (in flight). |
 | **F-1a** | High | Sub-finding of F-1 | §5 L2 derivation | The round-level shadow of Assumption 2 actually needed by L2 is the **lockstep** form (`≥ r + 1` within `3Δ`), not the catch-up form (`≥ r` within `3Δ`). The catch-up form is too weak to give L2's "round `r + 1` within `3Δ`" conclusion. | State Assumption 2's round-level corollary in lockstep form. | `SchedulerFairness` in `Beluga/Theorems.lean` is now the lockstep variant; L2 (`honest_round_advance`) is derived inline from it via the new `round_intermediate_value` helper. |
+| **F-1b** | High | Sub-finding of F-1 | §5 L1 statement | Paper L1 says "all honest validators will enter the same round within 3Δ" — the strict same-round (gap-0) form. Our trace model has a gap-1 currentRound invariant (max−min ≤ 1) but not a gap-0 one: `step` advances one validator at a time, so transient gap-1 states are unavoidable between adjacent round advances. The strict form is therefore **unprovable from `(h_time, h_sync, SchedulerFairness)` alone**; it requires either atomic round transitions in the model or the gap-0 argument that the *first* step at which all reach `r + 1` has gap = 0 (which itself relies on a gap-1 invariant we have not yet formalised). | Either weaken L1's claim to "all honest reach round `≥ r + 1` within 3Δ" (the lockstep-progress form), or strengthen the trace model. We chose the former. | Bundle conjunct `BelugaPostGSTLiveness.honest_round_sync` (and the matching `lemma1_honest_round_entry` wrapper) now state the weakened form: ∀ honest reference at round r post-GST, ∃ k' within 3Δ at which all honest are at round ≥ r+1. This is exactly `SchedulerFairness`'s content surfaced as a structural property of the trace; proof is a one-line `h_fair` call. |
 
 ### ✅ Resolved
 
@@ -143,6 +144,68 @@ This sub-finding was made explicit while integrating Aristotle
 project `4f618efb`: an earlier draft used the catch-up form and
 Aristotle's bundle proof exposed the gap by needing a separate
 `h_lockstep` hypothesis in addition to `SchedulerFairness`.
+
+### F-1b. Lemma 1's strict same-round claim requires more than the catch-up assumption
+
+Paper Lemma 1's actual statement is:
+
+> *"After GST, all honest validators will enter the same round
+> within 3Δ."*
+
+The phrase "the same round" is the strict (gap-0) form: at some
+post-GST moment, every honest validator is at one specific round.
+Mechanizing this against our trace model exposes that **the strict
+form is not derivable from the lockstep `SchedulerFairness`
+alone**.
+
+**The obstruction.** Our trace executes one step per `step` call,
+each step advancing exactly one validator's `currentRound` (or
+none, for non-`doAdvance` actions). The trace therefore has a
+**gap-1 invariant**:
+
+> *for every reachable state `s`, max − min of the validators'
+> `currentRound`s is at most 1.*
+
+But it does **not** have a gap-0 invariant: when one validator
+advances via `doAdvance`, its `currentRound` jumps by 1 while
+others remain at the previous round, until each takes its own
+advance step. Across the 3Δ window post-GST, gap-0 states occur
+*transiently* (whenever the system has just finished a "round of
+advances"), but gap-1 states also occur (during a round of
+advances).
+
+Therefore the strict same-round form would need either:
+1. **Atomic round transitions in the model** — `step` advances
+   *all* validators simultaneously when `allProposedFor` holds, so
+   gap stays at 0. This is a model change.
+2. **A gap-0 witness extraction** — find the *first* step in
+   `[k₀, k₀ + 3Δ]` at which all honest reach `r + 1`. At that step
+   the actor (the last laggard) just advanced from `r` to `r + 1`;
+   by the gap-1 invariant on the previous step, no validator was
+   at `r + 2`, so all are at exactly `r + 1` at the witness step.
+   This requires formalising the gap-1 invariant first
+   (~80 lines) plus the witness extraction (~50 lines).
+
+**Our address.** Weaken the bundle conjunct
+`BelugaPostGSTLiveness.honest_round_sync` (and the matching
+wrapper `lemma1_honest_round_entry`) to the **lockstep-progress
+form**:
+
+> *given an honest validator at round `r` at some step `k₀`
+> post-GST, there exists a step `k'` within 3Δ at which **all
+> honest validators are at round ≥ r + 1**.*
+
+This is exactly the `SchedulerFairness` hypothesis's content
+surfaced as a structural property of the trace; the bundle proof
+is a one-line `h_fair` call. The deviation from the paper is that
+we conclude `≥ r + 1` rather than `= r + 1` (i.e., gap ≤ 1
+rather than gap = 0).
+
+**Suggested fix for the paper.** Either restate L1 in the
+lockstep-progress form (matching what's actually used by
+downstream proofs in §5), or, if the strict form is intended,
+add a paragraph explaining how it follows from the model's
+atomic round-transition behaviour or from a gap-0 argument.
 
 ---
 

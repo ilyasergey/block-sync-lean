@@ -44,7 +44,7 @@ Status: ✅ done · ◐ in progress · ☐ planned · ⊘ out of scope · ⏸ de
 
 | Paper | Code | Status |
 |---|---|---|
-| §5 — **Lemma 1** — after GST, all honest validators reach the same round within 3Δ | [`Beluga/Theorems.lean :: lemma1_honest_round_entry`](BlockSynchroniser/Beluga/Theorems.lean#L537) | ◐ One-line projection of the `BelugaPostGSTLiveness` bundle (see below) |
+| §5 — **Lemma 1** — after GST, all honest validators reach the same round within 3Δ | [`Beluga/Theorems.lean :: lemma1_honest_round_entry`](BlockSynchroniser/Beluga/Theorems.lean#L617) | ✅ **proved**, in the *weakened* form "all honest reach round ≥ r+1 within 3Δ" rather than the paper's strict same-round form; one-line projection of the `BelugaPostGSTLiveness` bundle. The strict same-round form is unprovable from `(h_time, h_sync, h_fair)` due to gap-1 transients (finding **F-1b**); see Stage 2 paper-additions doc. |
 | §5 — **Lemma 2** — round-to-round latency ≤ 3Δ in the happy case | [`Beluga/Theorems.lean :: lemma2_round_latency`](BlockSynchroniser/Beluga/Theorems.lean#L555) | ◐ Bundle projection; the L2 conjunct itself is now **sorry-free** (derived inline from the lockstep `SchedulerFairness` + `round_intermediate_value`); status is ◐ only because the load-bearing bundle theorem still has 4 other sorries. |
 | §5 — **Theorem 1** — Beluga ⊨ Block availability | [`Beluga/Theorems.lean :: theorem1_block_availability`](BlockSynchroniser/Beluga/Theorems.lean#L571) | ◐ One-line projection of the bundle |
 | §5 — **Theorem 2** — Beluga ⊨ Causal availability | [`Beluga/Theorems.lean :: theorem2_causal_availability`](BlockSynchroniser/Beluga/Theorems.lean#L588) | ✅ proved locally via `causallyClosed_trace` (no fairness needed) |

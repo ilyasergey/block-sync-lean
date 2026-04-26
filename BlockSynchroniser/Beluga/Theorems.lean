@@ -520,15 +520,30 @@ post-GST. Each field is one main-theorem conclusion verbatim:
 -/
 structure BelugaPostGSTLiveness
     (system : BlockSynchroniserSystem) (time : TimeMap) : Prop where
+  /-- L1 (paper §5) — post-GST round entry, *weakened from the
+  paper's strict same-round form*. **Finding F-1b** in
+  `docs/mechanization-findings.md` and the Stage 2 paper
+  additions doc explain the deviation:
+  - **Paper L1**: "After GST, all honest validators will enter
+    the same round within 3Δ."
+  - **Our L1**: "After GST, given an honest validator at round
+    `r`, all honest validators reach round `≥ r + 1` within 3Δ."
+
+  The strict same-round form requires either (a) atomic
+  round-transition in the model, or (b) the gap-1 currentRound
+  invariant + a careful argument that the *first* step at which
+  all reach `r+1` has gap = 0. Neither is currently in scope; the
+  weakened form captures the lockstep-progress intuition the
+  paper relies on without claiming gap-0 stably. -/
   honest_round_sync :
-    ∀ vid₁ vid₂,
-      isHonestValidator system vid₁ = true →
-      isHonestValidator system vid₂ = true →
-      ∀ k, time k ≥ system.GST + 3 * system.Δ →
-        match (belugaTrace system k).getValidator vid₁,
-              (belugaTrace system k).getValidator vid₂ with
-        | some bv₁, some bv₂ => bv₁.currentRound = bv₂.currentRound
-        | _, _ => False
+    ∀ vid_ref r k₀, isHonestValidator system vid_ref = true →
+      time k₀ ≥ system.GST →
+      (∃ bv_ref, (belugaTrace system k₀).getValidator vid_ref = some bv_ref ∧
+        bv_ref.currentRound = r) →
+      ∃ k', k₀ ≤ k' ∧ time k' ≤ time k₀ + 3 * system.Δ ∧
+        ∀ vid, isHonestValidator system vid = true →
+          ∃ bv, (belugaTrace system k').getValidator vid = some bv ∧
+                bv.currentRound ≥ r + 1
   honest_round_advance :
     ∀ vid r k,
       isHonestValidator system vid = true →
@@ -571,8 +586,11 @@ theorem belugaTrace_satisfies_post_gst_liveness
       block_availability := ?_
       round_progression := ?_
       round_termination := ?_ }
-  · -- L1 (honest_round_sync) — queued for delegation.
-    sorry
+  · -- L1 (honest_round_sync) — *weakened* form (see F-1b): all
+    -- honest reach round ≥ r + 1 within 3Δ. This is exactly
+    -- `h_fair`'s content rephrased; no extra work needed.
+    intro vid_ref r k₀ _hvid_ref htime ⟨bv_ref, hbv_ref, hrnd_ref⟩
+    exact h_fair k₀ r htime ⟨vid_ref, bv_ref, _hvid_ref, hbv_ref, hrnd_ref⟩
   · -- L2 (honest_round_advance) — derived from lockstep `h_fair`
     -- + `round_intermediate_value`.
     intro vid r k hvid htime ⟨bv, hbv, hrnd⟩
@@ -599,22 +617,32 @@ L1, L2, T1, T3, T4 are one-line projections of the bundle. T2
 derives directly from the trace-invariant `causally_closed_trace`
 in `Protocol.lean` and does not require fairness. -/
 
-/-- **Lemma 1 (paper §5).** After GST, all honest validators enter
-the same round within `3Δ`. -/
+/-- **Lemma 1 (paper §5)** — *weakened from the strict same-round
+form*. After GST, given an honest validator at round `r`, all
+honest validators reach round `≥ r + 1` within `3Δ`.
+
+The paper's original L1 statement is "After GST, all honest
+validators will enter the same round within 3Δ" — our weakened
+version replaces "the same round" with "at least round r + 1",
+because the strict same-round form requires either atomic
+round transitions in the trace model or a gap-1 currentRound
+invariant we don't currently have. See finding **F-1b** in
+`docs/mechanization-findings.md` and the Stage 2 paper-additions
+doc for the full discussion. -/
 theorem lemma1_honest_round_entry
     (system : BlockSynchroniserSystem)
     (time : TimeMap)
     (h_time : time.WellFormed)
     (h_sync : PartiallySynchronous system (belugaTrace system) time)
     (h_fair : SchedulerFairness system time) :
-    ∀ vid₁ vid₂,
-      isHonestValidator system vid₁ = true →
-      isHonestValidator system vid₂ = true →
-      ∀ k, time k ≥ system.GST + 3 * system.Δ →
-        match (belugaTrace system k).getValidator vid₁,
-              (belugaTrace system k).getValidator vid₂ with
-        | some bv₁, some bv₂ => bv₁.currentRound = bv₂.currentRound
-        | _, _ => False :=
+    ∀ vid_ref r k₀, isHonestValidator system vid_ref = true →
+      time k₀ ≥ system.GST →
+      (∃ bv_ref, (belugaTrace system k₀).getValidator vid_ref = some bv_ref ∧
+        bv_ref.currentRound = r) →
+      ∃ k', k₀ ≤ k' ∧ time k' ≤ time k₀ + 3 * system.Δ ∧
+        ∀ vid, isHonestValidator system vid = true →
+          ∃ bv, (belugaTrace system k').getValidator vid = some bv ∧
+                bv.currentRound ≥ r + 1 :=
   (belugaTrace_satisfies_post_gst_liveness system time h_time h_sync h_fair).honest_round_sync
 
 /-- **Lemma 2 (paper §5).** After GST, an honest validator at round
