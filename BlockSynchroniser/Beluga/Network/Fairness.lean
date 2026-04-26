@@ -1026,6 +1026,24 @@ theorem networkStep_emittedOperations_monotone
     exact networkTryActFor_emittedOperations_monotone system _ vid_a bv_a s'' h_act op h_del_hop
   case _ _ => exact h_del_hop
 
+/-- `networkStep` preserves "absent": if `vid` isn't in `s.base.validators`,
+it isn't in `(networkStep ...).base.validators` either. -/
+private lemma networkStep_preserves_none (system : BlockSynchroniserSystem)
+    (s : NetworkState) (newTime : Nat) (vid : ValidatorId)
+    (h : s.base.getValidator vid = none) :
+    (networkStep system s newTime).base.getValidator vid = none := by
+  unfold BelugaState.getValidator at h ⊢
+  rw [Option.map_eq_none_iff] at h ⊢
+  rw [List.find?_eq_none] at h ⊢
+  have h_keys := networkStep_preserves_ids system s newTime
+  intro x hx h_match
+  have h_x_key : x.1 ∈ (networkStep system s newTime).base.validators.map Prod.fst :=
+    List.mem_map.mpr ⟨x, hx, rfl⟩
+  rw [h_keys] at h_x_key
+  obtain ⟨y, hy_mem, hy_eq⟩ := List.mem_map.mp h_x_key
+  apply h y hy_mem
+  grind
+
 /-- The trace invariant: at every step of `networkTrace`, every
 validator's `roundEntryTime` is bounded by the state's
 `currentTime`. -/
