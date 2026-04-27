@@ -51,6 +51,16 @@ def NetworkState.deliverPending (s : NetworkState) : NetworkState :=
   let s' : NetworkState := { s with inflight := stillInflight }
   toDeliver.foldl (fun acc e => acc.appendToInbox e.recipient e.op) s'
 
+/-- Move every pull request in `pullRequestsInflight` whose
+`deliveryTime ≤ s.currentTime` into the responder's
+`pullRequestsInbox`. Mirrors `deliverPending` for the pull channel
+(paper §4.3). -/
+def NetworkState.deliverPullPending (s : NetworkState) : NetworkState :=
+  let (toDeliver, stillInflight) :=
+    s.pullRequestsInflight.partition (fun r => r.deliveryTime ≤ s.currentTime)
+  let s' : NetworkState := { s with pullRequestsInflight := stillInflight }
+  toDeliver.foldl (fun acc r => acc.appendToPullInbox r.responder r) s'
+
 /-! ## ImPoA: implicit availability
 
 A block `B` is *implicitly available* in `s` if at least `f+1`
@@ -95,6 +105,56 @@ def NetworkState.timeoutFired (s : NetworkState) (system : BlockSynchroniserSyst
     (bv : BelugaValidator) : Bool :=
   decide (s.currentTime ≥ bv.roundEntryTime + 4 * system.Δ)
 
+/-! ## Pull actions (paper §4.3 explicit handshake)
+
+When a validator notices a block in the pool it hasn't received and
+hasn't accepted, it issues a pull request to all other validators.
+The request travels via `pullRequestsInflight` (delivered by
+`deliverPullPending` after Δ post-GST) and lands in each responder's
+`pullRequestsInbox`. Responders that have the block schedule a
+`block_propose`-carrying `DeliveryEvent` back to the requester.
+
+The two new actions are:
+- `doPullRequest`: issue requests for a missing block.
+- `doPullResponse`: process one pull request from the inbox by
+  scheduling a block_propose delivery (if the responder has the
+  block). -/
+
+/-- Schedule pull requests for digest `d` from `vid` to every
+registered validator, with delivery deadline `currentTime + Δ`. -/
+def doPullRequest (system : BlockSynchroniserSystem) (s : NetworkState)
+    (vid : ValidatorId) (d : BlockDigest) : NetworkState :=
+  let requests : List PullRequest := system.validators.map (fun (responder, _) =>
+    { requester := vid, responder := responder, digest := d,
+      deliveryTime := s.currentTime + system.Δ })
+  { s with pullRequestsInflight := s.pullRequestsInflight ++ requests }
+
+/-- Process one pull request: if `vid_resp` has the block matching
+`req.digest`, schedule a `block_propose` delivery to `req.requester`
+with deadline `currentTime + Δ`. Either way, remove the request
+from the responder's inbox. -/
+def doPullResponse (system : BlockSynchroniserSystem) (s : NetworkState)
+    (vid_resp : ValidatorId) (req : PullRequest) : NetworkState :=
+  match s.base.blocks.find? (fun B => B.d == req.digest) with
+  | some B =>
+    let op := ValidatorOperation.block_propose B.author B B.r
+    let ev : DeliveryEvent :=
+      { sender := vid_resp, recipient := req.requester, op := op,
+        deliveryTime := s.currentTime + system.Δ }
+    let s' : NetworkState := { s with inflight := s.inflight ++ [ev] }
+    s'.removeFromPullInbox vid_resp req
+  | none =>
+    s.removeFromPullInbox vid_resp req
+
+/-- A pull-request candidate digest for `vid`: an in-pool block that
+`vid` hasn't accepted, hasn't received via push, AND for which `vid`
+hasn't already issued a pull. -/
+def NetworkState.pullCandidate (s : NetworkState) (vid : ValidatorId) : Option Block :=
+  s.base.blocks.find? (fun B =>
+    !hasAcceptedDigest s.base vid B.d &&
+    !s.hasReceivedPropose vid B B.r &&
+    !s.pullRequestsInflight.any (fun r => r.requester == vid && r.digest == B.d))
+
 /-! ## Network-aware action: `networkTryActFor`
 
 Mirrors the paper's Figure 8 priority order, but with the ImPoA-aware
@@ -119,9 +179,6 @@ def networkTryActFor (system : BlockSynchroniserSystem) (s : NetworkState)
   -- 1. Propose if not yet for current round
   if !hasProposedFor s.base vid r then
     let s_proposed : BelugaState := doPropose system s.base vid r
-    -- Schedule push deliveries: the proposed block is pushed to every
-    -- registered validator with deadline `currentTime + Δ`. The
-    -- newly emitted op is the last one in `s_proposed.emittedOperations`.
     let newOp := ValidatorOperation.block_propose vid
       { r := r, author := vid, d := digest system r vid
         parents := if r = 0 then [] else
@@ -144,14 +201,34 @@ def networkTryActFor (system : BlockSynchroniserSystem) (s : NetworkState)
       | none =>
         -- 4. Advance round if quorum gate fires OR timeout has fired
         if allProposedFor system s.base r || s.timeoutFired system bv then
-          -- Single `updateValidator` call: bumps `currentRound` AND records
-          -- `roundEntryTime`. Equivalent to `doAdvance` + manual rewrite of
-          -- `roundEntryTime`, but uses the standard `updateValidator` shape
-          -- so the existing `updateValidator_getValidator_*` lemmas apply.
           some { s with base := updateValidator s.base vid (fun bv0 =>
             { bv0 with currentRound := bv0.currentRound + 1,
                        roundEntryTime := s.currentTime }) }
         else none
+
+/-! ## `pullStep`: pull request issuance and response
+
+Pull is modeled as a separate, additive step that runs in
+`networkStep` BEFORE `networkTryActFor`. This keeps the existing
+`networkTryActFor` invariant proofs unchanged: pull only modifies
+`pullRequestsInflight`, `pullRequestsInbox`, and `inflight`
+(adding response events). It never modifies `base`, `inboxes`,
+or `currentTime`. -/
+
+/-- One pull action by validator `vid`: respond to a pending pull
+request if any, else issue a pull request for a missing block if any. -/
+def pullStepOne (system : BlockSynchroniserSystem) (s : NetworkState)
+    (vid : ValidatorId) : NetworkState :=
+  match s.pullInbox vid with
+  | req :: _ => doPullResponse system s vid req
+  | [] =>
+    match s.pullCandidate vid with
+    | some B => doPullRequest system s vid B.d
+    | none => s
+
+/-- For each validator, do one pull action. Folded over `system.validators`. -/
+def pullStep (system : BlockSynchroniserSystem) (s : NetworkState) : NetworkState :=
+  system.validators.foldl (fun acc (vid, _) => pullStepOne system acc vid) s
 
 /-! ## Network-aware step
 
@@ -172,6 +249,21 @@ def networkStep (system : BlockSynchroniserSystem) (s : NetworkState)
   | some s' => s'
   | none    => s_delivered
 
+/-- One step of the network-aware Beluga protocol, with the explicit
+pull mechanism (paper §4.3) layered on top. Used by `networkTraceWithPull`
+to derive `EventualCausalAcceptance` / `EventualRoundAcceptance` as
+theorems. -/
+def networkStepWithPull (system : BlockSynchroniserSystem) (s : NetworkState)
+    (newTime : Nat) : NetworkState :=
+  let s_advanced : NetworkState := { s with currentTime := newTime }
+  let s_delivered : NetworkState := s_advanced.deliverPending
+  let s_pull_delivered : NetworkState := s_delivered.deliverPullPending
+  let s_pulled : NetworkState := pullStep system s_pull_delivered
+  match s_pulled.base.validators.findSome?
+      (fun (vid, bv) => networkTryActFor system s_pulled vid bv) with
+  | some s' => s'
+  | none    => s_pulled
+
 /-- The Beluga **network-aware** trace: state at step `n` is obtained
 by iterating `networkStep` from `NetworkState.init system` with the
 wall-clock advance dictated by `time`. Each step takes `time (n+1)`
@@ -181,6 +273,15 @@ def networkTrace (system : BlockSynchroniserSystem) (time : Nat → Nat) :
   fun n => Nat.rec (motive := fun _ => NetworkState)
     { NetworkState.init system with currentTime := time 0 }
     (fun i s => networkStep system s (time (i + 1))) n
+
+/-- The Beluga network-aware trace WITH the explicit pull mechanism.
+Used to prove `EventualCausalAcceptance` and `EventualRoundAcceptance`
+as theorems. -/
+def networkTraceWithPull (system : BlockSynchroniserSystem) (time : Nat → Nat) :
+    Trace NetworkState :=
+  fun n => Nat.rec (motive := fun _ => NetworkState)
+    { NetworkState.init system with currentTime := time 0 }
+    (fun i s => networkStepWithPull system s (time (i + 1))) n
 
 end Network
 end Beluga

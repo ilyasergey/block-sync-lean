@@ -192,6 +192,154 @@ theorem NetworkState.deliverPending_preserves_currentTime (s : NetworkState) :
     apply ih
     simp [NetworkState.appendToInbox, h]
 
+/-- `deliverPullPending` preserves `currentTime`. -/
+theorem NetworkState.deliverPullPending_preserves_currentTime (s : NetworkState) :
+    s.deliverPullPending.currentTime = s.currentTime := by
+  unfold NetworkState.deliverPullPending
+  generalize hp : s.pullRequestsInflight.partition _ = p
+  suffices h : ∀ (l : List PullRequest) (s' : NetworkState),
+      s'.currentTime = s.currentTime →
+      (l.foldl (fun acc r => acc.appendToPullInbox r.responder r) s').currentTime =
+        s.currentTime by
+    apply h; rfl
+  intro l
+  induction l with
+  | nil => intro s' h; exact h
+  | cons hd tl ih =>
+    intro s' h
+    apply ih
+    simp [NetworkState.appendToPullInbox, h]
+
+/-- `deliverPullPending` preserves the `base` field. -/
+theorem NetworkState.deliverPullPending_preserves_base (s : NetworkState) :
+    s.deliverPullPending.base = s.base := by
+  unfold NetworkState.deliverPullPending
+  generalize hp : s.pullRequestsInflight.partition _ = p
+  suffices h : ∀ (l : List PullRequest) (s' : NetworkState),
+      s'.base = s.base →
+      (l.foldl (fun acc r => acc.appendToPullInbox r.responder r) s').base = s.base by
+    apply h; rfl
+  intro l
+  induction l with
+  | nil => intro s' h; exact h
+  | cons hd tl ih =>
+    intro s' h
+    apply ih; simp [NetworkState.appendToPullInbox, h]
+
+/-- `deliverPullPending` preserves `inflight`. -/
+theorem NetworkState.deliverPullPending_preserves_inflight (s : NetworkState) :
+    s.deliverPullPending.inflight = s.inflight := by
+  unfold NetworkState.deliverPullPending
+  generalize hp : s.pullRequestsInflight.partition _ = p
+  suffices h : ∀ (l : List PullRequest) (s' : NetworkState),
+      s'.inflight = s.inflight →
+      (l.foldl (fun acc r => acc.appendToPullInbox r.responder r) s').inflight = s.inflight by
+    apply h; rfl
+  intro l
+  induction l with
+  | nil => intro s' h; exact h
+  | cons hd tl ih =>
+    intro s' h
+    apply ih; simp [NetworkState.appendToPullInbox, h]
+
+/-- `deliverPullPending` preserves `inboxes`. -/
+theorem NetworkState.deliverPullPending_preserves_inboxes (s : NetworkState) :
+    s.deliverPullPending.inboxes = s.inboxes := by
+  unfold NetworkState.deliverPullPending
+  generalize hp : s.pullRequestsInflight.partition _ = p
+  suffices h : ∀ (l : List PullRequest) (s' : NetworkState),
+      s'.inboxes = s.inboxes →
+      (l.foldl (fun acc r => acc.appendToPullInbox r.responder r) s').inboxes = s.inboxes by
+    apply h; rfl
+  intro l
+  induction l with
+  | nil => intro s' h; exact h
+  | cons hd tl ih =>
+    intro s' h
+    apply ih; simp [NetworkState.appendToPullInbox, h]
+
+/-- `doPullRequest` preserves `currentTime`. -/
+theorem doPullRequest_preserves_currentTime (system : BlockSynchroniserSystem)
+    (s : NetworkState) (vid : ValidatorId) (d : BlockDigest) :
+    (doPullRequest system s vid d).currentTime = s.currentTime := by
+  unfold doPullRequest; rfl
+
+/-- `doPullRequest` preserves `base`. -/
+theorem doPullRequest_preserves_base (system : BlockSynchroniserSystem)
+    (s : NetworkState) (vid : ValidatorId) (d : BlockDigest) :
+    (doPullRequest system s vid d).base = s.base := by
+  unfold doPullRequest; rfl
+
+/-- `doPullResponse` preserves `currentTime`. -/
+theorem doPullResponse_preserves_currentTime (system : BlockSynchroniserSystem)
+    (s : NetworkState) (vid_resp : ValidatorId) (req : PullRequest) :
+    (doPullResponse system s vid_resp req).currentTime = s.currentTime := by
+  unfold doPullResponse
+  split <;> simp [NetworkState.removeFromPullInbox]
+
+/-- `doPullResponse` preserves `base`. -/
+theorem doPullResponse_preserves_base (system : BlockSynchroniserSystem)
+    (s : NetworkState) (vid_resp : ValidatorId) (req : PullRequest) :
+    (doPullResponse system s vid_resp req).base = s.base := by
+  unfold doPullResponse
+  split <;> simp [NetworkState.removeFromPullInbox]
+
+/-- `pullStepOne` preserves `currentTime`. -/
+theorem pullStepOne_preserves_currentTime (system : BlockSynchroniserSystem)
+    (s : NetworkState) (vid : ValidatorId) :
+    (pullStepOne system s vid).currentTime = s.currentTime := by
+  unfold pullStepOne
+  split
+  · rw [doPullResponse_preserves_currentTime]
+  · split
+    · rw [doPullRequest_preserves_currentTime]
+    · rfl
+
+/-- `pullStepOne` preserves `base`. -/
+theorem pullStepOne_preserves_base (system : BlockSynchroniserSystem)
+    (s : NetworkState) (vid : ValidatorId) :
+    (pullStepOne system s vid).base = s.base := by
+  unfold pullStepOne
+  split
+  · rw [doPullResponse_preserves_base]
+  · split
+    · rw [doPullRequest_preserves_base]
+    · rfl
+
+/-- `pullStep` preserves `currentTime`. -/
+theorem pullStep_preserves_currentTime (system : BlockSynchroniserSystem)
+    (s : NetworkState) :
+    (pullStep system s).currentTime = s.currentTime := by
+  unfold pullStep
+  suffices h : ∀ (l : List (ValidatorId × Bool)) (s' : NetworkState),
+      s'.currentTime = s.currentTime →
+      (l.foldl (fun acc x => pullStepOne system acc x.1) s').currentTime = s.currentTime by
+    apply h; rfl
+  intro l
+  induction l with
+  | nil => intro s' h; exact h
+  | cons hd tl ih =>
+    intro s' h
+    apply ih
+    rw [pullStepOne_preserves_currentTime]; exact h
+
+/-- `pullStep` preserves `base`. -/
+theorem pullStep_preserves_base (system : BlockSynchroniserSystem)
+    (s : NetworkState) :
+    (pullStep system s).base = s.base := by
+  unfold pullStep
+  suffices h : ∀ (l : List (ValidatorId × Bool)) (s' : NetworkState),
+      s'.base = s.base →
+      (l.foldl (fun acc x => pullStepOne system acc x.1) s').base = s.base by
+    apply h; rfl
+  intro l
+  induction l with
+  | nil => intro s' h; exact h
+  | cons hd tl ih =>
+    intro s' h
+    apply ih
+    rw [pullStepOne_preserves_base]; exact h
+
 /-- Each branch of `networkTryActFor` preserves `currentTime`.
 Direct from the definition: every branch returns
 `some { s with base := ... }` (or `{ s with base := ..., inflight :=
