@@ -126,13 +126,12 @@ in the abstract semantics. Once it is proved, every property
 satisfied by all `HonestStep`-respecting traces lifts automatically
 to `belugaTrace`.
 
-The transitive closure of `step_refines_HonestStep` was gated on a
-single trace-level obligation, `causal_history_of_find_none`: if a
-block is not present in the trace by digest, then no block in the
-trace causally references it. This cannot be proved one-step; it
-requires an inductive invariant about *every* state reachable in the
-trace. Closing it (Aristotle round `3f6cf619`) closed the entire
-refinement chain.
+The transitive closure of `step_refines_HonestStep` rests on a
+single trace-level obligation, `causal_history_of_find_none`: if
+a block is not present in the trace by digest, then no block in
+the trace causally references it. This cannot be proved one-step;
+it requires an inductive invariant about *every* state reachable
+in the trace. Discharging it closes the entire refinement chain.
 
 ### 2. `BlockInv → AcceptInv → CausallyClosed` is a vocabulary, not just plumbing
 
@@ -302,8 +301,7 @@ lake update
 lake build
 ```
 
-Toolchain pinned to `leanprover/lean4:v4.28.0` — matches Aristotle's pinned
-version exactly, so submissions compile cleanly on both sides.
+Toolchain pinned to `leanprover/lean4:v4.28.0`.
 
 ## Runnable examples
 

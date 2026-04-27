@@ -270,6 +270,44 @@ within `2Δ` after the witness honest references it) is still
 where item 6 *comes from*; making it explicit lets §5's prose
 treat the conclusion as a black box.
 
+## ImPoA: where it is used and where it is not
+
+It is worth being precise about what ImPoA buys. The accept rule
+of §4.3 reads "an honest validator may accept a block `B` whose
+parents have *all* been observed — either explicitly accepted, or
+implicitly available because `f + 1` subsequent in-pool blocks
+reference them." The ImPoA disjunct (the "implicit availability"
+half) is what lets a validator accept without having directly
+received every parent.
+
+This makes ImPoA *load-bearing for the runtime of the protocol*:
+without it, an honest validator that hasn't received a parent via
+push, and isn't fast enough to issue a pull request before the
+round timeout fires, would be stuck. With it, the f+1-reference
+quorum gives the validator structural permission to accept.
+
+ImPoA is **not** load-bearing for the §5 *correctness* proofs:
+
+- **T1** (Block Availability) is structural in the action-priority
+  order, downstream of the accept rule: it says "if you've
+  accepted, you'll store before advancing", regardless of *how*
+  you accepted.
+- **T2** (Causal Availability) recurses on `Reaches` and at each
+  step uses item 6 (universal in-pool delivery) to argue the
+  ancestor is received. The ancestor is then accepted via the
+  `received` disjunct of the accept rule, not the ImPoA disjunct.
+- **T3** (Round Progression) uses the propose-before-advance
+  gate and round liveness — no acceptance argument at all.
+- **T4** (Round Termination) again accepts via `received`, not
+  via ImPoA, once item 6 lands the block in the inbox.
+
+So the §5 proofs can be read as:
+**ImPoA + pull mechanism ⟹ item 6 (universal in-pool delivery)
+⟹ T1 / T2 / T3 / T4** — without §5 needing to look inside the
+arrow. This separation simplifies the §5 prose substantially and
+matches the formalization, which similarly never opens the ImPoA
+disjunct in any §5 proof.
+
 ### T3 (Round Progression) — proof sketch
 
 For any round `r`, we must show that some honest validator
