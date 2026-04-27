@@ -64,7 +64,32 @@ Three are genuinely new for the §4.3 pull mechanization. The
 are not new paper-level assumptions, just trace-substitutions of
 the same primitives.
 
-### Phase 10 — Prove `EventualRoundAcceptance` (PENDING)
+### Phase 10 — Prove `EventualRoundAcceptance` (IN PROGRESS)
+
+**With-pull helpers landed** (commits `5f37955`, `02bcd87`, `pullStep_preserves_inboxes`, persistent_traceWithPull, etc.):
+
+- `schedulerFairness_holds_withPull` ✓
+- `network_all_honest_eventually_at_roundWithPull` ✓
+- `network_honest_validator_persistent_traceWithPull` ✓
+- `network_hasProposedFor_monotoneWithPull` ✓
+- `networkStepWithPull_preserves_ids`, `networkTraceWithPull_validators_ids`/`_nodup` ✓
+- `networkTraceWithPull_getValidator_of_mem` ✓
+- `pullStep_preserves_inboxes` ✓
+- `networkStepWithPull_emittedOperations_monotone` ✓
+- `network_HasAccepted_monotone_withPull` ✓
+
+**Remaining with-pull helpers** (estimated ~700 lines mechanical migration):
+
+- `networkStepWithPull_round_monotone` / `_round_at_most_one`
+- `networkStepWithPull_preserves_none`
+- `networkStepWithPull_advance_inversion` (~150 lines, BIG) + 3 projections (`hasProposedFor`, `stored`, `gate`)
+- `network_round_monotone_traceWithPull`
+- `network_round_intermediate_valueWithPull`
+- `network_find_advance_stepWithPull`
+- `network_acceptedBlockExists_traceWithPull`
+- `network_proposed_for_lt_currentRoundWithPull`
+
+Once these helpers land, `network_eventualRoundAcceptance` follows from:
 
 Proof sketch:
 1. Apply `ActionScheduling` iteratively to bring every honest
