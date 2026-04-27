@@ -54,8 +54,6 @@ then code-facing.
 | [docs/mechanization-findings.md](docs/mechanization-findings.md) | Running log of paper-side observations from the formalization. Each finding (`F-1` through `F-13`) has severity, category, affected paper sections, headline issue, recommended action, and our address. Paper terminology only. |
 | [docs/paper-additions-stage1.md](docs/paper-additions-stage1.md) | Stage-1 list of recommended paper edits — items whose Lean proofs are fully closed, in the order theorems appear. |
 | [docs/paper-additions-stage2.md](docs/paper-additions-stage2.md) | Stage-2 follow-ups (paper-faithfulness commentary on §5, alternative proof sketches, recommended §4 changes). |
-| [docs/paper-feedback-l1-l2-fairness.md](docs/paper-feedback-l1-l2-fairness.md) | Deep dive on F-1 (the missing scheduler-fairness assumption for L1, L2). |
-| [docs/paper-feedback-impoa-vs-fairness.md](docs/paper-feedback-impoa-vs-fairness.md) | Why ImPoA does not substitute for the per-action liveness assumption. |
 | [docs/Block_Sync_Project.pdf](docs/Block_Sync_Project.pdf) | The paper itself. |
 
 ### Project overview
