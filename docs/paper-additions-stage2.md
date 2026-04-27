@@ -72,19 +72,59 @@ additions this assumption surfaces.
 the §4.2 timeout `T_rd = 4Δ` plus the timing model: an honest
 validator that has been ready to act for more than `Δ` time would
 already have advanced (otherwise the timeout fires). The paper's
-prose treats them this way. Item 6 is the conclusion the §4.3
-pull mechanism is designed to deliver; the paper sketches the
-mechanism (`pullCandidate`, push of pull requests, push of
-responses, push delivery of resulting `block_propose`) but does
-not name the conclusion. Two atomic §4.3 primitives that the
-paper *could* state separately —
-`PullRequestDelivery(req, k) ⇒ ∃ k', responder receives request
-within Δ` and `PullResponseScheduling(req, k) ⇒ ∃ k', responder
-schedules block_propose delivery within Δ` — together with item 2
-of the bundle would in principle let the authors derive item 6
-inside §4.3 itself. We recommend stating item 6 as the §4.3
-conclusion regardless: it is what every §5 proof actually consumes,
-and the deriving steps are routine but lengthy.
+prose treats them this way.
+
+Item 6 is the conclusion the §4.3 pull mechanism is designed to
+deliver; the paper sketches the mechanism (`pullCandidate`, push
+of pull requests, push of responses, push delivery of resulting
+`block_propose`) but does not name the conclusion. We recommend
+stating item 6 as the §4.3 conclusion: it is what every §5 proof
+actually consumes, and §5 should be able to cite it as a single
+named fact rather than re-derive a six-step liveness chain inline.
+
+A note on how item 6 sits relative to the more atomic primitives:
+the §4.3 mechanism's ingredients can be packaged as two separate
+liveness primitives — `PullRequestDelivery` ("post-GST, every
+honest pull request reaches every honest responder within `Δ`")
+and `PullResponseScheduling` ("post-GST, every honest responder
+with a pending pull request schedules a `block_propose` reply
+within `Δ`"). These together with item 2 (push delivery), the
+§4.3 `pullCandidate` selection rule, and the action-priority
+order let one in principle derive item 6 — but the chain has
+*six* post-GST `Δ`-bounded steps:
+
+1. The validator's `pullCandidate` identifies a missing in-pool
+   block.
+2. The validator's pull-issue action fires (per-action liveness).
+3. `PullRequestDelivery` lands the request in some responder's
+   inbox.
+4. `PullResponseScheduling` fires the responder's
+   `doPullResponse`.
+5. `doPullResponse` schedules a `block_propose` delivery to the
+   requester.
+6. Push delivery (item 2) lands the op in the requester's inbox.
+
+Each step is a separate `Δ`-bounded liveness step that has to be
+chained through the system's evolution, with care for the fact
+that successive steps may interleave with other pull requests and
+with the requester's own actions. We have **not** undertaken this
+derivation in our formalization. Two reasons:
+
+- The derivation is substantial (comparable in size to the §5
+  proofs that *consume* item 6). It is mostly tactic plumbing
+  rather than a conceptual contribution.
+- The paper itself never names the intermediate primitives
+  `PullRequestDelivery` and `PullResponseScheduling` and never
+  states item 6 as a separate fact. Stating *all three* (the two
+  atomic primitives plus the derived consolidated form) would
+  pollute the §5 layer with §4.3-internal accounting, while
+  stating only the consolidated form (item 6) keeps §5 clean and
+  matches the paper's actual usage.
+
+If a future version of the paper wants to expose the
+sub-primitives, item 6 becomes a derivable lemma of §4.3 rather
+than an axiom of §5. From §5's vantage point this is invisible:
+T1, T2, T3, T4 cite item 6 either way.
 
 What this assumption is not: it does **not** make any claim about
 Byzantine validators' messages, Byzantine pull responses, or the
