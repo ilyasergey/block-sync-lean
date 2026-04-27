@@ -1,4 +1,105 @@
-# Migration plan — §5 theorems against `networkTrace` — COMPLETE
+# Migration plan — §5 theorems against `networkTrace` — PARTIAL
+
+> **Status update.** Phases 1–6 (the §5-on-networkTrace migration)
+> are complete. Phases 7–13 (the **explicit pull mechanism** to
+> discharge `EventualCausalAcceptance` and `EventualRoundAcceptance`
+> as theorems rather than axioms) are in progress: Phases 7–9
+> (model and primitive states) done, Phases 10–13 (proofs and
+> integration) ahead.
+
+## Pull mechanization (Phases 7–13)
+
+Goal: replace the `EventualCausalAcceptance` /
+`EventualRoundAcceptance` Prop hypotheses on T2/T4 with derived
+theorems, using the explicit pull mechanism (paper §4.3).
+
+### Phase 7 — `NetworkState` extension (DONE, commit `0075618`)
+
+`PullRequest` type + `pullRequestsInflight` /
+`pullRequestsInbox` fields on `NetworkState`. Helpers `pullInbox`,
+`appendToPullInbox`, `removeFromPullInbox`. Existing networkTrace
+proofs unaffected (new fields default to empty).
+
+### Phase 8 — Pull semantics (DONE, commit `2074303`)
+
+- `deliverPullPending`: drains pull requests to responder inboxes.
+- `doPullRequest`: schedule pull requests for a digest.
+- `doPullResponse`: process a request, schedule block_propose delivery.
+- `pullCandidate`: identify a digest the validator wants but doesn't
+  have / hasn't requested.
+- `pullStepOne`, `pullStep`: per-validator and per-step pull actions.
+- `networkStepWithPull`: alternate step calling `deliverPullPending`
+  + `pullStep` before `networkTryActFor`.
+- `networkTraceWithPull`: trace using the with-pull step.
+- Preservation lemmas for currentTime and base across all new
+  operations.
+
+### Phase 9 — Pull liveness primitives (DONE, commit `3ea8b18`)
+
+Three paper-faithful primitives in `Beluga/Network/Fairness.lean`:
+
+- `PullRequestDelivery`: pull-channel `Δ`-bounded delivery (mirror
+  of `NetworkDelivery` for pull requests).
+- `PullResponseScheduling`: honest responders process pullInbox
+  within `Δ` post-GST.
+- `AcceptScheduling`: honest validators with acceptable blocks
+  fire `doAccept` within `Δ` post-GST.
+
+### Phase 10 — Prove `EventualRoundAcceptance` (PENDING)
+
+Proof sketch:
+1. Apply `ActionScheduling` iteratively to bring every honest
+   validator past round r+1 (so they all proposed for round r).
+2. By `NetworkDelivery`, every honest round-r block_propose op is
+   delivered to vid's inbox within Δ.
+3. Each delivered block in pool is canAcceptBlock-acceptable for vid
+   (vid hasn't accepted; vid has received via push).
+4. Apply `AcceptScheduling` iteratively: vid's accept fires for
+   each, within Δ.
+5. By `system.honestBound ≥ 2f+1`, vid has accepted ≥ 2f+1 distinct
+   honest authors' round-r blocks.
+
+Estimated: ~200-500 lines.
+
+### Phase 11 — Prove `EventualCausalAcceptance` (PENDING)
+
+Proof sketch (induction on causal-ancestor depth):
+1. Base: B' = B. vid has accepted B (given).
+2. Step: vid has accepted some block B'' that has B' as a
+   parent-set member.
+   - If vid hasn't received B' via push: vid has a `pullCandidate`
+     B'. Apply `PullScheduling` (pullStepOne fires): vid issues
+     pull request.
+   - By `PullRequestDelivery`: pull request reaches every honest
+     responder's pullInbox within Δ.
+   - At least one honest responder vid_resp has B' in pool (pool
+     is global).
+   - Apply `PullResponseScheduling`: vid_resp processes the
+     request, schedules a `block_propose` delivery to vid.
+   - By `NetworkDelivery` (for pull responses): vid's inbox
+     contains B' within Δ.
+   - Apply `AcceptScheduling`: vid accepts B' within Δ.
+
+Estimated: ~300-700 lines (the induction on causal depth is the
+new structural piece).
+
+### Phase 12 — Integrate (PENDING)
+
+Update `Beluga/Network/Theorems.lean`'s T2/T4 to use the proved
+theorems from Phase 10/11 instead of the `Eventual*` axiom
+hypotheses. The §5 corollary `networkTrace_isBlockSynchronizer`
+loses two of its hypothesis parameters.
+
+### Phase 13 — Cleanup + final docs (PENDING)
+
+Decide whether to keep both `networkTrace` and `networkTraceWithPull`
+or unify under the with-pull version. Update `formalization.md`
+and `mechanization-findings.md` (specifically F-1c) to reflect the
+fully-derived T2/T4. Update changelogs.
+
+---
+
+
 
 > **Goal.** All §5 paper theorems (L1, L2, T1, T2, T3, T4, bundle,
 > isBlockSynchronizer) stated against `networkTrace` (or its base
