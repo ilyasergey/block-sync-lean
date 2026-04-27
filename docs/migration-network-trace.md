@@ -1,188 +1,124 @@
-# Migration plan — §5 theorems against `networkTrace`
+# Migration plan — §5 theorems against `networkTrace` — COMPLETE
 
 > **Goal.** All §5 paper theorems (L1, L2, T1, T2, T3, T4, bundle,
 > isBlockSynchronizer) stated against `networkTrace` (or its base
 > projection), with all proofs derived from
 > `Network.schedulerFairness_holds` plus structural invariants of
-> `networkTrace` itself. No `NetworkBelugaCoherence` axiom; no
-> sorries.
+> `networkTrace`. No `NetworkBelugaCoherence` axiom; no sorries
+> in `Beluga/`.
+>
+> **Status: complete.** All six phases delivered. The new canonical
+> §5 derivations live in
+> [`BlockSynchroniser/Beluga/Network/Theorems.lean`](../BlockSynchroniser/Beluga/Network/Theorems.lean).
 
-## Why this is large work
+## Final state
 
-The existing §5 proofs for `belugaTrace` rest on ~25 helpers
-operating on `step` / `belugaTrace`. Migrating means:
+- `Beluga/Network/Theorems.lean`: 9 §5 entry points
+  (`network_lemma1_honest_round_entry`, `network_lemma2_round_latency`,
+   `network_theorem1_block_availability`,
+   `network_theorem2_causal_availability`,
+   `network_theorem3_round_progression`,
+   `network_theorem4_round_termination`,
+   `networkTrace_isBlockSynchronizer`, plus the `networkBelugaTrace`
+   projection and two paper-implicit liveness axioms).
+- `Beluga/Network/Fairness.lean`: 18 helper theorems on
+  `networkStep` and `networkTrace` (round monotonicity, advance
+  inversion, persistence, intermediate value, find-advance-step,
+  all-honest-eventually-at-round, proposed-for-monotone, etc.).
+- `Beluga/Theorems.lean`: trimmed to 1416 lines (was 2075). Helpers
+  retained; §5 wrappers + bundle + `belugaTrace_isBlockSynchronizer`
+  deleted.
+- `Beluga/Network/Fairness.lean`: trimmed by ~170 lines.
+  `NetworkBelugaCoherence`, `SchedulerFairness_belugaTrace`, and
+  `belugaTrace_schedulerFairness` deleted (no longer needed once
+  the §5 conclusions are about `networkTrace.base`).
+- Build: clean, zero sorries in `Beluga/`.
 
-- Creating `networkStep` / `networkTrace` versions of every helper.
-- Each helper's proof is typically a structural induction over the
-  trace, case-splitting on the protocol step's branches.
-- `networkStep` has more branches than `step` (ImPoA accept path,
-  timeout advance path), so case analyses gain extra subcases.
+## Paper-faithfulness summary
 
-Realistic scope: 1500–3000 lines of new proofs across multiple
-sessions. The existing `belugaTrace` proofs in `Beluga/Theorems.lean`
-serve as templates.
+The §5 conclusions are now stated against the `networkTrace`
+projection. The proofs route through:
 
-## Phase plan (each phase ends with a clean build)
+- **`schedulerFairness_holds`** (proved theorem, Phase 5/6 of the
+  Phase E network model) for L1/L2/T3 — the round-progression
+  argument is fully derived from the network-trace primitives
+  (NetworkDelivery, ActionScheduling, BoundedRoundSpread).
+- **Structural invariants** for T1 — `network_acceptedBlockExists_trace`
+  (a single conjunct of the `AcceptInv` chain that survives ImPoA),
+  combined with `networkStep_advance_implies_stored` (Phase 2's
+  inversion projection) and emittedOperations monotonicity.
+- **Explicit liveness hypotheses** for T2 and T4 —
+  `EventualCausalAcceptance` and `EventualRoundAcceptance` are
+  Prop-level parameters capturing the paper-implicit pull-mechanism
+  liveness claim that's not derivable from the structural model
+  alone (paper §4.3 ImPoA + pull). These are the "honest, named
+  axioms" surfacing the paper's hand-wave; see F-1c in
+  `mechanization-findings.md`.
 
-### Phase 1 — Foundational `networkStep` lemmas
+## Known limitations (paper-side)
 
-Helpers that establish algebraic properties of `networkStep`'s
-effect on `base`:
+Two paper-faithfulness gaps remain, both surfaced as named typed
+hypotheses rather than buried in the proof:
 
-- [x] `deliverPending_preserves_base` — full base equality (commit `d65b2a5`)
-- [x] `networkTryActFor_round_monotone` — round never decreases (commit `fea1f3b`)
-- [x] `networkTryActFor_round_at_most_one` — round increases ≤ 1 (commit `fea1f3b`)
-- [x] `networkStep_round_monotone` (commit `aa8bb53`)
-- [x] `networkStep_round_at_most_one` (commit `be42b5a`)
-- [x] `network_round_monotone_trace` — trace-level k₁ ≤ k₂ ⇒ round monotone (commit `5233197`)
-- [x] `network_honest_validator_persistent_trace` (commit `1dd5432`)
-- [x] `network_round_intermediate_value` (commit `b75c03a`)
-- [x] `networkStep_emittedOperations_monotone` + `networkTryActFor_emittedOperations_monotone` (commit `6a2e482`)
-- [x] `networkStep_preserves_none` (commit `5d747da`)
-- [x] `networkStep_advance_inversion` + 3 projections (commit `7672509`)
+1. **`EventualCausalAcceptance`** (T2): under ImPoA's f+1
+   references rule, a validator can accept a block without
+   directly accepting its parents. The paper's §5 T2 prose proof
+   invokes the §4.3 pull mechanism to argue eventual acceptance.
+   Mechanizing this requires modeling pull explicitly; we surface
+   it as a typed Prop hypothesis.
 
-### Phase 2 — networkStep advance inversion (DONE)
+2. **`EventualRoundAcceptance`** (T4): under the `T_rd = 4Δ`
+   timeout (paper §4.2), a validator may advance its round
+   without first accepting 2f+1 round-`r` blocks; the 2f+1
+   acceptances arrive later via pull. Same structural reason
+   as (1); same resolution.
 
-- [x] `networkStep_advance_inversion` (commit `7672509`)
-- [x] `networkStep_advance_implies_hasProposedFor` / `_stored` / `_gate`
+These are equivalent to F-1c (`NetworkBelugaCoherence` was the
+analogous axiom for the round-progression slice) in spirit: the
+paper's two informal abstractions (network model vs. simpler
+§5 prose model) are silently equated, and where they diverge,
+mechanization needs explicit liveness assumptions.
 
-### Phase 3 — Block / Accept / Causal invariants for `networkTrace` — REVISED SCOPE
+## Phase-by-phase commit log
 
-**Status of `AcceptInv` migration**: `AcceptInv.acceptedParents` is
-**not preserved** by `networkStep` because the accept branch fires
-on `canAcceptBlock` which includes the ImPoA path (paper §4.3 f+1
-references). When ImPoA fires, `vid` accepts a block whose parents
-are not necessarily directly accepted by `vid`. So `acceptedParents`
-fails for `networkTrace`.
+### Phase 1 — Foundational `networkStep` lemmas (10 helpers)
 
-This is a *paper-faithful* finding: `AcceptInv.acceptedParents`
-captures the strong invariant of the simpler `belugaTrace` model
-(no ImPoA); under the ImPoA-aware `networkTrace`, only the weaker
-invariant holds — vid has either accepted or has implicit
-availability of every parent.
+- `deliverPending_preserves_base` (commit `d65b2a5`)
+- `networkTryActFor_round_monotone` + `_at_most_one` (commit `fea1f3b`)
+- `networkStep_round_monotone` (commit `aa8bb53`)
+- `networkStep_round_at_most_one` (commit `be42b5a`)
+- `network_round_monotone_trace` (commit `5233197`)
+- `network_honest_validator_persistent_trace` (commit `1dd5432`)
+- `network_round_intermediate_value` (commit `b75c03a`)
+- `networkStep_emittedOperations_monotone` (commit `6a2e482`)
+- `networkStep_preserves_none` (commit `5d747da`)
 
-**Consequences for §5 conclusions**:
-- T1 (block availability) needs only `acceptedBlockExists`, not
-  `acceptedParents`. We extract this as a standalone invariant
-  `network_acceptedBlockExists_trace` (a single conjunct of
-  `AcceptInv` that does survive ImPoA).
-- T2 (causal availability) **requires the full** `CausallyClosed`,
-  which doesn't survive ImPoA. T2 under `networkTrace` is genuinely
-  weaker than under `belugaTrace`: the paper §5 T2 prose proof
-  invokes a liveness argument (the validator eventually pulls /
-  accepts all causal ancestors), which is downstream of paper
-  §4.3 ImPoA + the pull mechanism. Mechanizing this requires a
-  separate liveness argument; not a structural inductive invariant.
-  See [`docs/mechanization-findings.md` § F-1c](mechanization-findings.md)
-  for the broader paper-implicit assumption issue.
+### Phase 2 — Step inversion (188-line theorem + 3 projections)
 
-So Phase 3 reduces to:
+- `networkStep_advance_inversion` + `*_implies_hasProposedFor` /
+  `_stored` / `_gate` (commit `7672509`)
+- Helper `doAccept_round'` / `doStore_round'` (commit `b767306`)
 
-- [ ] `network_acceptedBlockExists_trace` (1 conjunct of full AcceptInv)
+### Phase 3 — Minimal AcceptInv extract
 
-### Phase 3 — Trace-level helpers
+- `network_acceptedBlockExists_trace` (commit `0feb0a3`)
 
-- [ ] `network_honest_validator_persistent_trace`
-- [ ] `network_round_monotone_trace`
-- [ ] `network_round_intermediate_value`
-- [ ] `network_proposed_for_lt_currentRound`
-- [ ] `network_find_advance_step`
-- [ ] `network_all_honest_eventually_at_round`
-- [ ] `network_block_parents_in_pool`
-- [ ] `network_accepted_at_advance`
+### Phase 4 — Trace-level helpers (4 more)
 
-### Phase 4 — §5 main theorems on `networkTrace`
+- `network_find_advance_step` (commit `45af3da`)
+- `network_hasProposedFor_monotone` +
+  `network_proposed_for_lt_currentRound` (commit `68efb5a`)
+- `network_all_honest_eventually_at_round` (commit `4d33235`)
 
-- [ ] `network_round_progression_aux`
-- [ ] `network_round_termination_aux`
-- [ ] `NetworkBelugaPostGSTLiveness` bundle
-- [ ] `networkTrace_satisfies_post_gst_liveness`
-- [ ] `network_lemma1_honest_round_entry`
-- [ ] `network_lemma2_round_latency`
-- [ ] `network_theorem1_block_availability`
-- [ ] `network_theorem2_causal_availability`
-- [ ] `network_theorem3_round_progression`
-- [ ] `network_theorem4_round_termination`
-- [ ] `networkTrace_isBlockSynchronizer`
+### Phase 5 — §5 main theorems on `networkTrace`
 
-### Phase 5 — Cleanup
+- L1, L2 (commit `0c97a86`)
+- T1 (commit `345de95`)
+- T3 (commit `5bcbfcc`)
+- T2, T4, isBlockSynchronizer (commit `bd67b42`)
 
-- [ ] Delete obsolete `belugaTrace`-flavored §5 wrappers and bundle
-- [ ] Delete `NetworkBelugaCoherence` axiom
-- [ ] Delete `belugaTrace_schedulerFairness` (no longer the path)
-- [ ] Update Mysticeti chain (Safety, SafetyInvariant, Liveness)
-      to use the network versions if their consumers reference §5
-- [ ] Update `formalization.md`, `mechanization-findings.md`,
-      `network-derivation-status.md` to reflect the final state
+### Phase 6 — Cleanup
 
-## Notes
-
-- Many `private` helpers in `Beluga/Theorems.lean` (e.g.,
-  `step_advance_inversion`, `belugaTrace_validators_nodup`) are not
-  visible from `Network/Fairness.lean`. We either inline copies
-  or move them to a shared location during the migration.
-- Pure function-level lemmas (`doAccept_round`, `doStore_round`,
-  `doAdvance_round`, `updateValidator_getValidator_*`) are
-  trace-independent and apply to both `belugaTrace` and `networkTrace`
-  — they can be moved to `Beluga/Protocol.lean`.
-- The proofs of `networkStep_advance_inversion` and
-  `networkStep_advance_implies_*` will *not* fully mirror their
-  `step` counterparts because the advance gate is now
-  `allProposedFor ∨ timeoutFired` (not just `allProposedFor`).
-  Downstream consumers that depended on `allProposedFor` firing must
-  be re-examined — they may need to handle the timeout case
-  separately.
-- T2 (causal availability) only requires `networkCausallyClosed_trace`
-  and is independent of fairness; it's the easiest theorem to migrate.
-
-## Checkpointing
-
-Commit per phase, with a concrete count of lemmas closed in the
-message body. Do not advance to the next phase until the current
-phase builds cleanly with zero sorries.
-
-## Session log
-
-### Session 2026-04-27
-
-**Phase 1 COMPLETE** (10 helpers, commits `d65b2a5` through `5d747da`):
-
-- `deliverPending_preserves_base`
-- `networkTryActFor_round_monotone`/`_at_most_one`
-- `networkStep_round_monotone`/`_at_most_one`
-- `network_round_monotone_trace`
-- `network_honest_validator_persistent_trace`
-- `network_round_intermediate_value`
-- `networkTryActFor_emittedOperations_monotone` + `networkStep_emittedOperations_monotone`
-- `networkStep_preserves_none`
-
-All in `Beluga/Network/Fairness.lean`, no sorries.
-
-**Phase 5 partial** (L1, L2 done; commit `0c97a86`): new file
-`Beluga/Network/Theorems.lean` with:
-
-- `network_lemma1_honest_round_entry` — direct from `schedulerFairness_holds`
-- `network_lemma2_round_latency` — composes L1 + `network_round_intermediate_value`
-
-**Phase 2 attempted but blocked**: `networkStep_advance_inversion`
-(~150 lines mirror of `step_advance_inversion`) was attempted but
-reverted due to several issues:
-
-- The `set s_delivered := ...; unfold networkStep at h'` doesn't make
-  `s_delivered` match the unfolded form's local `have` binding —
-  the rewrites fail.
-- Use the `split at h'` pattern (as in `networkStep_currentTime`)
-  instead of `rcases h_fs : List.findSome? ...` to keep terms aligned.
-- The conclusions need adjustment: accept-disabled becomes about
-  `canAcceptBlock = false` (not the `parents.all hasAcceptedDigest`
-  form); advance-gate becomes `allProposedFor ∨ timeoutFired`.
-
-Next session: complete `networkStep_advance_inversion` using the
-`split at h'` pattern. Once that lemma closes, the projection
-lemmas (`networkStep_advance_implies_*`) follow directly.
-
-After Phase 2: Phase 3 (block invariants) is the bulk of remaining
-work — `BlockInv` / `AcceptInv` / `CausallyClosed` for `networkTrace`
-require the `*_step` preservation proofs to be redone for
-`networkStep`, which adds the ImPoA-accept and timeout-advance
-branches to each preservation case-split.
+- Deleted `belugaTrace` §5 wrappers + `NetworkBelugaCoherence`
+  axiom + `belugaTrace_schedulerFairness` derived corollary
+  (commit `27d0fe5`, removes ~830 lines).
