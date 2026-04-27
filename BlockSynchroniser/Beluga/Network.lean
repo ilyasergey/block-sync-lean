@@ -5211,69 +5211,6 @@ theorem networkTraceWithPull_isBlockSynchronizer
      (network_eventualCausalAcceptance system time h_mono h_time_unbounded
        h_in_pool_delivery h_accept)⟩
 
-/-! ## §5 headline: bundled paper liveness + `BlockSynchronizer`
-
-`BelugaWithPullFairness` packages, in a single Prop-bundle, every
-liveness assumption that the paper makes in Sections 2, 4.2, and 4.3
-in support of the §5 theorems:
-
-- **§2 (partial synchrony)**: a globally-synchronized clock and
-  `Δ`-bounded message delivery between honest validators after GST.
-- **§4.2 (push protocol + per-round timeout `T_rd = 4Δ`)**:
-  honest validators advance rounds within `Δ` post-GST, their rounds
-  stay within one of each other, and acceptable in-pool blocks are
-  accepted within `Δ`.
-- **§4.3 (ImPoA + pull)**: every block in the global pool is
-  eventually known to every honest validator, whether via the push
-  channel of §2 or the pull mechanism of §4.3.
-
-| Field | Paper ref |
-|---|---|
-| `timeMonotone` | global clock monotonicity |
-| `timeUnbounded` | the trace makes wall-clock progress |
-| `networkDelivery` | §2 `Δ`-delivery |
-| `actionScheduling` | §4.2 round-advance liveness |
-| `boundedRoundSpread` | §4.2 protocol-synchronization (gap ≤ 1) |
-| `acceptScheduling` | §4.2 accept-action liveness |
-| `inPoolDelivery` | §4.3 universal in-pool delivery (push ∪ pull) |
--/
-structure BelugaWithPullFairness
-    (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop where
-  /-- The wall clock advances monotonically along the trace. -/
-  timeMonotone       : ∀ i j, i ≤ j → time i ≤ time j
-  /-- The wall clock is unbounded: the trace eventually passes any time. -/
-  timeUnbounded      : ∀ T, ∃ k, time k ≥ T
-  /-- Paper §2: post-GST, every push message between honest validators
-  is delivered within `Δ`. -/
-  networkDelivery    : NetworkDeliveryWithPull system time
-  /-- Paper §4.2: post-GST, every honest validator advances rounds
-  within `Δ` (the per-round timeout `T_rd = 4Δ` upper-bounds the
-  time spent in any one round). -/
-  actionScheduling   : ActionSchedulingWithPull system time
-  /-- Paper §4.2 protocol-synchronization: post-GST, the rounds of any
-  two honest validators differ by at most one. -/
-  boundedRoundSpread : BoundedRoundSpread_networkTraceWithPull system time
-  /-- Paper §4.2: post-GST, an honest validator with an acceptable
-  in-pool block accepts it within `Δ`. -/
-  acceptScheduling   : AcceptScheduling system time
-  /-- Paper §4.3: post-GST, every block in the global pool is
-  eventually known to every honest validator (via push for honest
-  authors, or via the pull mechanism otherwise). -/
-  inPoolDelivery     : NetworkInPoolDeliveryWithPull system time
-
-/-- **§5 headline theorem.** Under `BelugaWithPullFairness`, the
-network-aware Beluga trace satisfies all four block-synchronizer
-properties (T1: BlockAvailability, T2: CausalAvailability, T3:
-RoundProgression, T4: RoundTermination). All four are fully derived;
-no `Eventual*` axioms remain. -/
-theorem beluga_isBlockSynchronizer
-    {system : BlockSynchroniserSystem} {time : Nat → Nat}
-    (h : BelugaWithPullFairness system time) :
-    Properties.BlockSynchronizer system (networkBelugaTraceWithPull system time) :=
-  networkTraceWithPull_isBlockSynchronizer system time
-    h.timeMonotone h.timeUnbounded h.networkDelivery h.actionScheduling
-    h.boundedRoundSpread h.acceptScheduling h.inPoolDelivery
-
 
 
 end Network
