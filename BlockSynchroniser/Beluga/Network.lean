@@ -3,10 +3,45 @@ Copyright Ilya Sergey
 
 Licensed under the Apache License, Version 2.0.
 
-Network-aware Beluga: state extension, protocol step, fairness
-derivation, and §5 theorems on `networkTraceWithPull`. Consolidated
-from the former `Beluga/Network/{State,Protocol,Fairness,Theorems}.lean`
-files; see git history for per-section attribution.
+Network-aware Beluga (paper §4).
+
+This file is the protocol layer. It refines the Beluga state of
+`Beluga/State.lean` and the relational `step` of `Beluga/Protocol.lean`
+to a model that mirrors paper Section 4 mechanism by mechanism:
+
+* `NetworkState` extends `BelugaState` with the in-flight delivery
+  queue, per-validator inboxes, the wall clock, and the pull-channel
+  queues described in paper §4.3.
+* `networkStep` is the §4.2 push step: deliver pending events, then
+  fire the first applicable validator action (`networkTryActFor`,
+  whose advance branch is gated by the per-round timeout `T_rd = 4Δ`
+  and whose accept branch consults the §4.3 ImPoA quorum).
+* `networkStepWithPull` adds the explicit §4.3 pull mechanism on
+  top: `pullStep` collects unaccepted in-pool blocks via
+  `pullCandidate` / `pullStepOne`, schedules pull-request and
+  response events, and lets the network deliver the resulting
+  `block_propose` message back to the requester.
+
+The paper-stated liveness primitives appear here as named `Prop`
+abbreviations:
+
+* `NetworkDelivery` / `NetworkDeliveryWithPull` — paper §2's
+  `Δ`-bounded honest-to-honest delivery.
+* `ActionScheduling` / `ActionSchedulingWithPull` — paper §4.2's
+  per-validator round-advance liveness.
+* `BoundedRoundSpread_networkTrace*` — the gap-1 invariant
+  maintained by paper §4.2's push protocol + per-round timeout.
+* `AcceptScheduling` — paper §4.2's per-action liveness for the
+  accept rule.
+* `PullRequestDelivery` / `PullResponseScheduling` — atomic
+  paper §4.3 pull primitives.
+* `NetworkInPoolDeliveryWithPull` — the consolidated paper §4.3
+  guarantee that every in-pool block is eventually delivered to
+  every honest validator (subsuming push + pull).
+
+The §5 paper-facing layer (lemmas L1, L2 and theorems T1–T4 with
+the `BelugaWithPullFairness` bundle and the `beluga_isBlockSynchronizer`
+corollary) lives in `Beluga/Theorems.lean`, which imports this file.
 -/
 import Mathlib.Tactic
 import BlockSynchroniser.Beluga.State
@@ -2523,46 +2558,6 @@ def BoundedRoundSpread_networkTrace
     (networkTrace system time k).base.getValidator vid₁ = some bv₁ →
     (networkTrace system time k).base.getValidator vid₂ = some bv₂ →
     bv₁.currentRound ≤ bv₂.currentRound + 1
-
-/-! ## `PartiallySynchronousFairness` — bundled paper primitives
-
-Bundle of all six paper-named primitives needed by the §5 theorems
-on `networkTrace` and the T2/T4 `Eventual*` derivations on
-`networkTraceWithPull`. Symmetric to the existing conclusion-side
-`BelugaPostGSTLiveness` bundle; carries one named hypothesis per
-paper-stated assumption.
-
-| Field | Paper ref | Trace |
-|---|---|---|
-| `networkDelivery` | §2 `Δ`-delivery | `networkTrace` |
-| `actionScheduling` | §4.2 round-advance | `networkTrace` |
-| `boundedRoundSpread` | §4.2 protocol-synchronization (gap ≤ 1) | `networkTrace` |
-| `acceptScheduling` | §4.2 accept-action | `networkTraceWithPull` |
-| `pullRequestDelivery` | §4.3 pull-channel `Δ`-delivery | `networkTraceWithPull` |
-| `pullResponseScheduling` | §4.3 pull-response action | `networkTraceWithPull` |
-
-Top-level §5 wrappers consume this single hypothesis instead of
-threading 5–6 individual primitives. Internal proofs destructure
-to access individual fields. -/
-structure PartiallySynchronousFairness
-    (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop where
-  /-- Paper §2 `Δ`-bounded honest-honest block_propose delivery. -/
-  networkDelivery        : NetworkDelivery system time
-  /-- Paper §4.2 per-validator round-advance liveness. -/
-  actionScheduling       : ActionScheduling system time
-  /-- Paper §4.2 protocol-synchronization: post-GST, any two honest
-  validators are within one local round of each other. -/
-  boundedRoundSpread     : BoundedRoundSpread_networkTrace system time
-  /-- Paper §4.2 per-action liveness for the accept action: when an
-  honest validator has an acceptable in-pool block (canAcceptBlock
-  = true), `doAccept` fires within `Δ` post-GST. -/
-  acceptScheduling       : AcceptScheduling system time
-  /-- Paper §4.3 pull-channel `Δ`-delivery: honest pull requests
-  reach honest responders' `pullRequestsInbox` within `Δ`. -/
-  pullRequestDelivery    : PullRequestDelivery system time
-  /-- Paper §4.3 pull-response action liveness: honest responder
-  with non-empty `pullInbox` drains the first request within `Δ`. -/
-  pullResponseScheduling : PullResponseScheduling system time
 
 /-- **The headline theorem.** Under the paper §2 + §4.2 + §4.3
 mechanisms (NetworkDelivery, ActionScheduling, BoundedRoundSpread),

@@ -5,14 +5,30 @@ Licensed under the Apache License, Version 2.0.
 
 Beluga's main theorems (paper §5).
 
-The four main theorems (T1–T4) and supporting Lemmas 1–2 are stated
-against `belugaTrace`. They are parameterised by a paper-implicit
-**scheduler-fairness assumption** that is required to recover the
-paper's 3Δ latency bounds; see
-[`docs/paper-feedback-l1-l2-fairness.md`](../../docs/paper-feedback-l1-l2-fairness.md)
-for a full discussion (paper terminology, no Lean) and
-[`formalization.md`](../../formalization.md) "Mechanization findings"
-for the project-side summary.
+This file is the paper-facing layer. It packages the paper's
+partial-synchrony assumptions (Sections 2, 4.2, 4.3) into the
+`BelugaWithPullFairness` bundle and proves, against the network-aware
+trace `networkTraceWithPull`, the §5 lemmas
+
+* L1 — round entry within `3Δ` (`lemma1_honest_round_entry`)
+* L2 — round-to-round latency `≤ 3Δ` (`lemma2_round_latency`)
+
+and the §5 theorems
+
+* T1 — Block Availability (`network_theorem1_block_availability_withPull`)
+* T2 — Causal Availability (`network_theorem2_causal_availability_withPull`)
+* T3 — Round Progression  (`network_theorem3_round_progression_withPull`)
+* T4 — Round Termination  (`network_theorem4_round_termination_proved`)
+
+The §5 headline `beluga_isBlockSynchronizer` consumes the bundle once
+and concludes that Beluga's network-aware trace satisfies all four
+block-synchronizer properties — fully derived from the paper-stated
+liveness primitives, with no `Eventual*` axioms.
+
+The relational synchronous-style invariants of Beluga's executable
+`step` function (round monotonicity, advance inversion, etc.) are
+also collected here as supporting infrastructure inside the
+`Theorems` namespace.
 -/
 import Mathlib.Tactic
 import BlockSynchroniser.System
@@ -24,100 +40,77 @@ import BlockSynchroniser.Beluga.Network
 
 namespace BlockSynchroniser
 namespace Beluga
+
+namespace Network
+
+/-! ## §5 paper-liveness bundle -/
+
+/-- **`BelugaWithPullFairness`** packages, in a single Prop-bundle,
+every liveness assumption made by the paper in Sections 2, 4.2,
+and 4.3 in support of the §5 theorems:
+
+- **§2 (partial synchrony)**: a globally-synchronised clock and
+  `Δ`-bounded message delivery between honest validators after GST.
+- **§4.2 (push protocol + per-round timeout `T_rd = 4Δ`)**:
+  honest validators advance rounds within `Δ` post-GST, their rounds
+  stay within one of each other, and acceptable in-pool blocks are
+  accepted within `Δ`.
+- **§4.3 (ImPoA + pull)**: every block in the global pool is
+  eventually known to every honest validator, whether via the push
+  channel of §2 or the pull mechanism of §4.3.
+
+The bundle is the single hypothesis of the §5 lemmas L1, L2 and the
+corollary `beluga_isBlockSynchronizer`: under exactly these
+paper-stated liveness assumptions, the network-aware Beluga trace
+satisfies T1, T2, T3, and T4.
+
+| Field                | Paper reference                                    |
+|----------------------|----------------------------------------------------|
+| `timeMonotone`       | global clock monotonicity                          |
+| `timeUnbounded`      | the trace makes wall-clock progress                |
+| `networkDelivery`    | §2 — `Δ`-delivery                                  |
+| `actionScheduling`   | §4.2 — round-advance liveness                      |
+| `boundedRoundSpread` | §4.2 — protocol synchronization (gap ≤ 1)          |
+| `acceptScheduling`   | §4.2 — accept-action liveness                      |
+| `inPoolDelivery`     | §4.3 — universal in-pool delivery (push ∪ pull)    |
+-/
+structure BelugaWithPullFairness
+    (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop where
+  /-- The wall clock advances monotonically along the trace. -/
+  timeMonotone       : ∀ i j, i ≤ j → time i ≤ time j
+  /-- The wall clock is unbounded: the trace eventually passes any time. -/
+  timeUnbounded      : ∀ T, ∃ k, time k ≥ T
+  /-- Paper §2: post-GST, every push message between honest validators
+  is delivered within `Δ`. -/
+  networkDelivery    : NetworkDeliveryWithPull system time
+  /-- Paper §4.2: post-GST, every honest validator advances rounds
+  within `Δ` (the per-round timeout `T_rd = 4Δ` upper-bounds the
+  time spent in any one round). -/
+  actionScheduling   : ActionSchedulingWithPull system time
+  /-- Paper §4.2 protocol-synchronization: post-GST, the rounds of any
+  two honest validators differ by at most one. -/
+  boundedRoundSpread : BoundedRoundSpread_networkTraceWithPull system time
+  /-- Paper §4.2: post-GST, an honest validator with an acceptable
+  in-pool block accepts it within `Δ`. -/
+  acceptScheduling   : AcceptScheduling system time
+  /-- Paper §4.3: post-GST, every block in the global pool is
+  eventually known to every honest validator (via push for honest
+  authors, or via the pull mechanism otherwise). -/
+  inPoolDelivery     : NetworkInPoolDeliveryWithPull system time
+
+end Network
+
 namespace Theorems
 
 open Properties Network
 
-/-! ## Section 5 — Main theorems
+/-! ## Supporting infrastructure for `belugaTrace`
 
 Each theorem says "the trace induced by Beluga's executable protocol
 satisfies Definition 1.X". The statements are stated against the
 *relational* `HonestStep` semantics — `belugaTrace` (the executable
 schedule) is one specific witness, but the theorems generalize to any
 trace whose every step satisfies `HonestStep`. -/
-
-/-! ### Scheduler fairness (paper Assumption 2, made explicit — lockstep variant)
-
-The paper's prose proofs of L1, L2, and T1–T4 silently assume that
-honest validators *act promptly*: whenever the protocol of §4 enables
-a local action (propose/accept/store/advance), an honest validator
-performs it within `Δ`. Without this, the paper's `3Δ`-bounded round
-synchronisation (and any "eventually" claim downstream) does not
-hold — see `docs/paper-feedback-l1-l2-fairness.md` for a paper-level
-counterexample.
-
-We surface the assumption at *round granularity* (which is what our
-trace model exposes), in the **lockstep** form actually needed by L2:
-post-GST, when some honest validator reaches round `r`, every honest
-validator reaches round `r + 1` within `3Δ`. The `+1` (rather than
-`≥ r`) captures the combined effect of the §4 `allProposedFor` gate
-and per-action scheduler fairness: in `3Δ` not only does everyone
-catch up to the leader's round, but the leader also advances. This
-is finding **F-1a** in `docs/mechanization-findings.md`.
-
-Discharging this from a more primitive scheduler model would require
-adding action-level enabledness predicates to our trace (future work).
--/
-/-- **Lockstep round-progress assumption** (paper §5 Assumption 2,
-made explicit, lockstep form — finding **F-1a**).
-
-In plain English:
-
-> *After GST, whenever some honest validator is at round `r` at
-> some step `k`, then within `3Δ` wall-clock every honest
-> validator has reached round at least `r + 1`.*
-
-This is a **strong** assumption — it bundles three things into one:
-1. **Liveness** — rounds do advance (not just "may advance").
-2. **Lockstep** — every honest validator catches up to one ahead
-   of the witness validator's round.
-3. **Time bound** — the catch-up happens within `3Δ`.
-
-It is essentially the *conclusion* of paper Lemma 1 promoted to
-an axiom of the trace model. The paper derives this conclusion
-from a network-delivery bound (`Δ`-bounded message delay between
-honest validators) + the ImPoA-based pull protocol (§4.3) +
-the push protocol's parent-acceptance rules (§4.2). Our trace
-model abstracts the network layer, so we surface the conclusion
-directly as a hypothesis on `(belugaTrace, time)` rather than
-deriving it from a more primitive scheduler model.
-
-**What we use this for.** L1 (`lemma1_honest_round_entry`) is a
-direct invocation; L2 (`lemma2_round_latency`) follows from L1 +
-`round_intermediate_value`; T3 and T4's main proofs iterate
-`SchedulerFairness` to bring all honest validators past a target
-round. T1 (block availability) does *not* directly invoke
-`SchedulerFairness` — it uses the action-priority gate plus the
-existence of a post-GST advance step (which `SchedulerFairness`
-supplies via L2).
-
-**Discharging this from a more primitive model** would require
-adding action-level enabledness predicates and a network layer
-(in-flight messages, per-message delivery deadlines) to the trace.
-That is future work; with the current state-only trace,
-`SchedulerFairness` is the cleanest factoring that keeps the §5
-proofs tractable.
-
-See `docs/paper-feedback-l1-l2-fairness.md` for a paper-level
-counterexample motivating why the assumption is needed (without
-it, L1's `3Δ` bound fails) and `docs/mechanization-findings.md`
-finding F-1a for the project-side write-up. -/
-def SchedulerFairness
-    (system : BlockSynchroniserSystem) (time : TimeMap) : Prop :=
-  ∀ k r,
-    -- Post-GST step `k`...
-    time k ≥ system.GST →
-    -- ...at which some honest validator is at round `r`...
-    (∃ vid bv,
-        isHonestValidator system vid = true ∧
-        (belugaTrace system k).getValidator vid = some bv ∧
-        bv.currentRound = r) →
-    -- ...implies a step `k'` within 3Δ at which every honest
-    -- validator has reached round ≥ r + 1.
-    ∃ k', k ≤ k' ∧ time k' ≤ time k + 3 * system.Δ ∧
-      ∀ vid, isHonestValidator system vid = true →
-        ∃ bv, (belugaTrace system k').getValidator vid = some bv ∧
-              bv.currentRound ≥ r + 1
 
 /-! ## Helper lemmas — paper-faithful infrastructure
 
@@ -458,9 +451,9 @@ structural arguments handle T1 and T4 once we add invariants
 for accept-before-advance and store-before-advance.
 
 L1 (`honest_round_sync`) is weakened from the paper's strict
-same-round form to the lockstep-progress form; finding **F-1b**
-records the gap-1 transient states between adjacent round advances
-that block the strict form. -/
+same-round form to the lockstep-progress form, since the protocol's
+advance rule allows transient states where two honest validators
+differ by one round. -/
 
 /-! ### Side conditions threaded through the bundle
 
@@ -1270,40 +1263,6 @@ private lemma accepted_at_advance
       rw [h_p_acc] at h_pd_unacc
       cases h_pd_unacc
 
-/-
-Iterated `SchedulerFairness`: starting from a post-GST step, every
-honest validator can be brought to currentRound ≥ R for any R, by
-applying `h_fair` `R` times. Requires a witness honest validator
-to drive the iteration.
--/
-private lemma all_honest_eventually_at_round
-    (system : BlockSynchroniserSystem)
-    (time : TimeMap) (h_time : time.WellFormed)
-    (h_fair : SchedulerFairness system time)
-    (vid_w : ValidatorId) (h_w : isHonestValidator system vid_w = true)
-    (k₀ : Nat) (h_gst : time k₀ ≥ system.GST) :
-    ∀ R, ∃ k, k₀ ≤ k ∧ time k ≥ system.GST ∧
-      ∀ vid, isHonestValidator system vid = true →
-        ∃ bv, (belugaTrace system k).getValidator vid = some bv ∧
-              bv.currentRound ≥ R := by
-  intro R
-  induction R with
-  | zero =>
-    refine ⟨k₀, le_refl _, h_gst, ?_⟩
-    intro vid h_vid
-    obtain ⟨bv, h_bv⟩ := honest_validator_persistent_trace system vid h_vid k₀
-    exact ⟨bv, h_bv, Nat.zero_le _⟩
-  | succ R ih =>
-    obtain ⟨k_R, h_k_R_le, h_k_R_gst, h_all_R⟩ := ih
-    obtain ⟨bv_w, h_bv_w, h_bv_w_round⟩ := h_all_R vid_w h_w
-    obtain ⟨k', h_k'_le, _, h_all_succ⟩ :=
-      h_fair k_R bv_w.currentRound h_k_R_gst ⟨vid_w, bv_w, h_w, h_bv_w, rfl⟩
-    refine ⟨k', le_trans h_k_R_le h_k'_le,
-      le_trans h_k_R_gst (h_time.1 _ _ h_k'_le), ?_⟩
-    intro vid h_vid
-    obtain ⟨bv', h_bv', h_bv'_round⟩ := h_all_succ vid h_vid
-    exact ⟨bv', h_bv', le_trans (Nat.succ_le_succ h_bv_w_round) h_bv'_round⟩
-
 /- `hasProposedFor s vid r = true` iff a `block_propose vid _ r` op
 is in `s.emittedOperations`. Bridge between the boolean predicate
 and the operation-list witness. -/
@@ -1369,357 +1328,74 @@ private lemma isHonestValidator_of_mem
   rw [← find_beq_eq_find, h_find]
 end Theorems
 
-/-! ## §5 headline: bundled paper liveness + `BlockSynchronizer`
-
-`BelugaWithPullFairness` packages, in a single Prop-bundle, every
-liveness assumption that the paper makes in Sections 2, 4.2, and 4.3
-in support of the §5 theorems:
-
-- **§2 (partial synchrony)**: a globally-synchronized clock and
-  `Δ`-bounded message delivery between honest validators after GST.
-- **§4.2 (push protocol + per-round timeout `T_rd = 4Δ`)**:
-  honest validators advance rounds within `Δ` post-GST, their rounds
-  stay within one of each other, and acceptable in-pool blocks are
-  accepted within `Δ`.
-- **§4.3 (ImPoA + pull)**: every block in the global pool is
-  eventually known to every honest validator, whether via the push
-  channel of §2 or the pull mechanism of §4.3.
-
-| Field | Paper ref |
-|---|---|
-| `timeMonotone` | global clock monotonicity |
-| `timeUnbounded` | the trace makes wall-clock progress |
-| `networkDelivery` | §2 `Δ`-delivery |
-| `actionScheduling` | §4.2 round-advance liveness |
-| `boundedRoundSpread` | §4.2 protocol-synchronization (gap ≤ 1) |
-| `acceptScheduling` | §4.2 accept-action liveness |
-| `inPoolDelivery` | §4.3 universal in-pool delivery (push ∪ pull) |
--/
-
 namespace Network
 
-/-! ## §5 Lemma 1 (network-trace) — round entry within 3Δ -/
+/-! ## §5 Lemma 1 — round entry within `3Δ`
 
-/-- **Lemma 1 (paper §5).** Network-trace formulation: after GST,
-given an honest validator at round `r`, every honest validator
-reaches round `≥ r + 1` within `3Δ`. Direct one-line consequence
-of `schedulerFairness_holds`. -/
-theorem network_lemma1_honest_round_entry
-    (system : BlockSynchroniserSystem) (time : Nat → Nat)
-    (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
-    (h_prim : PartiallySynchronousFairness system time) :
+After GST, given an honest validator at round `r`, every honest
+validator reaches round at least `r + 1` within `3Δ`. Direct
+consequence of the fairness derivation. -/
+
+/-- **Lemma 1 (paper §5).** -/
+theorem lemma1_honest_round_entry
+    {system : BlockSynchroniserSystem} {time : Nat → Nat}
+    (h : BelugaWithPullFairness system time) :
     ∀ vid_ref r k₀, isHonestValidator system vid_ref = true →
       time k₀ ≥ system.GST →
-      (∃ bv_ref, (networkTrace system time k₀).base.getValidator vid_ref = some bv_ref ∧
+      (∃ bv_ref, (networkTraceWithPull system time k₀).base.getValidator vid_ref = some bv_ref ∧
         bv_ref.currentRound = r) →
       ∃ k', k₀ ≤ k' ∧ time k' ≤ time k₀ + 3 * system.Δ ∧
         ∀ vid, isHonestValidator system vid = true →
-          ∃ bv, (networkTrace system time k').base.getValidator vid = some bv ∧
+          ∃ bv, (networkTraceWithPull system time k').base.getValidator vid = some bv ∧
                 bv.currentRound ≥ r + 1 := by
   intro vid_ref r k₀ h_honest h_post_gst ⟨bv_ref, h_bv_ref, h_round⟩
   have h_persistent : ∀ vid k, isHonestValidator system vid = true →
-      ∃ bv, (networkTrace system time k).base.getValidator vid = some bv :=
-    fun vid k h => network_honest_validator_persistent_trace system time vid h k
-  exact schedulerFairness_holds system time h_mono
-    h_prim.networkDelivery h_prim.actionScheduling h_prim.boundedRoundSpread
-    h_persistent
+      ∃ bv, (networkTraceWithPull system time k).base.getValidator vid = some bv :=
+    fun vid k h => network_honest_validator_persistent_traceWithPull system time vid h k
+  exact schedulerFairness_holds_withPull system time h.timeMonotone
+    h.networkDelivery h.actionScheduling h.boundedRoundSpread h_persistent
     k₀ r h_post_gst ⟨vid_ref, bv_ref, h_honest, h_bv_ref, h_round⟩
 
-/-! ## §5 Lemma 2 (network-trace) — round-to-round latency ≤ 3Δ -/
+/-! ## §5 Lemma 2 — round-to-round latency `≤ 3Δ`
 
-/-- **Lemma 2 (paper §5).** Network-trace formulation: after GST,
-given an honest validator `vid` at round `r`, by some step within
-`3Δ`, `vid` is at round exactly `r + 1`. Uses
-`schedulerFairness_holds` to bring `vid` to `≥ r + 1`, then applies
-`network_round_intermediate_value` to extract the exact-`r+1` step. -/
-theorem network_lemma2_round_latency
-    (system : BlockSynchroniserSystem) (time : Nat → Nat)
-    (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
-    (h_prim : PartiallySynchronousFairness system time) :
+After GST, an honest validator at round `r` is at round exactly
+`r + 1` by some step within `3Δ`. Combines L1 with the round-IVT
+to land at exactly `r + 1`. -/
+
+/-- **Lemma 2 (paper §5).** -/
+theorem lemma2_round_latency
+    {system : BlockSynchroniserSystem} {time : Nat → Nat}
+    (h : BelugaWithPullFairness system time) :
     ∀ vid r k,
       isHonestValidator system vid = true →
       time k ≥ system.GST →
-      (∃ bv, (networkTrace system time k).base.getValidator vid = some bv ∧
+      (∃ bv, (networkTraceWithPull system time k).base.getValidator vid = some bv ∧
         bv.currentRound = r) →
       ∃ k' ≥ k, time k' ≤ time k + 3 * system.Δ ∧
-        ∃ bv, (networkTrace system time k').base.getValidator vid = some bv ∧
+        ∃ bv, (networkTraceWithPull system time k').base.getValidator vid = some bv ∧
               bv.currentRound = r + 1 := by
   intro vid r k h_honest h_post_gst ⟨bv, h_bv, h_round⟩
-  -- Apply network_lemma1_honest_round_entry to get all honest at ≥ r + 1.
   obtain ⟨k', hk'le, hk'time, hk'all⟩ :=
-    network_lemma1_honest_round_entry system time h_mono h_prim
-      vid r k h_honest h_post_gst ⟨bv, h_bv, h_round⟩
+    lemma1_honest_round_entry h vid r k h_honest h_post_gst ⟨bv, h_bv, h_round⟩
   obtain ⟨bv', hbv', hbv'rnd⟩ := hk'all vid h_honest
-  -- Apply intermediate value to get an exact-r+1 step in [k, k'].
   have hle_r : bv.currentRound ≤ r + 1 := by rw [h_round]; exact Nat.le_succ r
   obtain ⟨kc, hkc_lo, hkc_hi, bvc, hbvc, hrnd_eq⟩ :=
-    network_round_intermediate_value system time vid k k' (r + 1) hk'le bv bv' h_bv hbv'
+    network_round_intermediate_valueWithPull system time vid k k' (r + 1) hk'le bv bv' h_bv hbv'
       hle_r hbv'rnd
   have htime_kc : time kc ≤ time k + 3 * system.Δ :=
-    le_trans (h_mono kc k' hkc_hi) hk'time
+    le_trans (h.timeMonotone kc k' hkc_hi) hk'time
   exact ⟨kc, hkc_lo, htime_kc, bvc, hbvc, hrnd_eq⟩
 
-/-! ## §5 Theorem 1 (network-trace) — Block Availability -/
+/-! ## §5 eventual-acceptance predicates
 
-/-- The trace `λ k => (networkTrace system time k).base : Trace BelugaState`,
-which is what the §5 properties (`BlockAvailability`, etc.) range over. -/
-def networkBelugaTrace (system : BlockSynchroniserSystem) (time : Nat → Nat) :
-    Trace BelugaState :=
-  fun k => (networkTrace system time k).base
+`EventualCausalAcceptance` and `EventualRoundAcceptance` are the two
+paper-implicit liveness conjuncts in §5's T2 and T4 proofs. They are
+defined here on a generic `Trace BelugaState` so the with-pull track
+below can prove them as theorems (rather than take them as axioms). -/
 
-/-- Helper: emittedOperations grow monotonically along `networkTrace`. -/
-private lemma networkBelugaTrace_emittedOperations_monotone
-    (system : BlockSynchroniserSystem) (time : Nat → Nat) (k₁ k₂ : Nat) (h_le : k₁ ≤ k₂) :
-    ∀ op ∈ (networkTrace system time k₁).base.emittedOperations,
-      op ∈ (networkTrace system time k₂).base.emittedOperations := by
-  induction h_le with
-  | refl => intro _ h; exact h
-  | step _ ih =>
-    intro op hop
-    rename_i k_mid _
-    have ih' := ih op hop
-    show op ∈ (networkStep system (networkTrace system time k_mid)
-                (time (k_mid + 1))).base.emittedOperations
-    exact networkStep_emittedOperations_monotone system _ _ op ih'
-
-/-- **Theorem 1 (paper §5).** Network-trace formulation: every accepted
-block is eventually stored. -/
-theorem network_theorem1_block_availability
-    (system : BlockSynchroniserSystem) (time : Nat → Nat)
-    (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
-    (h_time_unbounded : ∀ T, ∃ k, time k ≥ T)
-    (h_prim : PartiallySynchronousFairness system time) :
-    Properties.BlockAvailability system (networkBelugaTrace system time) := by
-  intro k vid d h_honest h_acc
-  -- Step 1: Find a post-GST step.
-  obtain ⟨k_post, hk_post_le, hk_post_gst⟩ : ∃ k', k ≤ k' ∧ time k' ≥ system.GST := by
-    obtain ⟨k', hk'⟩ := h_time_unbounded system.GST
-    exact ⟨max k k', le_max_left _ _, le_trans hk' (h_mono _ _ (le_max_right _ _))⟩
-  -- Step 2: Persistence of vid at k_post.
-  obtain ⟨bv_post, h_bv_post⟩ :=
-    network_honest_validator_persistent_trace system time vid h_honest k_post
-  set r := bv_post.currentRound with hr_def
-  -- Step 3: Apply schedulerFairness_holds to bring all honest to round ≥ r + 1.
-  have h_persistent : ∀ vid k, isHonestValidator system vid = true →
-      ∃ bv, (networkTrace system time k).base.getValidator vid = some bv :=
-    fun vid k h => network_honest_validator_persistent_trace system time vid h k
-  obtain ⟨k_target, hk_target_le, _, h_target_all⟩ :=
-    schedulerFairness_holds system time h_mono
-      h_prim.networkDelivery h_prim.actionScheduling h_prim.boundedRoundSpread h_persistent
-      k_post r hk_post_gst ⟨vid, bv_post, h_honest, h_bv_post, hr_def.symm⟩
-  obtain ⟨bv_target, h_bv_target, hbv_target_rnd⟩ := h_target_all vid h_honest
-  -- Step 4: Find the step where vid's round transitioned r → r + 1.
-  obtain ⟨k_a, bv_a, bv_a', hk_a_le, _, h_a, h_a', h_a_eq, h_a'_eq⟩ :=
-    network_find_advance_step system time vid r hk_target_le bv_post bv_target
-      h_bv_post h_bv_target hr_def.symm hbv_target_rnd
-  have h_nodup_a := networkTrace_validators_nodup system time k_a
-  have h_advance : bv_a'.currentRound = bv_a.currentRound + 1 := by rw [h_a_eq, h_a'_eq]
-  -- Step 5: Apply networkStep_advance_implies_stored to get the store-disabled gate.
-  have h_a'_step :
-      (networkStep system (networkTrace system time k_a) (time (k_a + 1))).base.getValidator vid
-        = some bv_a' := h_a'
-  have h_stored_gate :=
-    networkStep_advance_implies_stored system (networkTrace system time k_a) (time (k_a + 1))
-      vid bv_a bv_a' h_nodup_a h_a h_a'_step h_advance
-  -- Step 6: d is accepted at k_a (by emittedOperations monotonicity).
-  have h_acc_at_a : HasAccepted (networkTrace system time k_a).base vid d := by
-    have h_le : k ≤ k_a := le_trans hk_post_le hk_a_le
-    exact networkBelugaTrace_emittedOperations_monotone system time k k_a h_le _ h_acc
-  have h_acc_bool :
-      hasAcceptedDigest (networkTrace system time k_a).base vid d = true := by
-    unfold hasAcceptedDigest
-    rw [List.any_eq_true]
-    exact ⟨_, h_acc_at_a, by simp +decide⟩
-  -- Step 7: Use acceptedBlockExists to get the block B with B.d = d.
-  obtain ⟨B, hB_mem, hB_d⟩ :=
-    network_acceptedBlockExists_trace system time vid k_a d h_acc_at_a
-  have h_acc_B :
-      hasAcceptedDigest (networkTrace system time k_a).base vid B.d = true := by
-    rw [hB_d]; exact h_acc_bool
-  have h_sto_B :
-      hasStoredDigest (networkTrace system time k_a).base vid B.d = true :=
-    h_stored_gate B hB_mem h_acc_B
-  -- Step 8: Extract the block_store op from h_sto_B.
-  unfold hasStoredDigest at h_sto_B
-  rw [List.any_eq_true] at h_sto_B
-  obtain ⟨op, hop_mem, hop_match⟩ := h_sto_B
-  refine ⟨k_a, le_trans hk_post_le hk_a_le, ?_⟩
-  cases op with
-  | block_store v B' =>
-    simp at hop_match
-    obtain ⟨h_v, h_d⟩ := hop_match
-    refine ⟨B', ?_, ?_⟩
-    · show ValidatorOperation.block_store vid B' ∈
-        (networkBelugaTrace system time k_a).emittedOperations
-      rw [h_v] at hop_mem; exact hop_mem
-    · rw [h_d]; exact hB_d
-  | _ => simp at hop_match
-
-/-! ## §5 Theorem 3 (network-trace) — Round Progression -/
-
-/-- Helper: hasProposedFor iff there's a block_propose op in emittedOperations. -/
-private lemma network_hasProposedFor_iff_mem (s : BelugaState)
-    (vid : ValidatorId) (r : Round) :
-    hasProposedFor s vid r = true ↔
-    ∃ B, ValidatorOperation.block_propose vid B r ∈ s.emittedOperations := by
-  unfold hasProposedFor
-  rw [List.any_eq_true]
-  constructor
-  · rintro ⟨op, hop_mem, hop_match⟩
-    cases op with
-    | block_propose v B r' =>
-      simp at hop_match
-      obtain ⟨h_v, h_r⟩ := hop_match
-      exact ⟨B, h_v ▸ h_r ▸ hop_mem⟩
-    | _ => simp at hop_match
-  · rintro ⟨B, h_mem⟩
-    refine ⟨ValidatorOperation.block_propose vid B r, h_mem, ?_⟩
-    simp +decide
-
-/-- Helper: under nodup, find? on a system-registered honest validator returns
-the honest pair. -/
-private lemma network_isHonestValidator_of_mem
-    (system : BlockSynchroniserSystem) (vid : ValidatorId)
-    (h_mem : (vid, true) ∈ system.validators) :
-    isHonestValidator system vid = true := by
-  unfold isHonestValidator BlockSynchroniserSystem.isHonest
-  have h_find : system.validators.find? (fun p => p.1 == vid) = some (vid, true) :=
-    find?_of_mem_nodup _ vid true h_mem system.validatorsNodup
-  have h_pred_eq :
-      (fun (x : ValidatorId × Bool) => match x with | (vid_1, _) => decide (vid_1 = vid))
-        = (fun p => p.1 == vid) := by
-    funext p
-    cases p
-    show decide _ = (_ == _)
-    rfl
-  rw [h_pred_eq, h_find]
-
-/-- **Theorem 3 (paper §5).** Network-trace formulation: every round
-eventually has 2f+1 distinct proposers (counted across honest validators
-who have advanced past that round). -/
-theorem network_theorem3_round_progression
-    (system : BlockSynchroniserSystem) (time : Nat → Nat)
-    (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
-    (h_time_unbounded : ∀ T, ∃ k, time k ≥ T)
-    (h_prim : PartiallySynchronousFairness system time) :
-    Properties.RoundProgression system (networkBelugaTrace system time) := by
-  intro round
-  -- Honest pair list non-empty (system has honestBound ≥ 2f+1 ≥ 1).
-  have hHonest := system.honestBound
-  set honest_pairs := system.validators.filter (fun p => p.2 = true) with h_hp_def
-  have h_hp_ne : honest_pairs ≠ [] := by
-    intro h_e
-    have : honest_pairs.length = 0 := by rw [h_e]; rfl
-    omega
-  set pair_w := honest_pairs.head h_hp_ne
-  have h_pair_w_mem : pair_w ∈ honest_pairs := List.head_mem _
-  have h_pw_filter := List.mem_filter.mp h_pair_w_mem
-  have h_pw_in : pair_w ∈ system.validators := h_pw_filter.1
-  have h_pw_true : pair_w.2 = true := by simpa using h_pw_filter.2
-  set vid_w := pair_w.1 with hv_w_def
-  have h_w_pair_eq : (vid_w, true) ∈ system.validators := by
-    have h_eq : pair_w = (vid_w, true) := by
-      apply Prod.ext
-      · rfl
-      · exact h_pw_true
-    rw [← h_eq]; exact h_pw_in
-  have h_w_honest : isHonestValidator system vid_w = true :=
-    network_isHonestValidator_of_mem system vid_w h_w_pair_eq
-  -- Get a post-GST step.
-  obtain ⟨k₀, h_k₀_gst⟩ := h_time_unbounded system.GST
-  -- Apply iterated fairness to get all honest at round ≥ round + 1.
-  obtain ⟨k, _, _, h_all⟩ :=
-    network_all_honest_eventually_at_round system time h_mono
-      h_prim.networkDelivery h_prim.actionScheduling h_prim.boundedRoundSpread
-      vid_w h_w_honest k₀ h_k₀_gst (round + 1)
-  refine ⟨k, ?_⟩
-  set honest_vids := honest_pairs.map Prod.fst with h_hv_def
-  have h_hv_len : honest_vids.length ≥ 2 * system.f + 1 := by
-    rw [h_hv_def, List.length_map]; exact hHonest
-  have h_sys_nodup := system.validatorsNodup
-  have h_hp_nodup_records : honest_pairs.Nodup := by
-    rw [h_hp_def]
-    apply List.Nodup.filter
-    exact List.Nodup.of_map _ h_sys_nodup
-  have h_hv_nodup : honest_vids.Nodup := by
-    rw [h_hv_def]
-    apply List.Nodup.map_on _ h_hp_nodup_records
-    intro x hx y hy h_eq
-    have hx_in : x ∈ system.validators := (List.mem_filter.mp hx).1
-    have hy_in : y ∈ system.validators := (List.mem_filter.mp hy).1
-    have hx_find : system.validators.find? (fun z => z.1 == x.1) = some x :=
-      find?_of_mem_nodup _ x.1 x.2 hx_in h_sys_nodup
-    have hy_find : system.validators.find? (fun z => z.1 == y.1) = some y :=
-      find?_of_mem_nodup _ y.1 y.2 hy_in h_sys_nodup
-    rw [h_eq] at hx_find
-    rw [hx_find] at hy_find
-    grind
-  set proposers_raw := (opsAt (networkBelugaTrace system time) k).filterMap (fun op =>
-    match op with
-    | .block_propose vid _ r => if r = round then some vid else none
-    | _ => none) with h_pr_def
-  have h_subset : ∀ vid ∈ honest_vids, vid ∈ proposers_raw := by
-    intro vid h_vid_mem
-    obtain ⟨pair, h_pair_mem, h_pair_fst⟩ := List.mem_map.mp h_vid_mem
-    have h_pair_filter := List.mem_filter.mp h_pair_mem
-    have h_pair_in : pair ∈ system.validators := h_pair_filter.1
-    have h_pair_true : pair.2 = true := by simpa using h_pair_filter.2
-    have h_vid_pair_in : (vid, true) ∈ system.validators := by
-      have h_pair_eq : pair = (vid, true) := by
-        apply Prod.ext
-        · exact h_pair_fst
-        · exact h_pair_true
-      rw [← h_pair_eq]; exact h_pair_in
-    have h_vid_honest : isHonestValidator system vid = true :=
-      network_isHonestValidator_of_mem system vid h_vid_pair_in
-    obtain ⟨bv, h_bv, h_bv_round⟩ := h_all vid h_vid_honest
-    have h_round_lt : round < bv.currentRound := by
-      have : round + 1 ≤ bv.currentRound := h_bv_round
-      exact this
-    have h_prop := network_proposed_for_lt_currentRound system time k vid bv h_bv round h_round_lt
-    obtain ⟨B, h_op⟩ := (network_hasProposedFor_iff_mem _ vid round).mp h_prop
-    rw [h_pr_def]
-    apply List.mem_filterMap.mpr
-    refine ⟨ValidatorOperation.block_propose vid B round, h_op, ?_⟩
-    simp +decide
-  show proposers_raw.eraseDups.length ≥ 2 * system.f + 1
-  have h_fin_subset : honest_vids.toFinset ⊆ proposers_raw.toFinset := by
-    intro x hx
-    rw [List.mem_toFinset] at hx ⊢
-    exact h_subset x hx
-  have h_card_le : honest_vids.toFinset.card ≤ proposers_raw.toFinset.card :=
-    Finset.card_le_card h_fin_subset
-  have h_hv_card : honest_vids.toFinset.card = honest_vids.length :=
-    List.toFinset_card_of_nodup h_hv_nodup
-  have h_eraseDups_ge_toFinset : ∀ (l : List ValidatorId),
-      l.eraseDups.length ≥ l.toFinset.card := by
-    intro l
-    induction' l using List.reverseRecOn with l a ih
-    · rfl
-    · simp +decide [ List.eraseDups_append ]
-      by_cases h : a ∈ l.toFinset <;> simp_all +decide [ List.removeAll ]
-      exact Nat.lt_succ_of_le ‹_›
-  have h_pr_ge : proposers_raw.eraseDups.length ≥ proposers_raw.toFinset.card :=
-    h_eraseDups_ge_toFinset proposers_raw
-  omega
-
-/-! ## §5 Theorem 2 (network-trace) — Causal Availability
-
-Under `networkTrace`'s ImPoA-aware accept rule, a validator can
-accept a block via the f+1 references path *without* directly
-accepting its parents. The strong belugaTrace invariant
-`AcceptInv.acceptedParents` therefore fails. Paper §5's prose proof
-of T2 invokes a separate liveness argument — under §4.3 ImPoA's
-pull mechanism, the validator eventually pulls and accepts every
-causally-related block.
-
-We state T2 with an explicit hypothesis `EventualCausalAcceptance`
-capturing this paper-implicit liveness step. This is the
-load-bearing axiom for T2 under ImPoA. -/
-
-/-- The eventual-causal-acceptance assumption: for any honest validator
-that has accepted some digest `d` corresponding to a block `B`,
-every causal ancestor `B'` of `B` is eventually accepted by `vid`. -/
+/-- For any honest validator that has accepted some digest `d`
+corresponding to a block `B`, every causal ancestor `B'` of `B` is
+eventually accepted by `vid`. -/
 def EventualCausalAcceptance (system : BlockSynchroniserSystem)
     (trace : Trace BelugaState) : Prop :=
   ∀ k vid d B, isHonestValidator system vid = true →
@@ -1728,36 +1404,8 @@ def EventualCausalAcceptance (system : BlockSynchroniserSystem)
     ∀ B', Reaches (trace k) B B' →
       ∃ k', k ≤ k' ∧ HasAccepted (trace k') vid B'.d
 
-/-- **Theorem 2 (paper §5).** Network-trace formulation: under the
-`EventualCausalAcceptance` axiom (paper §4.3 ImPoA + pull). -/
-theorem network_theorem2_causal_availability
-    (system : BlockSynchroniserSystem) (time : Nat → Nat)
-    (h_eventual : EventualCausalAcceptance system (networkBelugaTrace system time)) :
-    Properties.CausalAvailability system (networkBelugaTrace system time) := by
-  intro k vid d B h_honest h_acc h_get B' h_reach
-  exact h_eventual k vid d B h_honest h_acc h_get B' h_reach
-
-/-! ## §5 Theorem 4 (network-trace) — Round Termination
-
-T4 says every honest validator eventually accepts blocks from 2f+1
-distinct authors at every round. Under `belugaTrace`'s `step`,
-this follows from the accept-before-advance gate: at the advance
-step, accept is disabled (every accepted block already stored, no
-more accept candidates), so vid has accepted every round-≤-`r`
-block in the pool (specifically, 2f+1 round-`r` blocks from the
-`allProposedFor` gate).
-
-Under `networkTrace` with the timeout (paper §4.2 `T_rd = 4Δ`),
-vid may advance via timeout *without* accepting all round-`r`
-blocks. The 2f+1 acceptances would then come later, via §4.3 ImPoA
-+ pull mechanism. Like T2, this requires an explicit eventual-
-acceptance hypothesis. -/
-
-/-- The eventual-round-acceptance assumption: every honest validator
-eventually accepts 2f+1 distinct authors' round-`r` blocks. Under
-the network model, this is a paper §4.3 + pull liveness claim;
-it is not derivable from the structural networkTrace properties
-alone. -/
+/-- Every honest validator eventually accepts `2f + 1` distinct
+authors' round-`r` blocks. -/
 def EventualRoundAcceptance (system : BlockSynchroniserSystem)
     (trace : Trace BelugaState) : Prop :=
   ∀ round vid, isHonestValidator system vid →
@@ -1771,32 +1419,6 @@ def EventualRoundAcceptance (system : BlockSynchroniserSystem)
           | _ => none)
         |>.eraseDups
       acceptedAuthors.length ≥ 2 * system.f + 1
-
-/-- **Theorem 4 (paper §5).** Network-trace formulation: under the
-`EventualRoundAcceptance` axiom (paper §4.3 ImPoA + pull). -/
-theorem network_theorem4_round_termination
-    (system : BlockSynchroniserSystem) (time : Nat → Nat)
-    (h_eventual : EventualRoundAcceptance system (networkBelugaTrace system time)) :
-    Properties.RoundTermination system (networkBelugaTrace system time) := by
-  intro round vid h_honest
-  exact h_eventual round vid h_honest
-
-/-! ## §5 corollary — Beluga is a block synchronizer (network-trace) -/
-
-/-- **Corollary (paper §5).** Network-trace formulation: Beluga
-satisfies all four block-synchronizer properties. -/
-theorem networkTrace_isBlockSynchronizer
-    (system : BlockSynchroniserSystem) (time : Nat → Nat)
-    (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
-    (h_time_unbounded : ∀ T, ∃ k, time k ≥ T)
-    (h_prim : PartiallySynchronousFairness system time)
-    (h_eventual_causal : EventualCausalAcceptance system (networkBelugaTrace system time))
-    (h_eventual_round : EventualRoundAcceptance system (networkBelugaTrace system time)) :
-    Properties.BlockSynchronizer system (networkBelugaTrace system time) :=
-  ⟨network_theorem3_round_progression system time h_mono h_time_unbounded h_prim,
-   network_theorem4_round_termination system time h_eventual_round,
-   network_theorem1_block_availability system time h_mono h_time_unbounded h_prim,
-   network_theorem2_causal_availability system time h_eventual_causal⟩
 
 /-! ## `EventualRoundAcceptance` as a derived theorem -/
 
@@ -2048,6 +1670,24 @@ theorem network_theorem4_round_termination_proved
     h_delivery h_scheduling h_spread h_accept round vid h_honest
 
 /-! ## T1 (BlockAvailability) and T3 (RoundProgression) on `networkTraceWithPull` -/
+
+/-- Helper: under nodup, find? on a system-registered honest validator returns
+the honest pair. -/
+private lemma network_isHonestValidator_of_mem
+    (system : BlockSynchroniserSystem) (vid : ValidatorId)
+    (h_mem : (vid, true) ∈ system.validators) :
+    isHonestValidator system vid = true := by
+  unfold isHonestValidator BlockSynchroniserSystem.isHonest
+  have h_find : system.validators.find? (fun p => p.1 == vid) = some (vid, true) :=
+    find?_of_mem_nodup _ vid true h_mem system.validatorsNodup
+  have h_pred_eq :
+      (fun (x : ValidatorId × Bool) => match x with | (vid_1, _) => decide (vid_1 = vid))
+        = (fun p => p.1 == vid) := by
+    funext p
+    cases p
+    show decide _ = (_ == _)
+    rfl
+  rw [h_pred_eq, h_find]
 
 /-- emittedOperations monotonicity along `networkTraceWithPull`. -/
 private lemma networkBelugaTraceWithPull_emittedOperations_monotone
@@ -2344,29 +1984,7 @@ theorem networkTraceWithPull_isBlockSynchronizer
        h_in_pool_delivery h_accept)⟩
 
 
-structure BelugaWithPullFairness
-    (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop where
-  /-- The wall clock advances monotonically along the trace. -/
-  timeMonotone       : ∀ i j, i ≤ j → time i ≤ time j
-  /-- The wall clock is unbounded: the trace eventually passes any time. -/
-  timeUnbounded      : ∀ T, ∃ k, time k ≥ T
-  /-- Paper §2: post-GST, every push message between honest validators
-  is delivered within `Δ`. -/
-  networkDelivery    : NetworkDeliveryWithPull system time
-  /-- Paper §4.2: post-GST, every honest validator advances rounds
-  within `Δ` (the per-round timeout `T_rd = 4Δ` upper-bounds the
-  time spent in any one round). -/
-  actionScheduling   : ActionSchedulingWithPull system time
-  /-- Paper §4.2 protocol-synchronization: post-GST, the rounds of any
-  two honest validators differ by at most one. -/
-  boundedRoundSpread : BoundedRoundSpread_networkTraceWithPull system time
-  /-- Paper §4.2: post-GST, an honest validator with an acceptable
-  in-pool block accepts it within `Δ`. -/
-  acceptScheduling   : AcceptScheduling system time
-  /-- Paper §4.3: post-GST, every block in the global pool is
-  eventually known to every honest validator (via push for honest
-  authors, or via the pull mechanism otherwise). -/
-  inPoolDelivery     : NetworkInPoolDeliveryWithPull system time
+/-! ## §5 headline -/
 
 /-- **§5 headline theorem.** Under `BelugaWithPullFairness`, the
 network-aware Beluga trace satisfies all four block-synchronizer
