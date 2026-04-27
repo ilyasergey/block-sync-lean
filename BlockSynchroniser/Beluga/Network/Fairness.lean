@@ -3141,6 +3141,98 @@ theorem network_eventually_accepts_received_withPull
     · rw [Bool.or_eq_true]; left; rw [h_r_eq]; exact h_received
   exact h_accept k vid_r B h_r h_post_gst h_in_pool h_can_accept
 
+/-! ## Block-pool monotonicity along `networkTraceWithPull` -/
+
+/-- One `networkStepWithPull` only extends `base.blocks`. -/
+theorem networkStepWithPull_blocks_monotone
+    (system : BlockSynchroniserSystem) (s : NetworkState) (newTime : Nat) :
+    ∀ B ∈ s.base.blocks,
+      B ∈ (networkStepWithPull system s newTime).base.blocks := by
+  intro B hB
+  unfold networkStepWithPull
+  have h_del_base :
+      ({ s with currentTime := newTime } : NetworkState).deliverPending.base = s.base := by
+    rw [NetworkState.deliverPending_preserves_base]
+  have h_pull_del_base :
+      (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending).base
+        = s.base := by
+    rw [NetworkState.deliverPullPending_preserves_base]; exact h_del_base
+  have h_pulled_base :
+      (pullStep system (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending)).base
+        = s.base := by
+    rw [pullStep_preserves_base]; exact h_pull_del_base
+  have hB_pulled : B ∈
+      (pullStep system (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending)).base.blocks := by
+    rw [h_pulled_base]; exact hB
+  simp only
+  split
+  case _ s' h_fs =>
+    rw [List.findSome?_eq_some_iff] at h_fs
+    obtain ⟨_, ⟨vid_a, bv_a⟩, _, _, h_act, _⟩ := h_fs
+    unfold networkTryActFor at h_act
+    simp only at h_act
+    split at h_act
+    case isTrue _ =>
+      injection h_act with h_eq
+      subst h_eq
+      show B ∈ (doPropose system _ vid_a bv_a.currentRound).blocks
+      exact doPropose_blocks system _ vid_a bv_a.currentRound B hB_pulled
+    case isFalse _ =>
+      split at h_act
+      case h_1 B_acc h_findAcc =>
+        injection h_act with h_eq
+        subst h_eq
+        show B ∈ (doAccept _ vid_a B_acc).blocks
+        rw [doAccept_blocks_eq]; exact hB_pulled
+      case h_2 _ =>
+        split at h_act
+        case h_1 B_sto h_findSto =>
+          injection h_act with h_eq
+          subst h_eq
+          show B ∈ (doStore _ vid_a B_sto).blocks
+          rw [doStore_blocks_eq]; exact hB_pulled
+        case h_2 _ =>
+          split at h_act
+          case isTrue _ =>
+            injection h_act with h_eq
+            subst h_eq
+            show B ∈ (updateValidator _ vid_a _).blocks
+            rw [updateValidator_blocks_eq]; exact hB_pulled
+          case isFalse _ => simp at h_act
+  case _ _ => exact hB_pulled
+
+/-- Block pool is monotone along `networkTraceWithPull`. -/
+theorem network_blocks_monotone_traceWithPull
+    (system : BlockSynchroniserSystem) (time : Nat → Nat) :
+    ∀ k₁ k₂, k₁ ≤ k₂ →
+    ∀ B ∈ (networkTraceWithPull system time k₁).base.blocks,
+      B ∈ (networkTraceWithPull system time k₂).base.blocks := by
+  intro k₁ k₂ h_le
+  induction h_le with
+  | refl => intro B hB; exact hB
+  | @step k_mid _ ih =>
+    intro B hB
+    have ih' := ih B hB
+    show B ∈ (networkStepWithPull system (networkTraceWithPull system time k_mid)
+                (time (k_mid + 1))).base.blocks
+    exact networkStepWithPull_blocks_monotone system _ _ B ih'
+
+/-- Inversion of `hasProposedFor`: extract the block from the propose op. -/
+theorem hasProposedFor_implies_propose_op (s : BelugaState)
+    (vid : ValidatorId) (r : Round) (h : hasProposedFor s vid r = true) :
+    ∃ B, ValidatorOperation.block_propose vid B r ∈ s.emittedOperations := by
+  unfold hasProposedFor at h
+  rw [List.any_eq_true] at h
+  obtain ⟨op, hop_mem, hop_match⟩ := h
+  cases op with
+  | block_propose v B r' =>
+    simp at hop_match
+    obtain ⟨h_v, h_r⟩ := hop_match
+    refine ⟨B, ?_⟩
+    rw [h_v, h_r] at hop_mem
+    exact hop_mem
+  | _ => simp at hop_match
+
 /-! ## EventualRoundAcceptance: proof skeleton
 
 Phase 10's main theorem, derived from the with-pull primitives:
