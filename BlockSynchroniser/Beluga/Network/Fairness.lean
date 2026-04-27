@@ -672,6 +672,58 @@ theorem networkTrace_validators_nodup
   rw [networkTrace_validators_ids]
   exact system.validatorsNodup
 
+/-- `networkStepWithPull` preserves validator IDs. The new pull steps
+(deliverPullPending, pullStep) preserve `base` entirely, so they
+preserve validator IDs; `networkTryActFor` preservation is the
+existing helper. -/
+theorem networkStepWithPull_preserves_ids
+    (system : BlockSynchroniserSystem) (s : NetworkState) (newTime : Nat) :
+    (networkStepWithPull system s newTime).base.validators.map Prod.fst =
+    s.base.validators.map Prod.fst := by
+  unfold networkStepWithPull
+  have h_del_base :
+      ({ s with currentTime := newTime } : NetworkState).deliverPending.base.validators.map Prod.fst
+        = s.base.validators.map Prod.fst := deliverPending_preserves_ids _
+  have h_pull_del_base :
+      (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending).base.validators.map Prod.fst
+        = s.base.validators.map Prod.fst := by
+    rw [NetworkState.deliverPullPending_preserves_base]; exact h_del_base
+  have h_pulled_base :
+      (pullStep system (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending)).base.validators.map Prod.fst
+        = s.base.validators.map Prod.fst := by
+    rw [pullStep_preserves_base]; exact h_pull_del_base
+  simp only
+  split
+  case _ s' h_fs =>
+    rw [List.findSome?_eq_some_iff] at h_fs
+    obtain ⟨_, ⟨vid_a, bv_a⟩, _, _, h_act, _⟩ := h_fs
+    have := networkTryActFor_preserves_ids system _ vid_a bv_a s' h_act
+    rw [this]; exact h_pulled_base
+  case _ _ => exact h_pulled_base
+
+/-- `networkTraceWithPull` preserves validator IDs across all steps. -/
+theorem networkTraceWithPull_validators_ids
+    (system : BlockSynchroniserSystem) (time : Nat → Nat) (k : Nat) :
+    (networkTraceWithPull system time k).base.validators.map Prod.fst =
+    system.validators.map Prod.fst := by
+  induction k with
+  | zero =>
+    show ({ NetworkState.init system with currentTime := time 0 }
+      : NetworkState).base.validators.map Prod.fst = _
+    unfold NetworkState.init BelugaState.init
+    simp [List.map_map]
+  | succ k ih =>
+    show (networkStepWithPull system (networkTraceWithPull system time k) (time (k + 1))).base.validators.map Prod.fst = _
+    rw [networkStepWithPull_preserves_ids]
+    exact ih
+
+/-- `networkTraceWithPull`'s validator-IDs are nodup. -/
+theorem networkTraceWithPull_validators_nodup
+    (system : BlockSynchroniserSystem) (time : Nat → Nat) (k : Nat) :
+    ((networkTraceWithPull system time k).base.validators.map Prod.fst).Nodup := by
+  rw [networkTraceWithPull_validators_ids]
+  exact system.validatorsNodup
+
 /-- Generic helper: given `(vid, bv) ∈ l` and `l.map Prod.fst` is
 Nodup, then `l.find? (·.1 == vid) = some (vid, bv)`. -/
 lemma find?_of_mem_nodup
