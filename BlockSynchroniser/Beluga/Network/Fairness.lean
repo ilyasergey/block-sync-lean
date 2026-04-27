@@ -1256,6 +1256,153 @@ private lemma networkStep_advance_implies_gate
         system bv = true :=
   (networkStep_advance_inversion system s newTime vid bv bv' h_nodup h h' h_advance).2.2
 
+/-! ## Phase 3 (minimal): acceptedBlockExists for `networkTrace`
+
+The full `AcceptInv` does not survive `networkStep` under ImPoA
+(paper §4.3) — `acceptedParents` is broken when a validator
+accepts a block via the f+1-references path. We extract just the
+`acceptedBlockExists` conjunct, which is preserved (canAcceptBlock
+only fires for blocks already in the pool). -/
+
+private lemma network_doAccept_HasAccepted_iff (s : BelugaState) (vid_a : ValidatorId)
+    (B : Block) (vid : ValidatorId) (d : BlockDigest) :
+    HasAccepted (doAccept s vid_a B) vid d ↔
+    HasAccepted s vid d ∨ (vid = vid_a ∧ d = B.d) := by
+  unfold HasAccepted Emitted doAccept updateValidator
+  simp [SystemState.emittedOperations]
+
+private lemma network_doStore_HasAccepted_iff (s : BelugaState) (vid_s : ValidatorId)
+    (B : Block) (vid : ValidatorId) (d : BlockDigest) :
+    HasAccepted (doStore s vid_s B) vid d ↔ HasAccepted s vid d := by
+  unfold HasAccepted Emitted doStore updateValidator
+  simp [SystemState.emittedOperations]
+
+private lemma network_doPropose_HasAccepted_iff (system : BlockSynchroniserSystem)
+    (s : BelugaState) (vid_p : ValidatorId) (r : Round)
+    (vid : ValidatorId) (d : BlockDigest) :
+    HasAccepted (doPropose system s vid_p r) vid d ↔ HasAccepted s vid d := by
+  unfold HasAccepted Emitted doPropose; simp [SystemState.emittedOperations]
+
+/-- Helper: `updateValidator` doesn't change `emittedOperations`. -/
+private lemma updateValidator_emittedOperations_eq (s : BelugaState) (vid : ValidatorId)
+    (f : BelugaValidator → BelugaValidator) :
+    (updateValidator s vid f).emittedOperations = s.emittedOperations := by
+  simp [updateValidator]
+
+/-- Helper: `updateValidator` doesn't change `blocks`. -/
+private lemma updateValidator_blocks_eq (s : BelugaState) (vid : ValidatorId)
+    (f : BelugaValidator → BelugaValidator) :
+    (updateValidator s vid f).blocks = s.blocks := by
+  simp [updateValidator]
+
+/-- HasAccepted preservation across `updateValidator`. -/
+private lemma updateValidator_HasAccepted_iff (s : BelugaState) (vid_u : ValidatorId)
+    (f : BelugaValidator → BelugaValidator) (vid : ValidatorId) (d : BlockDigest) :
+    HasAccepted (updateValidator s vid_u f) vid d ↔ HasAccepted s vid d := by
+  unfold HasAccepted Emitted updateValidator
+  simp [SystemState.emittedOperations]
+
+/-- The accepted-block-exists invariant on `networkTrace`. -/
+theorem network_acceptedBlockExists_trace
+    (system : BlockSynchroniserSystem) (time : Nat → Nat)
+    (vid : ValidatorId) (k : Nat) :
+    ∀ d, HasAccepted (networkTrace system time k).base vid d →
+      ∃ B ∈ (networkTrace system time k).base.blocks, B.d = d := by
+  induction k with
+  | zero =>
+    intro d h_acc
+    exfalso
+    have h_emp : (networkTrace system time 0).base.emittedOperations = [] := by
+      show ({ NetworkState.init system with currentTime := time 0 }
+        : NetworkState).base.emittedOperations = []
+      rfl
+    unfold HasAccepted Emitted at h_acc
+    change ValidatorOperation.block_accept vid d ∈
+      (networkTrace system time 0).base.emittedOperations at h_acc
+    rw [h_emp] at h_acc
+    simp at h_acc
+  | succ k ih =>
+    intro d h_acc
+    have h_step_eq : (networkTrace system time (k + 1)).base =
+        (networkStep system (networkTrace system time k) (time (k + 1))).base := rfl
+    rw [h_step_eq] at h_acc
+    show ∃ B ∈ (networkStep system (networkTrace system time k)
+      (time (k + 1))).base.blocks, B.d = d
+    set s_pre : NetworkState := networkTrace system time k with h_s_pre
+    set s_del : NetworkState :=
+      ({ s_pre with currentTime := time (k + 1) } : NetworkState).deliverPending with h_s_del
+    have h_del_base : s_del.base = s_pre.base :=
+      NetworkState.deliverPending_preserves_base _
+    -- Goal: ∃ B ∈ (networkStep system s_pre (time (k+1))).base.blocks, B.d = d
+    -- h_acc: HasAccepted (networkStep system s_pre (time (k+1))).base vid d
+    unfold networkStep at h_acc ⊢
+    simp only at h_acc ⊢
+    split
+    case _ s_post h_fs =>
+      simp only [h_fs] at h_acc
+      rw [List.findSome?_eq_some_iff] at h_fs
+      obtain ⟨_, ⟨vid_a, bv_a⟩, _, _, h_act, _⟩ := h_fs
+      unfold networkTryActFor at h_act
+      simp only at h_act
+      split at h_act
+      case isTrue _ =>
+        injection h_act with h_eq
+        subst h_eq
+        rw [network_doPropose_HasAccepted_iff] at h_acc
+        rw [h_del_base] at h_acc
+        obtain ⟨B', hB'_mem, hB'_d⟩ := ih d h_acc
+        refine ⟨B', ?_, hB'_d⟩
+        show B' ∈ (doPropose system s_del.base vid_a bv_a.currentRound).blocks
+        rw [h_del_base]
+        exact doPropose_blocks system _ vid_a bv_a.currentRound B' hB'_mem
+      case isFalse _ =>
+        split at h_act
+        case h_1 B_acc h_findAcc =>
+          injection h_act with h_eq
+          subst h_eq
+          rw [network_doAccept_HasAccepted_iff] at h_acc
+          rcases h_acc with h_old | ⟨_, h_d⟩
+          · rw [h_del_base] at h_old
+            obtain ⟨B', hB'_mem, hB'_d⟩ := ih d h_old
+            refine ⟨B', ?_, hB'_d⟩
+            show B' ∈ (doAccept s_del.base vid_a B_acc).blocks
+            rw [doAccept_blocks_eq, h_del_base]; exact hB'_mem
+          · have hB_mem : B_acc ∈ s_del.base.blocks :=
+              List.mem_of_find?_eq_some h_findAcc
+            refine ⟨B_acc, ?_, h_d.symm⟩
+            show B_acc ∈ (doAccept s_del.base vid_a B_acc).blocks
+            rw [doAccept_blocks_eq]; exact hB_mem
+        case h_2 _ =>
+          split at h_act
+          case h_1 B_sto h_findSto =>
+            injection h_act with h_eq
+            subst h_eq
+            rw [network_doStore_HasAccepted_iff] at h_acc
+            rw [h_del_base] at h_acc
+            obtain ⟨B', hB'_mem, hB'_d⟩ := ih d h_acc
+            refine ⟨B', ?_, hB'_d⟩
+            show B' ∈ (doStore s_del.base vid_a B_sto).blocks
+            rw [doStore_blocks_eq, h_del_base]; exact hB'_mem
+          case h_2 _ =>
+            split at h_act
+            case isTrue _ =>
+              injection h_act with h_eq
+              subst h_eq
+              rw [updateValidator_HasAccepted_iff] at h_acc
+              rw [h_del_base] at h_acc
+              obtain ⟨B', hB'_mem, hB'_d⟩ := ih d h_acc
+              refine ⟨B', ?_, hB'_d⟩
+              show B' ∈ (updateValidator s_del.base vid_a _).blocks
+              rw [updateValidator_blocks_eq, h_del_base]; exact hB'_mem
+            case isFalse _ => simp at h_act
+    case _ h_fs =>
+      simp only [h_fs] at h_acc
+      rw [h_del_base] at h_acc
+      obtain ⟨B', hB'_mem, hB'_d⟩ := ih d h_acc
+      refine ⟨B', ?_, hB'_d⟩
+      show B' ∈ s_del.base.blocks
+      rw [h_del_base]; exact hB'_mem
+
 /-! ## Phase 4: Trace-level helpers -/
 
 /-- Find the step where vid's round transitioned from r to r+1. -/
