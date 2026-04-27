@@ -48,11 +48,8 @@ What the paper assumes implicitly that we surface here:
   in-pool block is eventually known to every honest validator — is
   the load-bearing fact used by T2's prose proof. The paper sketches
   the mechanism but never names the conclusion. We give it as
-  `inPoolDelivery`, which is provable from the more atomic
-  `PullRequestDelivery` + `PullResponseScheduling` + push-delivery
-  primitives also defined in `Beluga/Network.lean`; we surface the
-  consolidated form for headline use, leaving the atomic
-  decomposition as the structural fact it derives from.
+  `inPoolDelivery`. See "Why item 6 is taken as an assumption"
+  below.
 - The **gap-1 round-spread invariant** — `boundedRoundSpread` — is
   what the paper's §5 prose calls "all honest validators are at
   comparable rounds". The paper's L1 phrasing ("the same round")
@@ -61,11 +58,61 @@ What the paper assumes implicitly that we surface here:
 
 What we leave as assumptions (do not derive from anything else):
 
-- All seven fields of `BelugaWithPullFairness`. They are paper-stated
-  liveness primitives (in the case of §2 + §4.2) or paper-implicit
-  liveness conclusions of §4.3 (in the case of `inPoolDelivery`).
-  No further mechanization can derive them without modelling
-  individual messages and per-validator clocks at finer granularity.
+- The first six fields of `BelugaWithPullFairness` (clock,
+  push delivery, round-advance, protocol synchronization,
+  accept-action liveness) are paper-stated post-GST liveness
+  primitives. They cannot be derived without modelling individual
+  messages and per-validator clocks at finer granularity.
+- The seventh field, `inPoolDelivery`, is also taken as an
+  assumption in the current formalization, but for a different
+  reason. See immediately below.
+
+### Why item 6 (`inPoolDelivery`) is taken as an assumption
+
+In the **paper's level of abstraction**, where each validator has
+its own independent DAG view, item 6 is the §4.3 conclusion
+delivered by the pull mechanism. The pull mechanism's correctness
+rests on `ImPoA` and the standard quorum-intersection argument:
+when an honest validator `v` issues a pull for a block `B` that
+it has not received via push, the f+1 in-pool blocks referencing
+`B` guarantee that at least one honest validator already holds
+`B` and will respond. Without `ImPoA`, item 6 would not follow
+from the §2 push primitive alone.
+
+In **our trace model**, the block pool is shared (`s.base.blocks`
+is a single list, not per-validator). Combined with the atomic
+§4.3 primitives we have stated and proved sound on the trace —
+`PullRequestDelivery` (post-GST honest pull requests reach honest
+responders' inboxes within `Δ`) and `PullResponseScheduling`
+(honest responder with non-empty `pullInbox` drains the first
+request within `Δ`) — plus `NetworkDeliveryWithPull` for the
+push channel, item 6 is *in principle derivable*. The chain is
+
+> `pullCandidate` identifies the missing block at vid → `pullStepOne`'s
+> issue branch fires (vid emits a pull request via `doPullRequest`)
+> → `PullRequestDelivery` lands the request in some honest
+> responder's inbox → `PullResponseScheduling` fires `doPullResponse`
+> → `doPullResponse` schedules a `block_propose` `DeliveryEvent`
+> → `deliverPending` lands the op in vid's inbox.
+
+What it would take to discharge item 6 from the more atomic
+primitives is a non-trivial liveness proof: each step in this
+chain is a separate post-GST `Δ`-bounded liveness step that has
+to be threaded through the trace's evolution. The proof would
+amount to ~200–300 lines of structural tactic work, comparable in
+size to the Phase 11 (`network_eventualCausalAcceptance`) proof
+that *consumes* item 6. We therefore state item 6 as a primitive
+in the bundle, paralleling how the paper presents §4.3's
+conclusion as the design intent of the pull mechanism rather than
+as a derived fact.
+
+The bottom line: in our trace model, item 6 is structurally
+derivable from `PullRequestDelivery` + `PullResponseScheduling`
++ push delivery + the pull driver code — but the derivation is
+itself a substantial proof we have not undertaken. It is taken as
+a primitive of the bundle, with the understanding that any future
+work that wants to remove it from the assumption list has a clear
+target.
 
 What we prove from `BelugaWithPullFairness` alone:
 

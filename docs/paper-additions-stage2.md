@@ -72,16 +72,19 @@ additions this assumption surfaces.
 the §4.2 timeout `T_rd = 4Δ` plus the timing model: an honest
 validator that has been ready to act for more than `Δ` time would
 already have advanced (otherwise the timeout fires). The paper's
-prose treats them this way. Item 6 is the conclusion the §4.3 pull
-mechanism is designed to deliver; the paper sketches the mechanism
-(`pullCandidate`, push of pull requests, push of responses, push
-delivery of resulting `block_propose`) but does not name the
-conclusion. If the authors want, item 6 can be derived from items
-2, 4 plus two atomic §4.3 primitives —
+prose treats them this way. Item 6 is the conclusion the §4.3
+pull mechanism is designed to deliver; the paper sketches the
+mechanism (`pullCandidate`, push of pull requests, push of
+responses, push delivery of resulting `block_propose`) but does
+not name the conclusion. Two atomic §4.3 primitives that the
+paper *could* state separately —
 `PullRequestDelivery(req, k) ⇒ ∃ k', responder receives request
 within Δ` and `PullResponseScheduling(req, k) ⇒ ∃ k', responder
-schedules block_propose delivery within Δ` — but it is cleaner to
-state the conclusion.
+schedules block_propose delivery within Δ` — together with item 2
+of the bundle would in principle let the authors derive item 6
+inside §4.3 itself. We recommend stating item 6 as the §4.3
+conclusion regardless: it is what every §5 proof actually consumes,
+and the deriving steps are routine but lengthy.
 
 What this assumption is not: it does **not** make any claim about
 Byzantine validators' messages, Byzantine pull responses, or the
