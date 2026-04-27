@@ -413,13 +413,10 @@ def networkTraceWithPull (system : BlockSynchroniserSystem) (time : Nat → Nat)
 
 
 
-/-! ## State-update helpers (mirrors of `Beluga/Theorems.lean`)
+/-! ## State-update helpers
 
-These lemmas are duplicated from `Beluga/Theorems.lean` to avoid a
-prospective circular import once `Theorems.lean` itself migrates to
-`networkTrace` (Phase F). The proofs are identical; future
-refactoring can move them to `Beluga/Protocol.lean` (their natural
-home) and remove this duplicate block. -/
+Duplicated from `Beluga/Theorems.lean` to avoid an import cycle.
+Their natural home is `Beluga/Protocol.lean`. -/
 
 private lemma updateValidator_getValidator_ne'
     (s : BelugaState) (vid vid' : ValidatorId)
@@ -485,9 +482,7 @@ from honest sender `vid_s` was emitted at or before step `k`, then
 some step `k'` within wall-clock `Δ` of `k` has every honest
 recipient's inbox containing the op.
 
-This is the **only** new axiom needed by Phase E; everything else
-in this file is derived. The axiom corresponds to paper Section 2's
-network model:
+The axiom corresponds to paper Section 2's network model:
 
 > *We assume the network is partially synchronous: after GST, every
 > message between honest validators is delivered within Δ.*
@@ -626,8 +621,7 @@ def NetworkInPoolDeliveryWithPull
 The full derivation requires several structural lemmas about
 `networkTrace`. Their proofs follow the same case-on-`tryActFor`-
 branch pattern as the existing Beluga proofs, augmented with the
-new delivery + timeout branches. We list the load-bearing lemmas
-below as a roadmap; the proofs are the bulk of Phase E proper. -/
+new delivery + timeout branches. -/
 
 /-- **Round-progress upper bound**: at every step of
 `networkTrace`, every honest validator at round `r` with
@@ -657,7 +651,7 @@ def TimeoutFiresPast4Delta (system : BlockSynchroniserSystem) (time : Nat → Na
     time k ≥ bv.roundEntryTime + 4 * system.Δ →
     (networkTrace system time k).timeoutFired system bv = true
 
-/-! ## Foundation lemmas (Phase E.2) -/
+/-! ## Foundation lemmas -/
 
 /-- `deliverPending` preserves `currentTime`. By definition: the
 folded `appendToInbox` only changes `inboxes`, and the partition
@@ -1206,7 +1200,7 @@ theorem networkTraceWithPull_getValidator_of_mem
   rw [find?_of_mem_nodup _ _ _ h_mem (networkTraceWithPull_validators_nodup system time k)]
   rfl
 
-/-! ## Phase E.2: round-entry monotonicity (structural)
+/-! ## Round-entry monotonicity (structural)
 
 The invariant `bv.roundEntryTime ≤ s.currentTime` holds at every
 state of `networkTrace`. Self-inductive: at init both are 0; at
@@ -1356,7 +1350,7 @@ theorem networkTryActFor_preserves_roundEntry_bound
             exact h_inv vid bv h_get
         · contradiction
 
-/-! ## Round-monotonicity helpers (Phase 1 of `networkTrace` §5 migration)
+/-! ## Round-monotonicity helpers
 
 These mirror `step_round_monotone` / `step_round_at_most_one` from
 `Beluga/Theorems.lean` but adapted for `networkStep`. The proof
@@ -1855,7 +1849,7 @@ private lemma networkStep_preserves_none (system : BlockSynchroniserSystem)
   apply h y hy_mem
   grind
 
-/-! ## Phase 2: networkStep advance inversion -/
+/-! ## `networkStep` advance inversion -/
 
 /-- If `vid`'s round increased by 1 across one `networkStep`, then
 the advance branch of `networkTryActFor` fired for `vid`. From this
@@ -2043,7 +2037,7 @@ private lemma networkStep_advance_implies_gate
         system bv = true :=
   (networkStep_advance_inversion system s newTime vid bv bv' h_nodup h h' h_advance).2.2
 
-/-! ## Phase 3 (minimal): acceptedBlockExists for `networkTrace`
+/-! ## `acceptedBlockExists` for `networkTrace`
 
 The full `AcceptInv` does not survive `networkStep` under ImPoA
 (paper §4.3) — `acceptedParents` is broken when a validator
@@ -2205,7 +2199,7 @@ private lemma network_getValidator_init_round_zero
   -- p = (q.1, { reputation := init }); so p.2.currentRound = 0 (default).
   rw [← h_eq, ← h_q_eq]
 
-/-! ## Phase 4: Trace-level helpers -/
+/-! ## Trace-level helpers -/
 
 /-- `hasProposedFor` is monotone along `networkTrace`. -/
 theorem network_hasProposedFor_monotone
@@ -2474,7 +2468,7 @@ theorem roundEntryTime_le_currentTime
       change bv.roundEntryTime ≤ s_pre.currentTime at h_le
       exact h_le
 
-/-! ## Phase E.3: timeout firing -/
+/-! ## Timeout firing -/
 
 /-- Past `roundEntryTime + 4Δ`, the timeout branch is enabled. Direct
 from the definition of `timeoutFired`. -/
@@ -2486,20 +2480,20 @@ theorem timeout_fires_past_4delta
   unfold NetworkState.timeoutFired
   exact decide_eq_true h
 
-/-! ## Phase E.4: derive `schedulerFairness_holds`
+/-! ## Deriving `schedulerFairness_holds`
 
 The paper-faithful primitive **`ActionScheduling`**: post-GST,
 when an honest validator's action is enabled at step `k`, the
 validator is selected as the actor at some step `k'` with
 `time k' ≤ time k + Δ`. This is the explicit form of paper §4.2's
-implicit "honest validators run the protocol" — finding F-1. -/
+implicit "honest validators run the protocol" assumption. -/
 
-/-- **`ActionScheduling`** — paper §4.2 + finding F-1: post-GST,
-honest validators with enabled actions are scheduled by the trace
-within `Δ` wall-clock. Combined with `NetworkDelivery`, this
-discharges the previous `SchedulerFairness` axiom in a paper-
-faithful factoring (each axiom now corresponds to a paper-stated
-primitive: §2 `Δ`-delivery and §4.2 protocol-execution). -/
+/-- **`ActionScheduling`** — paper §4.2: post-GST, honest validators
+with enabled actions are scheduled by the trace within `Δ` wall-clock.
+Combined with `NetworkDelivery`, this discharges the previous
+`SchedulerFairness` axiom in a paper-faithful factoring (each axiom
+now corresponds to a paper-stated primitive: §2 `Δ`-delivery and §4.2
+protocol-execution). -/
 def ActionScheduling (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
   ∀ k vid bv,
     isHonestValidator system vid = true →
@@ -2519,8 +2513,7 @@ def ActionScheduling (system : BlockSynchroniserSystem) (time : Nat → Nat) : P
 /-- **`BoundedRoundSpread_networkTrace`** — paper §4.2's protocol
 synchronization (push protocol + per-round timeout `T_rd = 4Δ`)
 maintains a gap-1 round-spread invariant post-GST: any two honest
-validators are within 1 local round of each other. This is finding
-F-1b made explicit, stated against `networkTrace`. -/
+validators are within 1 local round of each other. -/
 def BoundedRoundSpread_networkTrace
     (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
   ∀ k vid₁ vid₂ bv₁ bv₂,
@@ -2543,7 +2536,7 @@ paper-stated assumption.
 |---|---|---|
 | `networkDelivery` | §2 `Δ`-delivery | `networkTrace` |
 | `actionScheduling` | §4.2 round-advance | `networkTrace` |
-| `boundedRoundSpread` | §4.2 + F-1b gap-1 | `networkTrace` |
+| `boundedRoundSpread` | §4.2 protocol-synchronization (gap ≤ 1) | `networkTrace` |
 | `acceptScheduling` | §4.2 accept-action | `networkTraceWithPull` |
 | `pullRequestDelivery` | §4.3 pull-channel `Δ`-delivery | `networkTraceWithPull` |
 | `pullResponseScheduling` | §4.3 pull-response action | `networkTraceWithPull` |
@@ -2557,8 +2550,8 @@ structure PartiallySynchronousFairness
   networkDelivery        : NetworkDelivery system time
   /-- Paper §4.2 per-validator round-advance liveness. -/
   actionScheduling       : ActionScheduling system time
-  /-- F-1b gap-1 invariant on the round spread between honest
-  validators (paper §4.2 protocol synchronization). -/
+  /-- Paper §4.2 protocol-synchronization: post-GST, any two honest
+  validators are within one local round of each other. -/
   boundedRoundSpread     : BoundedRoundSpread_networkTrace system time
   /-- Paper §4.2 per-action liveness for the accept action: when an
   honest validator has an acceptable in-pool block (canAcceptBlock
@@ -2586,11 +2579,11 @@ every honest validator reaches round `≥ r + 1` within `3Δ`.
   + scheduling argument suffices for the 3Δ bound), but it is
   paper-stated and threaded through the §5 wrappers as an
   available primitive for tighter ImPoA-driven refinements.
-- **`ActionScheduling` (paper §4.2 + finding F-1)**: the
-  per-validator Δ-bounded round advance. Used twice in the proof
-  (steps 1 and 2 of paper L1's optimistic argument: vid_w
-  advances from `r` to `r+1` to `r+2`).
-- **`BoundedRoundSpread_networkTrace` (paper §4.2 + finding F-1b)**:
+- **`ActionScheduling` (paper §4.2)**: the per-validator
+  Δ-bounded round advance. Used twice in the proof (steps 1 and 2
+  of paper L1's optimistic argument: vid_w advances from `r` to
+  `r+1` to `r+2`).
+- **`BoundedRoundSpread_networkTrace` (paper §4.2)**:
   the gap-1 invariant maintained by the push protocol's
   parent-acceptance rules combined with the per-round timeout
   `T_rd = 4Δ`. After vid_w reaches round ≥ r+2, every honest is
@@ -3007,7 +3000,7 @@ private lemma networkStepWithPull_preserves_none (system : BlockSynchroniserSyst
   apply h y hy_mem
   grind
 
-/-! ## Phase 10: networkStepWithPull advance inversion -/
+/-! ## `networkStepWithPull` advance inversion -/
 
 /-- If `vid`'s round increased by 1 across one `networkStepWithPull`,
 then the advance branch of `networkTryActFor` fired for `vid`. Mirror
@@ -3626,9 +3619,7 @@ theorem network_blocks_monotone_traceWithPull
 /-- Universal in-pool acceptance: under the with-pull primitives,
 every honest validator eventually accepts every block in the pool
 post-GST (regardless of author honesty). Combines
-`NetworkInPoolDeliveryWithPull` + `AcceptScheduling`. This closes the
-Phase 11 gap: it's the universal in-pool acceptance hypothesis taken
-by `network_eventualCausalAcceptance_modulo_gap`. -/
+`NetworkInPoolDeliveryWithPull` + `AcceptScheduling`. -/
 theorem network_in_pool_eventually_accepted_withPull
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
     (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
@@ -4240,42 +4231,6 @@ theorem all_honest_in_list_eventually_accepted
     · exact network_hasAcceptedDigest_monotone_withPull system time vid (digest system r p)
         k_tl (max k_tl k_hd) (le_max_left _ _) (h_tl p h_in)
 
-/-! ## EventualRoundAcceptance: proof skeleton
-
-Phase 10's main theorem, derived from the with-pull primitives:
-
-```
-theorem network_eventualRoundAcceptance
-    (system : BlockSynchroniserSystem) (time : Nat → Nat)
-    (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
-    (h_time_unbounded : ∀ T, ∃ k, time k ≥ T)
-    (h_delivery : NetworkDeliveryWithPull system time)
-    (h_scheduling : ActionSchedulingWithPull system time)
-    (h_spread : BoundedRoundSpread_networkTraceWithPull system time)
-    (h_accept : AcceptScheduling system time) :
-    ∀ round vid, isHonestValidator system vid = true →
-      ∃ k, |acceptedAuthors_of_round_r_at_k_for_vid| ≥ 2f+1
-```
-
-Proof structure (~300-500 lines):
-1. Apply iterated `ActionSchedulingWithPull` to bring all honest
-   validators past round r+1.
-2. Each honest validator vid_p has proposed for r — block_propose op
-   in emittedOperations.
-3. By `NetworkDeliveryWithPull`, vid's inbox eventually contains
-   each of these block_propose ops.
-4. Apply `network_eventually_accepts_received_withPull` (above) for
-   each: vid accepts each block within Δ.
-5. By `system.honestBound ≥ 2f+1`, vid has accepted ≥ 2f+1 distinct
-   honest authors' round-r blocks.
-
-The iteration structure (step 4) requires extending from "single
-acceptance" to "multiple acceptances at a single later step". This
-needs a `accept_persistent` lemma (HasAccepted is monotone along
-the trace). Phase 10 deliverable. -/
-
-
-
 /-! ## §5 Lemma 1 (network-trace) — round entry within 3Δ -/
 
 /-- **Lemma 1 (paper §5).** Network-trace formulation: after GST,
@@ -4593,8 +4548,7 @@ causally-related block.
 
 We state T2 with an explicit hypothesis `EventualCausalAcceptance`
 capturing this paper-implicit liveness step. This is the
-load-bearing axiom for T2 under ImPoA — analogous to F-1c in
-`mechanization-findings.md`. -/
+load-bearing axiom for T2 under ImPoA. -/
 
 /-- The eventual-causal-acceptance assumption: for any honest validator
 that has accepted some digest `d` corresponding to a block `B`,
@@ -4636,7 +4590,7 @@ acceptance hypothesis. -/
 eventually accepts 2f+1 distinct authors' round-`r` blocks. Under
 the network model, this is a paper §4.3 + pull liveness claim;
 it is not derivable from the structural networkTrace properties
-alone (cf. F-1c). -/
+alone. -/
 def EventualRoundAcceptance (system : BlockSynchroniserSystem)
     (trace : Trace BelugaState) : Prop :=
   ∀ round vid, isHonestValidator system vid →
@@ -4677,7 +4631,7 @@ theorem networkTrace_isBlockSynchronizer
    network_theorem1_block_availability system time h_mono h_time_unbounded h_prim,
    network_theorem2_causal_availability system time h_eventual_causal⟩
 
-/-! ## Phase 10 deliverable: `EventualRoundAcceptance` as a theorem -/
+/-! ## `EventualRoundAcceptance` as a derived theorem -/
 
 /-- The pull-mechanism analog of `networkBelugaTrace`. -/
 def networkBelugaTraceWithPull (system : BlockSynchroniserSystem) (time : Nat → Nat) :
@@ -4805,10 +4759,9 @@ private lemma honestList_all_honest (system : BlockSynchroniserSystem)
 
 /-! ## Main theorem: `network_eventualRoundAcceptance` -/
 
-/-- **Phase 10 main theorem.** Under the with-pull primitives,
-`networkBelugaTraceWithPull` satisfies `EventualRoundAcceptance`.
-This replaces the `EventualRoundAcceptance` axiom on T4 (cf. F-1c)
-with a derived theorem. -/
+/-- Under the with-pull primitives, `networkBelugaTraceWithPull`
+satisfies `EventualRoundAcceptance`, so T4's `EventualRoundAcceptance`
+hypothesis becomes a derived fact rather than an axiom. -/
 theorem network_eventualRoundAcceptance
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
     (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
@@ -4927,7 +4880,7 @@ theorem network_theorem4_round_termination_proved
   exact network_eventualRoundAcceptance system time h_mono h_time_unbounded
     h_delivery h_scheduling h_spread h_accept round vid h_honest
 
-/-! ## With-pull migrations of T1 (BlockAvailability) and T3 (RoundProgression) -/
+/-! ## T1 (BlockAvailability) and T3 (RoundProgression) on `networkTraceWithPull` -/
 
 /-- emittedOperations monotonicity along `networkTraceWithPull`. -/
 private lemma networkBelugaTraceWithPull_emittedOperations_monotone
@@ -5109,24 +5062,15 @@ theorem network_theorem3_round_progression_withPull
     length_eraseDups_ge_card_toFinset proposers_raw
   omega
 
-/-! ## Phase 11: `EventualCausalAcceptance` via Reaches induction
+/-! ## `EventualCausalAcceptance` via `Reaches` induction
 
-The proof is structural: induction on the `Reaches` relation. The
-remaining gap (acceptance of in-pool blocks regardless of author
-honesty) is isolated as a single hypothesis `h_in_pool_accept`,
-which is the F-1c gap on the causal side: it requires formalizing
-the pull mechanism's liveness for Byzantine-authored ancestors.
-The structural derivation is fully proven. -/
+The proof is structural: induction on the `Reaches` relation, with the
+universal in-pool acceptance step factored into a single hypothesis. -/
 
-/-- **Phase 11 main theorem (modulo in-pool acceptance gap).**
-
-Under the with-pull primitives plus a universal in-pool acceptance
-hypothesis, `networkBelugaTraceWithPull` satisfies
-`EventualCausalAcceptance`. The hypothesis says: every honest
-validator eventually accepts every block in the pool (post-GST).
-This is provable from Phase 10 helpers for honest-authored blocks;
-the Byzantine-authored case requires deep pull-mechanism liveness
-reasoning (cf. F-1c on the causal-acceptance side). -/
+/-- Modulo a universal in-pool acceptance hypothesis, the `Reaches`
+induction closes `EventualCausalAcceptance` on `networkBelugaTraceWithPull`.
+The hypothesis says: every honest validator eventually accepts every
+block in the pool (post-GST). -/
 theorem network_eventualCausalAcceptance_modulo_gap
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
     (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
@@ -5173,18 +5117,14 @@ theorem network_eventualCausalAcceptance_modulo_gap
     · rw [hasAcceptedDigest_iff_HasAccepted] at h_acc_parent
       exact h_acc_parent
 
-/-! ## Phase 11 complete: `EventualCausalAcceptance` proved -/
+/-! ## `EventualCausalAcceptance` as a derived theorem -/
 
-/-- **Phase 11 main theorem (closed).**
-
-Under the with-pull primitives — including `NetworkInPoolDeliveryWithPull`
+/-- Under the with-pull primitives — including `NetworkInPoolDeliveryWithPull`
 which captures paper §4.3's universal pull-channel delivery —
-`networkBelugaTraceWithPull` satisfies `EventualCausalAcceptance`.
-
-This replaces the `EventualCausalAcceptance` axiom on T2 with a
-derived theorem (cf. F-1c on the causal side). Combined with
-Phase 10's `network_eventualRoundAcceptance`, both load-bearing
-F-1c axioms are now derived from the with-pull primitives. -/
+`networkBelugaTraceWithPull` satisfies `EventualCausalAcceptance`,
+turning T2's hypothesis into a derived fact. Combined with
+`network_eventualRoundAcceptance`, both `Eventual*` axioms become
+theorems. -/
 theorem network_eventualCausalAcceptance
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
     (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
@@ -5197,12 +5137,12 @@ theorem network_eventualCausalAcceptance
       network_in_pool_eventually_accepted_withPull system time h_mono
         h_in_pool_delivery h_accept k vid B h_v h_g h_p)
 
-/-! ## Partial discharge of Phase 11 gap: honest-authored case -/
+/-! ## Honest-author specialization of in-pool acceptance -/
 
 /-- Honest-authored in-pool blocks are eventually accepted by every
-honest validator. Discharges the Phase 11 gap for honest authors via
-the Phase 10 single-author lemma + the propose-op block-shape
-invariant (which gives `B.d = digest system B.r B.author`). -/
+honest validator, derived from the single-author acceptance lemma
+combined with the propose-op block-shape invariant (which gives
+`B.d = digest system B.r B.author`). -/
 theorem network_in_pool_honest_author_eventually_accepted_withPull
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
     (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
@@ -5222,7 +5162,7 @@ theorem network_in_pool_honest_author_eventually_accepted_withPull
   -- B.d = digest system B.r B.author by the propose-op invariant.
   obtain ⟨_, _, h_d_eq, _⟩ :=
     network_propose_op_invariant_traceWithPull system time k B.author B B.r h_propose_op
-  -- Phase 10 single-author lemma gives k' where vid accepts digest system B.r B.author.
+  -- single-author lemma gives k' where vid accepts digest system B.r B.author.
   obtain ⟨k', h_acc⟩ :=
     network_each_honest_block_eventually_accepted_withPull system time h_mono h_time_unbounded
       h_delivery h_scheduling h_spread h_accept B.r vid B.author h_vid_honest h_author_honest
@@ -5234,9 +5174,10 @@ theorem network_in_pool_honest_author_eventually_accepted_withPull
 
 /-! ## With-pull T2 (CausalAvailability) wrapper -/
 
-/-- **Theorem 2 (paper §5), with-pull.** Mirror of T2 on
-`networkTraceWithPull`. Still takes `EventualCausalAcceptance` as a
-hypothesis (Phase 11 work; cf. F-1c on the causal-acceptance side). -/
+/-- **Theorem 2 (paper §5), with-pull.** T2 expressed against
+`networkTraceWithPull`, taking `EventualCausalAcceptance` as a
+hypothesis. The hypothesis is discharged by
+`network_eventualCausalAcceptance` to obtain the axiom-free corollary. -/
 theorem network_theorem2_causal_availability_withPull
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
     (h_eventual : EventualCausalAcceptance system (networkBelugaTraceWithPull system time)) :
@@ -5246,12 +5187,10 @@ theorem network_theorem2_causal_availability_withPull
 
 /-! ## Unified with-pull corollary: Beluga-with-pull is a block synchronizer -/
 
-/-- **Phase 12 main corollary (axiom-free).** Under the with-pull
-primitives, `networkBelugaTraceWithPull` satisfies all four
-block-synchronizer properties. All four theorems (T1/T2/T3/T4) are
-fully derived; no `Eventual*` axioms. The migration goal is reached:
-both F-1c axioms (`EventualRoundAcceptance` and
-`EventualCausalAcceptance`) are now proved theorems. -/
+/-- **§5 corollary (axiom-free).** Under the with-pull primitives,
+`networkBelugaTraceWithPull` satisfies all four block-synchronizer
+properties. All four theorems (T1/T2/T3/T4) are fully derived; no
+`Eventual*` axioms remain. -/
 theorem networkTraceWithPull_isBlockSynchronizer
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
     (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
@@ -5271,6 +5210,69 @@ theorem networkTraceWithPull_isBlockSynchronizer
    network_theorem2_causal_availability_withPull system time
      (network_eventualCausalAcceptance system time h_mono h_time_unbounded
        h_in_pool_delivery h_accept)⟩
+
+/-! ## §5 headline: bundled paper liveness + `BlockSynchronizer`
+
+`BelugaWithPullFairness` packages, in a single Prop-bundle, every
+liveness assumption that the paper makes in Sections 2, 4.2, and 4.3
+in support of the §5 theorems:
+
+- **§2 (partial synchrony)**: a globally-synchronized clock and
+  `Δ`-bounded message delivery between honest validators after GST.
+- **§4.2 (push protocol + per-round timeout `T_rd = 4Δ`)**:
+  honest validators advance rounds within `Δ` post-GST, their rounds
+  stay within one of each other, and acceptable in-pool blocks are
+  accepted within `Δ`.
+- **§4.3 (ImPoA + pull)**: every block in the global pool is
+  eventually known to every honest validator, whether via the push
+  channel of §2 or the pull mechanism of §4.3.
+
+| Field | Paper ref |
+|---|---|
+| `timeMonotone` | global clock monotonicity |
+| `timeUnbounded` | the trace makes wall-clock progress |
+| `networkDelivery` | §2 `Δ`-delivery |
+| `actionScheduling` | §4.2 round-advance liveness |
+| `boundedRoundSpread` | §4.2 protocol-synchronization (gap ≤ 1) |
+| `acceptScheduling` | §4.2 accept-action liveness |
+| `inPoolDelivery` | §4.3 universal in-pool delivery (push ∪ pull) |
+-/
+structure BelugaWithPullFairness
+    (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop where
+  /-- The wall clock advances monotonically along the trace. -/
+  timeMonotone       : ∀ i j, i ≤ j → time i ≤ time j
+  /-- The wall clock is unbounded: the trace eventually passes any time. -/
+  timeUnbounded      : ∀ T, ∃ k, time k ≥ T
+  /-- Paper §2: post-GST, every push message between honest validators
+  is delivered within `Δ`. -/
+  networkDelivery    : NetworkDeliveryWithPull system time
+  /-- Paper §4.2: post-GST, every honest validator advances rounds
+  within `Δ` (the per-round timeout `T_rd = 4Δ` upper-bounds the
+  time spent in any one round). -/
+  actionScheduling   : ActionSchedulingWithPull system time
+  /-- Paper §4.2 protocol-synchronization: post-GST, the rounds of any
+  two honest validators differ by at most one. -/
+  boundedRoundSpread : BoundedRoundSpread_networkTraceWithPull system time
+  /-- Paper §4.2: post-GST, an honest validator with an acceptable
+  in-pool block accepts it within `Δ`. -/
+  acceptScheduling   : AcceptScheduling system time
+  /-- Paper §4.3: post-GST, every block in the global pool is
+  eventually known to every honest validator (via push for honest
+  authors, or via the pull mechanism otherwise). -/
+  inPoolDelivery     : NetworkInPoolDeliveryWithPull system time
+
+/-- **§5 headline theorem.** Under `BelugaWithPullFairness`, the
+network-aware Beluga trace satisfies all four block-synchronizer
+properties (T1: BlockAvailability, T2: CausalAvailability, T3:
+RoundProgression, T4: RoundTermination). All four are fully derived;
+no `Eventual*` axioms remain. -/
+theorem beluga_isBlockSynchronizer
+    {system : BlockSynchroniserSystem} {time : Nat → Nat}
+    (h : BelugaWithPullFairness system time) :
+    Properties.BlockSynchronizer system (networkBelugaTraceWithPull system time) :=
+  networkTraceWithPull_isBlockSynchronizer system time
+    h.timeMonotone h.timeUnbounded h.networkDelivery h.actionScheduling
+    h.boundedRoundSpread h.acceptScheduling h.inPoolDelivery
 
 
 
