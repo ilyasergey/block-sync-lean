@@ -60,6 +60,25 @@ structure DeliveryEvent where
   deliveryTime : Nat
   deriving Repr, DecidableEq
 
+/--
+A pending pull request (paper §4.3). A pull request is in-flight from
+`requester` to `responder`, asking for the block whose digest is
+`digest`. Post-GST, the request reaches the responder by
+`deliveryTime`; the responder then schedules a `DeliveryEvent`
+carrying the requested block back to the requester.
+-/
+structure PullRequest where
+  /-- The validator issuing the pull request (wants the block). -/
+  requester : ValidatorId
+  /-- The validator the request is targeted at (expected to have the block). -/
+  responder : ValidatorId
+  /-- The digest of the block being requested. -/
+  digest : BlockDigest
+  /-- The wall-clock deadline by which the responder is guaranteed
+  to have received the request (post-GST, between honest pairs). -/
+  deliveryTime : Nat
+  deriving Repr, DecidableEq
+
 /-- A `NetworkState` is a `BelugaState` augmented with the network
 queue and the wall-clock "now". The wall clock is part of the state
 so that `networkStep` is a closed-form transition function (no
@@ -76,6 +95,14 @@ structure NetworkState where
   `deliveryTime`; the network step delivers all events with
   `deliveryTime ≤ currentTime`. -/
   inflight : List DeliveryEvent := []
+  /-- In-flight pull requests (paper §4.3). Each request is
+  delivered to the responder's `pullRequestInbox` when its
+  `deliveryTime ≤ currentTime`. -/
+  pullRequestsInflight : List PullRequest := []
+  /-- Per-validator pull-request inbox: pull requests received and
+  awaiting response. The responder action `doPullResponse` drains
+  this inbox by scheduling block_propose deliveries. -/
+  pullRequestsInbox : List (ValidatorId × List PullRequest) := []
   /-- The wall clock value at this state. Advanced by `networkStep`. -/
   currentTime : Nat := 0
   deriving Repr
@@ -97,6 +124,8 @@ def NetworkState.init (system : BlockSynchroniserSystem) : NetworkState :=
   { base := BelugaState.init system
     inboxes := system.validators.map (fun (vid, _) => (vid, []))
     inflight := []
+    pullRequestsInflight := []
+    pullRequestsInbox := system.validators.map (fun (vid, _) => (vid, []))
     currentTime := 0 }
 
 /-- Look up a validator's inbox by id. Returns `[]` if the validator
@@ -125,6 +154,26 @@ def NetworkState.hasReceivedPropose (s : NetworkState) (vid : ValidatorId)
     match op with
     | .block_propose v B' r' => v == B.author && B' == B && r' == r
     | _ => false)
+
+/-- Look up a validator's pull-request inbox by id. -/
+def NetworkState.pullInbox (s : NetworkState) (vid : ValidatorId) :
+    List PullRequest :=
+  match s.pullRequestsInbox.find? (fun (id, _) => id == vid) with
+  | some (_, reqs) => reqs
+  | none => []
+
+/-- Append a pull request to a validator's pull-request inbox. -/
+def NetworkState.appendToPullInbox (s : NetworkState) (vid : ValidatorId)
+    (req : PullRequest) : NetworkState :=
+  { s with pullRequestsInbox := s.pullRequestsInbox.map (fun (id, reqs) =>
+      if id == vid then (id, reqs ++ [req]) else (id, reqs)) }
+
+/-- Remove a pull request from a validator's pull-request inbox.
+Used when the responder has scheduled a response. -/
+def NetworkState.removeFromPullInbox (s : NetworkState) (vid : ValidatorId)
+    (req : PullRequest) : NetworkState :=
+  { s with pullRequestsInbox := s.pullRequestsInbox.map (fun (id, reqs) =>
+      if id == vid then (id, reqs.filter (· ≠ req)) else (id, reqs)) }
 
 end Network
 end Beluga
