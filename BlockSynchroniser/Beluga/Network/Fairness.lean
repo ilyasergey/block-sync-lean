@@ -3233,6 +3233,152 @@ theorem hasProposedFor_implies_propose_op (s : BelugaState)
     exact hop_mem
   | _ => simp at hop_match
 
+/-! ## Propose-op block-shape invariant -/
+
+/-- One `networkStepWithPull` preserves the propose-op block-shape
+invariant. If every existing propose op in `s.base.emittedOperations`
+has the right block shape and a witnessing block in the pool, then so
+does every propose op in the post-step state. -/
+private lemma networkStepWithPull_propose_op_invariant
+    (system : BlockSynchroniserSystem) (s : NetworkState) (newTime : Nat)
+    (h_inv : ∀ vid B r, ValidatorOperation.block_propose vid B r ∈ s.base.emittedOperations →
+      B.author = vid ∧ B.r = r ∧ B.d = digest system r vid ∧ B ∈ s.base.blocks) :
+    ∀ vid B r, ValidatorOperation.block_propose vid B r ∈
+                 (networkStepWithPull system s newTime).base.emittedOperations →
+      B.author = vid ∧ B.r = r ∧ B.d = digest system r vid ∧
+      B ∈ (networkStepWithPull system s newTime).base.blocks := by
+  intro vid B r h_op_new
+  unfold networkStepWithPull at h_op_new ⊢
+  have h_del_base :
+      ({ s with currentTime := newTime } : NetworkState).deliverPending.base = s.base := by
+    rw [NetworkState.deliverPending_preserves_base]
+  have h_pull_del_base :
+      (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending).base
+        = s.base := by
+    rw [NetworkState.deliverPullPending_preserves_base]; exact h_del_base
+  have h_pulled_base :
+      (pullStep system (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending)).base
+        = s.base := by
+    rw [pullStep_preserves_base]; exact h_pull_del_base
+  -- Helper: existing propose op invariant on the pulled state.
+  have h_inv_pulled : ∀ vid' B' r', ValidatorOperation.block_propose vid' B' r' ∈
+        (pullStep system (({ s with currentTime := newTime }
+          : NetworkState).deliverPending.deliverPullPending)).base.emittedOperations →
+      B'.author = vid' ∧ B'.r = r' ∧ B'.d = digest system r' vid' ∧
+      B' ∈ (pullStep system (({ s with currentTime := newTime }
+        : NetworkState).deliverPending.deliverPullPending)).base.blocks := by
+    intro vid' B' r' h
+    rw [h_pulled_base] at h
+    obtain ⟨ha, hr, hd, hb⟩ := h_inv vid' B' r' h
+    refine ⟨ha, hr, hd, ?_⟩
+    rw [h_pulled_base]; exact hb
+  simp only at h_op_new ⊢
+  split at h_op_new
+  case _ s' h_fs =>
+    rw [List.findSome?_eq_some_iff] at h_fs
+    obtain ⟨_, ⟨vid_a, bv_a⟩, _, _, h_act, _⟩ := h_fs
+    unfold networkTryActFor at h_act
+    simp only at h_act
+    split at h_act
+    case isTrue _ =>
+      injection h_act with h_eq
+      have h_base_eq : s'.base = doPropose system
+          (pullStep system (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending)).base
+          vid_a bv_a.currentRound := by rw [← h_eq]
+      rw [h_base_eq] at h_op_new
+      rw [h_base_eq]
+      simp only [doPropose] at h_op_new
+      simp only [List.mem_append, List.mem_singleton] at h_op_new
+      rcases h_op_new with h_old | h_new
+      · obtain ⟨ha, hr, hd, hb⟩ := h_inv_pulled vid B r h_old
+        refine ⟨ha, hr, hd, ?_⟩
+        show B ∈ (doPropose system _ vid_a bv_a.currentRound).blocks
+        exact doPropose_blocks system _ vid_a bv_a.currentRound B hb
+      · injection h_new with hv hB hr_eq
+        subst hv; subst hr_eq; subst hB
+        refine ⟨rfl, rfl, rfl, ?_⟩
+        simp [doPropose]
+    case isFalse _ =>
+      split at h_act
+      case h_1 B_acc h_findAcc =>
+        injection h_act with h_eq
+        have h_base_eq : s'.base = doAccept
+            (pullStep system (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending)).base
+            vid_a B_acc := by rw [← h_eq]
+        rw [h_base_eq] at h_op_new
+        rw [h_base_eq]
+        simp only [doAccept, updateValidator] at h_op_new
+        simp only [List.mem_append, List.mem_singleton] at h_op_new
+        rcases h_op_new with h_old | h_bad
+        · obtain ⟨ha, hr, hd, hb⟩ := h_inv_pulled vid B r h_old
+          refine ⟨ha, hr, hd, ?_⟩
+          show B ∈ (doAccept _ vid_a B_acc).blocks
+          rw [doAccept_blocks_eq]; exact hb
+        · cases h_bad
+      case h_2 _ =>
+        split at h_act
+        case h_1 B_sto h_findSto =>
+          injection h_act with h_eq
+          have h_base_eq : s'.base = doStore
+              (pullStep system (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending)).base
+              vid_a B_sto := by rw [← h_eq]
+          rw [h_base_eq] at h_op_new
+          rw [h_base_eq]
+          simp only [doStore, updateValidator] at h_op_new
+          simp only [List.mem_append, List.mem_singleton] at h_op_new
+          rcases h_op_new with h_old | h_bad
+          · obtain ⟨ha, hr, hd, hb⟩ := h_inv_pulled vid B r h_old
+            refine ⟨ha, hr, hd, ?_⟩
+            show B ∈ (doStore _ vid_a B_sto).blocks
+            rw [doStore_blocks_eq]; exact hb
+          · cases h_bad
+        case h_2 _ =>
+          split at h_act
+          case isTrue _ =>
+            injection h_act with h_eq
+            have h_base_eq : s'.base = updateValidator
+                (pullStep system (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending)).base
+                vid_a (fun bv0 => { bv0 with currentRound := bv0.currentRound + 1,
+                                              roundEntryTime :=
+                  (pullStep system (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending)).currentTime }) := by
+              rw [← h_eq]
+            rw [h_base_eq] at h_op_new
+            rw [h_base_eq]
+            rw [updateValidator_emittedOperations_eq] at h_op_new
+            rw [updateValidator_blocks_eq]
+            exact h_inv_pulled vid B r h_op_new
+          case isFalse _ => simp at h_act
+  case _ _ =>
+    exact h_inv_pulled vid B r h_op_new
+
+/-- Trace-level propose-op block-shape invariant: at every step of
+`networkTraceWithPull`, every propose op's block has the protocol-
+prescribed shape (B.author = vid, B.r = r, B.d = digest system r vid)
+and is in the block pool. -/
+theorem network_propose_op_invariant_traceWithPull
+    (system : BlockSynchroniserSystem) (time : Nat → Nat) :
+    ∀ k vid B r, ValidatorOperation.block_propose vid B r ∈
+                   (networkTraceWithPull system time k).base.emittedOperations →
+      B.author = vid ∧ B.r = r ∧ B.d = digest system r vid ∧
+      B ∈ (networkTraceWithPull system time k).base.blocks := by
+  intro k
+  induction k with
+  | zero =>
+    intro vid B r h_op
+    have h_emp : (networkTraceWithPull system time 0).base.emittedOperations = [] := by
+      show ({ NetworkState.init system with currentTime := time 0 }
+        : NetworkState).base.emittedOperations = []
+      rfl
+    rw [h_emp] at h_op
+    simp at h_op
+  | succ k ih =>
+    show ∀ vid B r, _ → _
+    have h_step : (networkTraceWithPull system time (k + 1)).base =
+        (networkStepWithPull system (networkTraceWithPull system time k)
+          (time (k + 1))).base := rfl
+    rw [h_step]
+    exact networkStepWithPull_propose_op_invariant system _ _ ih
+
 /-! ## EventualRoundAcceptance: proof skeleton
 
 Phase 10's main theorem, derived from the with-pull primitives:
