@@ -85,8 +85,22 @@ straightforward once Phases 10/11 close.
 
 ## Files touched
 
-- `BlockSynchroniser/Beluga/Network/Fairness.lean` — added 11
-  new defs/lemmas across Phases 9-10 (~150 lines).
+- `BlockSynchroniser/Beluga/Network/Fairness.lean` — added 13
+  new defs/lemmas across Phases 9-10 (~200 lines).
+
+### Phase 10 partial cont. (commit `3221c2b`)
+
+Added the missing piece for the iteration:
+
+- `networkStepWithPull_emittedOperations_monotone`: emittedOperations
+  grow across networkStepWithPull (the new pull machinery preserves
+  base, so the proof reduces to networkTryActFor's existing
+  monotonicity).
+- `network_HasAccepted_monotone_withPull`: HasAccepted is preserved
+  forward along networkTraceWithPull. Once accepted, always accepted.
+
+This is the key missing piece for accumulating acceptances at a
+single later step in EventualRoundAcceptance's proof.
 
 ## Commits
 
