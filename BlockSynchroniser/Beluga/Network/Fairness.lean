@@ -2140,6 +2140,59 @@ theorem network_all_honest_eventually_at_round
     obtain ⟨bv', h_bv', h_bv'_round⟩ := h_all_succ vid h_vid
     exact ⟨bv', h_bv', le_trans (Nat.succ_le_succ h_bv_w_round) h_bv'_round⟩
 
+/-! ## emittedOperations monotonicity for `networkTraceWithPull` -/
+
+/-- `networkTryActFor` only appends to `emittedOperations` (already proved
+in `networkTryActFor_emittedOperations_monotone`); same shape proof here
+under the trace (handled by existing helper). The new step bodies in
+`networkStepWithPull` (deliverPullPending, pullStep) preserve
+`emittedOperations` (they don't touch base — just pull queues and
+`inflight`). -/
+theorem networkStepWithPull_emittedOperations_monotone
+    (system : BlockSynchroniserSystem) (s : NetworkState) (newTime : Nat) :
+    ∀ op ∈ s.base.emittedOperations,
+      op ∈ (networkStepWithPull system s newTime).base.emittedOperations := by
+  intro op hop
+  unfold networkStepWithPull
+  have h_del_base :
+      ({ s with currentTime := newTime } : NetworkState).deliverPending.base = s.base := by
+    rw [NetworkState.deliverPending_preserves_base]
+  have h_pull_del_base :
+      (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending).base
+        = s.base := by
+    rw [NetworkState.deliverPullPending_preserves_base]; exact h_del_base
+  have h_pulled_base :
+      (pullStep system (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending)).base
+        = s.base := by
+    rw [pullStep_preserves_base]; exact h_pull_del_base
+  have h_pulled_hop : op ∈
+      (pullStep system (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending)).base.emittedOperations := by
+    rw [h_pulled_base]; exact hop
+  simp only
+  split
+  case _ s' h_fs =>
+    rw [List.findSome?_eq_some_iff] at h_fs
+    obtain ⟨_, ⟨vid_a, bv_a⟩, _, _, h_act, _⟩ := h_fs
+    exact networkTryActFor_emittedOperations_monotone system _ vid_a bv_a s' h_act op h_pulled_hop
+  case _ _ => exact h_pulled_hop
+
+/-- `HasAccepted` is monotone along `networkTraceWithPull`: once accepted,
+always accepted. -/
+theorem network_HasAccepted_monotone_withPull
+    (system : BlockSynchroniserSystem) (time : Nat → Nat)
+    (vid : ValidatorId) (d : BlockDigest)
+    (k₁ k₂ : Nat) (h_le : k₁ ≤ k₂)
+    (h_acc : HasAccepted (networkTraceWithPull system time k₁).base vid d) :
+    HasAccepted (networkTraceWithPull system time k₂).base vid d := by
+  induction h_le with
+  | refl => exact h_acc
+  | @step k_mid _ ih =>
+    show ValidatorOperation.block_accept vid d ∈
+      (networkStepWithPull system (networkTraceWithPull system time k_mid)
+        (time (k_mid + 1))).base.emittedOperations
+    exact networkStepWithPull_emittedOperations_monotone system
+      (networkTraceWithPull system time k_mid) (time (k_mid + 1)) _ ih
+
 /-! ## Pull-mechanism liveness: every honest pushed block is eventually accepted -/
 
 /-- Foundational liveness lemma: under the with-pull primitives, an
