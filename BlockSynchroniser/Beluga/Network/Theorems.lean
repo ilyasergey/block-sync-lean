@@ -668,6 +668,91 @@ theorem network_theorem4_round_termination_proved
   exact network_eventualRoundAcceptance system time h_mono h_time_unbounded
     h_delivery h_scheduling h_spread h_accept round vid h_honest
 
+/-! ## With-pull migrations of T1 (BlockAvailability) and T3 (RoundProgression) -/
+
+/-- emittedOperations monotonicity along `networkTraceWithPull`. -/
+private lemma networkBelugaTraceWithPull_emittedOperations_monotone
+    (system : BlockSynchroniserSystem) (time : Nat → Nat) (k₁ k₂ : Nat) (h_le : k₁ ≤ k₂) :
+    ∀ op ∈ (networkTraceWithPull system time k₁).base.emittedOperations,
+      op ∈ (networkTraceWithPull system time k₂).base.emittedOperations := by
+  induction h_le with
+  | refl => intro _ h; exact h
+  | step _ ih =>
+    intro op hop
+    rename_i k_mid _
+    have ih' := ih op hop
+    show op ∈ (networkStepWithPull system (networkTraceWithPull system time k_mid)
+                (time (k_mid + 1))).base.emittedOperations
+    exact networkStepWithPull_emittedOperations_monotone system _ _ op ih'
+
+/-- **Theorem 1 (paper §5), with-pull.** Mirror of T1 on
+`networkTraceWithPull`. Same proof structure, threading the with-pull
+helpers in place of their without-pull counterparts. -/
+theorem network_theorem1_block_availability_withPull
+    (system : BlockSynchroniserSystem) (time : Nat → Nat)
+    (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
+    (h_time_unbounded : ∀ T, ∃ k, time k ≥ T)
+    (h_delivery : NetworkDeliveryWithPull system time)
+    (h_scheduling : ActionSchedulingWithPull system time)
+    (h_spread : BoundedRoundSpread_networkTraceWithPull system time) :
+    Properties.BlockAvailability system (networkBelugaTraceWithPull system time) := by
+  intro k vid d h_honest h_acc
+  obtain ⟨k_post, hk_post_le, hk_post_gst⟩ : ∃ k', k ≤ k' ∧ time k' ≥ system.GST := by
+    obtain ⟨k', hk'⟩ := h_time_unbounded system.GST
+    exact ⟨max k k', le_max_left _ _, le_trans hk' (h_mono _ _ (le_max_right _ _))⟩
+  obtain ⟨bv_post, h_bv_post⟩ :=
+    network_honest_validator_persistent_traceWithPull system time vid h_honest k_post
+  set r := bv_post.currentRound with hr_def
+  have h_persistent : ∀ vid k, isHonestValidator system vid = true →
+      ∃ bv, (networkTraceWithPull system time k).base.getValidator vid = some bv :=
+    fun vid k h => network_honest_validator_persistent_traceWithPull system time vid h k
+  obtain ⟨k_target, hk_target_le, _, h_target_all⟩ :=
+    schedulerFairness_holds_withPull system time h_mono
+      h_delivery h_scheduling h_spread h_persistent
+      k_post r hk_post_gst ⟨vid, bv_post, h_honest, h_bv_post, hr_def.symm⟩
+  obtain ⟨bv_target, h_bv_target, hbv_target_rnd⟩ := h_target_all vid h_honest
+  obtain ⟨k_a, bv_a, bv_a', hk_a_le, _, h_a, h_a', h_a_eq, h_a'_eq⟩ :=
+    network_find_advance_stepWithPull system time vid r hk_target_le bv_post bv_target
+      h_bv_post h_bv_target hr_def.symm hbv_target_rnd
+  have h_nodup_a := networkTraceWithPull_validators_nodup system time k_a
+  have h_advance : bv_a'.currentRound = bv_a.currentRound + 1 := by rw [h_a_eq, h_a'_eq]
+  have h_a'_step :
+      (networkStepWithPull system (networkTraceWithPull system time k_a) (time (k_a + 1))).base.getValidator vid
+        = some bv_a' := h_a'
+  have h_stored_gate :=
+    networkStepWithPull_advance_implies_stored system (networkTraceWithPull system time k_a) (time (k_a + 1))
+      vid bv_a bv_a' h_nodup_a h_a h_a'_step h_advance
+  have h_acc_at_a : HasAccepted (networkTraceWithPull system time k_a).base vid d := by
+    have h_le : k ≤ k_a := le_trans hk_post_le hk_a_le
+    exact networkBelugaTraceWithPull_emittedOperations_monotone system time k k_a h_le _ h_acc
+  have h_acc_bool :
+      hasAcceptedDigest (networkTraceWithPull system time k_a).base vid d = true := by
+    unfold hasAcceptedDigest
+    rw [List.any_eq_true]
+    exact ⟨_, h_acc_at_a, by simp +decide⟩
+  obtain ⟨B, hB_mem, hB_d⟩ :=
+    network_acceptedBlockExists_traceWithPull system time vid k_a d h_acc_at_a
+  have h_acc_B :
+      hasAcceptedDigest (networkTraceWithPull system time k_a).base vid B.d = true := by
+    rw [hB_d]; exact h_acc_bool
+  have h_sto_B :
+      hasStoredDigest (networkTraceWithPull system time k_a).base vid B.d = true :=
+    h_stored_gate B hB_mem h_acc_B
+  unfold hasStoredDigest at h_sto_B
+  rw [List.any_eq_true] at h_sto_B
+  obtain ⟨op, hop_mem, hop_match⟩ := h_sto_B
+  refine ⟨k_a, le_trans hk_post_le hk_a_le, ?_⟩
+  cases op with
+  | block_store v B' =>
+    simp at hop_match
+    obtain ⟨h_v, h_d⟩ := hop_match
+    refine ⟨B', ?_, ?_⟩
+    · show ValidatorOperation.block_store vid B' ∈
+        (networkBelugaTraceWithPull system time k_a).emittedOperations
+      rw [h_v] at hop_mem; exact hop_mem
+    · rw [h_d]; exact hB_d
+  | _ => simp at hop_match
+
 end Network
 end Beluga
 end BlockSynchroniser
