@@ -792,6 +792,16 @@ theorem networkTrace_getValidator_of_mem
   rw [find?_of_mem_nodup _ _ _ h_mem (networkTrace_validators_nodup system time k)]
   rfl
 
+/-- With-pull analog of `networkTrace_getValidator_of_mem`. -/
+theorem networkTraceWithPull_getValidator_of_mem
+    (system : BlockSynchroniserSystem) (time : Nat → Nat) (k : Nat)
+    (vid_a : ValidatorId) (bv_a : BelugaValidator)
+    (h_mem : (vid_a, bv_a) ∈ (networkTraceWithPull system time k).base.validators) :
+    (networkTraceWithPull system time k).base.getValidator vid_a = some bv_a := by
+  unfold BelugaState.getValidator
+  rw [find?_of_mem_nodup _ _ _ h_mem (networkTraceWithPull_validators_nodup system time k)]
+  rfl
+
 /-! ## Phase E.2: round-entry monotonicity (structural)
 
 The invariant `bv.roundEntryTime ≤ s.currentTime` holds at every
@@ -1261,6 +1271,29 @@ theorem network_honest_validator_persistent_trace
   have h_pair : p = (vid, p.2) := Prod.ext h_p_eq rfl
   rw [h_pair] at h_p_in
   exact networkTrace_getValidator_of_mem system time k vid p.2 h_p_in
+
+/-- With-pull analog of `network_honest_validator_persistent_trace`. -/
+theorem network_honest_validator_persistent_traceWithPull
+    (system : BlockSynchroniserSystem) (time : Nat → Nat)
+    (vid : ValidatorId) (h_vid_honest : isHonestValidator system vid = true)
+    (k : Nat) :
+    ∃ bv, (networkTraceWithPull system time k).base.getValidator vid = some bv := by
+  have h_vid_in_system : vid ∈ system.validators.map Prod.fst := by
+    unfold isHonestValidator BlockSynchroniserSystem.isHonest at h_vid_honest
+    cases h_some : system.validators.find? (fun p => p.1 = vid) with
+    | none => rw [h_some] at h_vid_honest; exact absurd h_vid_honest (by simp)
+    | some p =>
+      have h_p_in := List.mem_of_find?_eq_some h_some
+      have h_match := List.find?_some h_some
+      have h_p1 : p.1 = vid := by simpa using h_match
+      rw [← h_p1]; exact List.mem_map.mpr ⟨p, h_p_in, rfl⟩
+  have h_vid_in_k : vid ∈ (networkTraceWithPull system time k).base.validators.map Prod.fst := by
+    rw [networkTraceWithPull_validators_ids]; exact h_vid_in_system
+  obtain ⟨p, h_p_in, h_p_eq⟩ := List.mem_map.mp h_vid_in_k
+  refine ⟨p.2, ?_⟩
+  have h_pair : p = (vid, p.2) := Prod.ext h_p_eq rfl
+  rw [h_pair] at h_p_in
+  exact networkTraceWithPull_getValidator_of_mem system time k vid p.2 h_p_in
 
 /-- Intermediate value theorem for `networkTrace` rounds: if `vid`'s
 round goes from `≤ r` to `≥ r` between steps `k₁` and `k₂`, there's
