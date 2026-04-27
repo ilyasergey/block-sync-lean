@@ -201,9 +201,34 @@ Block `d`'s corresponding block `B` is in the pool at time `t`
 `B` remains in the pool. Therefore at the advance step, `B`'s
 digest is already stored — `v_i` has emitted `block_store_i`. □
 
-(Compare the paper's current T1 proof, which routes through ImPoA
-and the f+1-references / pull argument. Both are correct; the
-above is shorter and uses only the action-priority structure.)
+**Why this sketch does not need ImPoA.** The paper's current T1
+proof routes through ImPoA: "the parent blocks are referenced by
+`f + 1` subsequent blocks → at least one honest validator stored
+them → the validator pulls them → the validator eventually
+accepts them, then stores them." This argument is needed if T1
+is read as "even when a validator is missing some parents at the
+moment of acceptance, it will eventually catch up", because then
+the catch-up step has to be justified — and ImPoA + pull is the
+mechanism §4.3 supplies for that.
+
+The sketch above does not need this catch-up step because it
+relies only on the *action-priority order* of §4 (`accept ≻
+store ≻ advance`, all above `propose`). The argument is
+structural rather than temporal: at the moment `v_i` advances —
+which it does within `Δ` of becoming able to, by per-action
+liveness — every accepted-and-still-in-pool digest is *already*
+stored, because otherwise the higher-priority `store` action
+would have fired first instead of the `advance`. No pull, no
+ImPoA, no f+1-references quorum is consulted; the conclusion is
+forced by the priority order alone.
+
+ImPoA is still required for the *runtime* of the protocol: it is
+what enables a validator to *accept* a block whose parents it has
+not directly received, by trusting the f+1-reference quorum
+instead. T1 is downstream of the accept rule and does not need to
+re-derive what made acceptance valid in the first place — once
+`v_i` has accepted `d`, the structural action-priority argument
+takes over.
 
 ### T2 (Causal Availability) — proof sketch
 
@@ -224,11 +249,26 @@ Induction on the length of the causal-ancestor chain `B → B'`.
   (accept-action liveness), `v_i` accepts `B'` within `Δ` of `t'`.
   □
 
-(Compare the paper's current T2 proof, which uses ImPoA + f+1
-references + the pull mechanism in one go. The above splits the
-argument: the structural part is just the causal-ancestor
-induction, and the protocol-level "blocks reach you eventually"
-is item 6 of the named assumption.)
+**Why this sketch does not need a separate ImPoA / f+1-references
+argument.** The paper's current T2 proof folds two things into
+one: (i) the recursion through causal ancestors, and (ii) the
+liveness step that says each ancestor will eventually be received.
+For (ii), the paper invokes ImPoA + f+1-references + the pull
+mechanism inline.
+
+In the sketch above, (i) and (ii) are separated. (i) is just the
+length-induction over `Reaches`, with no protocol content. (ii)
+is item 6 of `BelugaPartialSynchrony` — "every block in the pool
+is eventually received" — which is exactly the conclusion ImPoA +
+the pull mechanism are designed to deliver. By naming the
+conclusion as a stated assumption, the paper does not need to
+re-derive it inside T2: T2 just cites it, and the structural
+recursion is the entire content of the proof.
+
+The atomic §4.3 derivation (every f+1-referenced block is pulled
+within `2Δ` after the witness honest references it) is still
+where item 6 *comes from*; making it explicit lets §5's prose
+treat the conclusion as a black box.
 
 ### T3 (Round Progression) — proof sketch
 
