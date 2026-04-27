@@ -3379,6 +3379,71 @@ theorem network_propose_op_invariant_traceWithPull
     rw [h_step]
     exact networkStepWithPull_propose_op_invariant system _ _ ih
 
+/-! ## Single-author eventual acceptance -/
+
+/-- Under the with-pull primitives, every honest validator eventually
+accepts the round-`r` block of every honest author. The cornerstone
+of `network_eventualRoundAcceptance`: given an honest `vid_p` and
+honest receiver `vid`, by some step `k`, `vid` has the digest
+`digest system r vid_p` accepted. -/
+theorem network_each_honest_block_eventually_accepted_withPull
+    (system : BlockSynchroniserSystem) (time : Nat → Nat)
+    (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
+    (h_time_unbounded : ∀ T, ∃ k, time k ≥ T)
+    (h_delivery : NetworkDeliveryWithPull system time)
+    (h_scheduling : ActionSchedulingWithPull system time)
+    (h_spread : BoundedRoundSpread_networkTraceWithPull system time)
+    (h_accept : AcceptScheduling system time)
+    (r : Round) (vid : ValidatorId) (vid_p : ValidatorId)
+    (h_vid_honest : isHonestValidator system vid = true)
+    (h_vid_p_honest : isHonestValidator system vid_p = true) :
+    ∃ k, hasAcceptedDigest (networkTraceWithPull system time k).base vid
+           (digest system r vid_p) = true := by
+  -- Step 1: find a post-GST step.
+  obtain ⟨k_gst, h_k_gst⟩ : ∃ k, time k ≥ system.GST := h_time_unbounded system.GST
+  -- Step 2: bring all honest to currentRound ≥ r + 1.
+  obtain ⟨k₁, h_k₁_le, h_k₁_gst, h_all_at_succ⟩ :=
+    network_all_honest_eventually_at_roundWithPull system time h_mono h_delivery
+      h_scheduling h_spread vid h_vid_honest k_gst h_k_gst (r + 1)
+  obtain ⟨bv_p, h_bv_p, h_bv_p_round⟩ := h_all_at_succ vid_p h_vid_p_honest
+  -- Step 3: vid_p has proposed for r at step k₁.
+  have h_lt : r < bv_p.currentRound := h_bv_p_round
+  have h_proposed : hasProposedFor (networkTraceWithPull system time k₁).base vid_p r = true :=
+    network_proposed_for_lt_currentRoundWithPull system time k₁ vid_p bv_p h_bv_p r h_lt
+  -- Step 4: extract the block.
+  obtain ⟨B, h_op⟩ :=
+    hasProposedFor_implies_propose_op (networkTraceWithPull system time k₁).base vid_p r h_proposed
+  -- Step 5: structural facts about B.
+  obtain ⟨h_B_author, h_B_r, h_B_d, h_B_in_pool⟩ :=
+    network_propose_op_invariant_traceWithPull system time k₁ vid_p B r h_op
+  -- Step 6: deliver B's propose op to vid's inbox.
+  obtain ⟨k₂, h_k₂_le, h_k₂_time, h_in_inbox⟩ :=
+    h_delivery k₁ vid_p vid B r h_vid_p_honest h_vid_honest h_k₁_gst h_op
+  have h_k₂_gst : time k₂ ≥ system.GST :=
+    le_trans h_k₁_gst (h_mono _ _ h_k₂_le)
+  -- Step 7: B is in pool at k₂ (by blocks monotonicity).
+  have h_B_in_pool_k₂ : B ∈ (networkTraceWithPull system time k₂).base.blocks :=
+    network_blocks_monotone_traceWithPull system time k₁ k₂ h_k₂_le B h_B_in_pool
+  -- Step 8: case-split on whether vid has already accepted B.d at k₂.
+  by_cases h_already :
+      hasAcceptedDigest (networkTraceWithPull system time k₂).base vid B.d = true
+  · -- Already accepted. We have B.d = digest system r vid_p, so done.
+    refine ⟨k₂, ?_⟩; rw [h_B_d] at h_already; exact h_already
+  · -- Not accepted. Apply AcceptScheduling-derived liveness.
+    have h_not_accepted :
+        hasAcceptedDigest (networkTraceWithPull system time k₂).base vid B.d = false := by
+      cases h_b : hasAcceptedDigest (networkTraceWithPull system time k₂).base vid B.d with
+      | true => exact absurd h_b h_already
+      | false => rfl
+    -- Reconstruct propose op shape: block_propose B.author B r matches op's author = vid_p.
+    have h_in_inbox' : ValidatorOperation.block_propose B.author B r ∈
+        (networkTraceWithPull system time k₂).inbox vid := by rw [h_B_author]; exact h_in_inbox
+    obtain ⟨k₃, h_k₃_le, _, h_acc⟩ :=
+      network_eventually_accepts_received_withPull system time h_accept vid B r
+        h_vid_honest k₂ h_k₂_gst h_in_inbox' h_B_in_pool_k₂ h_not_accepted h_B_r
+    refine ⟨k₃, ?_⟩
+    rw [h_B_d] at h_acc; exact h_acc
+
 /-! ## EventualRoundAcceptance: proof skeleton
 
 Phase 10's main theorem, derived from the with-pull primitives:
