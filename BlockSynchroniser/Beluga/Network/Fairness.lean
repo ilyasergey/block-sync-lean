@@ -3233,6 +3233,130 @@ theorem hasProposedFor_implies_propose_op (s : BelugaState)
     exact hop_mem
   | _ => simp at hop_match
 
+/-! ## Blocks→propose-op bridge -/
+
+/-- Per-step bridge: if every block in the pre-state's pool has a
+corresponding propose op in `emittedOperations`, the same holds for
+the post-state's pool. -/
+private lemma networkStepWithPull_block_implies_propose_op
+    (system : BlockSynchroniserSystem) (s : NetworkState) (newTime : Nat)
+    (h_inv : ∀ B, B ∈ s.base.blocks →
+      ValidatorOperation.block_propose B.author B B.r ∈ s.base.emittedOperations) :
+    ∀ B, B ∈ (networkStepWithPull system s newTime).base.blocks →
+      ValidatorOperation.block_propose B.author B B.r ∈
+        (networkStepWithPull system s newTime).base.emittedOperations := by
+  intro B h_B_new
+  unfold networkStepWithPull at h_B_new ⊢
+  have h_pulled_base :
+      (pullStep system (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending)).base
+        = s.base := by
+    rw [pullStep_preserves_base]
+    rw [NetworkState.deliverPullPending_preserves_base]
+    rw [NetworkState.deliverPending_preserves_base]
+  have h_inv_pulled : ∀ B, B ∈
+        (pullStep system (({ s with currentTime := newTime }
+          : NetworkState).deliverPending.deliverPullPending)).base.blocks →
+      ValidatorOperation.block_propose B.author B B.r ∈
+        (pullStep system (({ s with currentTime := newTime }
+          : NetworkState).deliverPending.deliverPullPending)).base.emittedOperations := by
+    intro B' h
+    rw [h_pulled_base] at h
+    rw [h_pulled_base]; exact h_inv B' h
+  simp only at h_B_new ⊢
+  split at h_B_new
+  case _ s' h_fs =>
+    rw [List.findSome?_eq_some_iff] at h_fs
+    obtain ⟨_, ⟨vid_a, bv_a⟩, _, _, h_act, _⟩ := h_fs
+    unfold networkTryActFor at h_act
+    simp only at h_act
+    split at h_act
+    case isTrue _ =>
+      injection h_act with h_eq
+      have h_base_eq : s'.base = doPropose system
+          (pullStep system (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending)).base
+          vid_a bv_a.currentRound := by rw [← h_eq]
+      rw [h_base_eq] at h_B_new
+      rw [h_base_eq]
+      unfold doPropose at h_B_new ⊢
+      simp only [List.mem_cons] at h_B_new
+      rcases h_B_new with h_new | h_old
+      · subst h_new
+        rw [List.mem_append]
+        right
+        simp
+      · rw [List.mem_append]; left
+        exact h_inv_pulled B h_old
+    case isFalse _ =>
+      split at h_act
+      case h_1 B_acc h_findAcc =>
+        injection h_act with h_eq
+        have h_base_eq : s'.base = doAccept
+            (pullStep system (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending)).base
+            vid_a B_acc := by rw [← h_eq]
+        rw [h_base_eq] at h_B_new
+        rw [h_base_eq]
+        rw [doAccept_blocks_eq] at h_B_new
+        unfold doAccept; simp only [updateValidator]
+        rw [List.mem_append]
+        left
+        exact h_inv_pulled B h_B_new
+      case h_2 _ =>
+        split at h_act
+        case h_1 B_sto h_findSto =>
+          injection h_act with h_eq
+          have h_base_eq : s'.base = doStore
+              (pullStep system (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending)).base
+              vid_a B_sto := by rw [← h_eq]
+          rw [h_base_eq] at h_B_new
+          rw [h_base_eq]
+          rw [doStore_blocks_eq] at h_B_new
+          unfold doStore; simp only [updateValidator]
+          rw [List.mem_append]
+          left
+          exact h_inv_pulled B h_B_new
+        case h_2 _ =>
+          split at h_act
+          case isTrue _ =>
+            injection h_act with h_eq
+            have h_base_eq : s'.base = updateValidator
+                (pullStep system (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending)).base
+                vid_a (fun bv0 => { bv0 with currentRound := bv0.currentRound + 1,
+                                              roundEntryTime :=
+                  (pullStep system (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending)).currentTime }) := by
+              rw [← h_eq]
+            rw [h_base_eq] at h_B_new
+            rw [h_base_eq]
+            rw [updateValidator_blocks_eq] at h_B_new
+            rw [updateValidator_emittedOperations_eq]
+            exact h_inv_pulled B h_B_new
+          case isFalse _ => simp at h_act
+  case _ _ =>
+    exact h_inv_pulled B h_B_new
+
+/-- Trace-level: every block in the pool has a corresponding propose op. -/
+theorem network_block_in_pool_implies_propose_op_traceWithPull
+    (system : BlockSynchroniserSystem) (time : Nat → Nat) :
+    ∀ k B, B ∈ (networkTraceWithPull system time k).base.blocks →
+      ValidatorOperation.block_propose B.author B B.r ∈
+        (networkTraceWithPull system time k).base.emittedOperations := by
+  intro k
+  induction k with
+  | zero =>
+    intro B h_B
+    have h_emp : (networkTraceWithPull system time 0).base.blocks = [] := by
+      show ({ NetworkState.init system with currentTime := time 0 }
+        : NetworkState).base.blocks = []
+      rfl
+    rw [h_emp] at h_B
+    simp at h_B
+  | succ k ih =>
+    show ∀ B, _ → _
+    have h_step : (networkTraceWithPull system time (k + 1)).base =
+        (networkStepWithPull system (networkTraceWithPull system time k)
+          (time (k + 1))).base := rfl
+    rw [h_step]
+    exact networkStepWithPull_block_implies_propose_op system _ _ ih
+
 /-! ## Propose-op block-shape invariant -/
 
 /-- One `networkStepWithPull` preserves the propose-op block-shape
