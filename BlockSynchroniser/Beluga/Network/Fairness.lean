@@ -2810,6 +2810,298 @@ private lemma networkStepWithPull_advance_implies_gate
         system bv = true :=
   (networkStepWithPull_advance_inversion system s newTime vid bv bv' h_nodup h h' h_advance).2.2
 
+/-! ## Trace-level helpers for `networkTraceWithPull` -/
+
+/-- Intermediate value theorem for `networkTraceWithPull` rounds. -/
+theorem network_round_intermediate_valueWithPull
+    (system : BlockSynchroniserSystem) (time : Nat → Nat) (vid : ValidatorId)
+    (k₁ k₂ : Nat) (r : Nat)
+    (hle : k₁ ≤ k₂)
+    (bv₁ bv₂ : BelugaValidator)
+    (h₁ : (networkTraceWithPull system time k₁).base.getValidator vid = some bv₁)
+    (h₂ : (networkTraceWithPull system time k₂).base.getValidator vid = some bv₂)
+    (hr₁ : bv₁.currentRound ≤ r)
+    (hr₂ : r ≤ bv₂.currentRound) :
+    ∃ k, k₁ ≤ k ∧ k ≤ k₂ ∧
+      ∃ bv, (networkTraceWithPull system time k).base.getValidator vid = some bv ∧
+            bv.currentRound = r := by
+  induction hle generalizing bv₁ bv₂ with
+  | refl =>
+    have h_eq : bv₁ = bv₂ := by rw [h₁] at h₂; injection h₂
+    rw [h_eq] at hr₁
+    refine ⟨k₁, le_rfl, le_rfl, bv₂, h₂, ?_⟩
+    exact Nat.le_antisymm hr₁ hr₂
+  | @step k₂ hk ih =>
+    have h_step_eq : (networkTraceWithPull system time (k₂ + 1)).base =
+        (networkStepWithPull system (networkTraceWithPull system time k₂)
+          (time (k₂ + 1))).base := rfl
+    have h_succ_ids := networkTraceWithPull_validators_ids system time (k₂ + 1)
+    have h_mid_ids := networkTraceWithPull_validators_ids system time k₂
+    have h_vid_in_succ : vid ∈
+        (networkTraceWithPull system time (k₂ + 1)).base.validators.map Prod.fst := by
+      unfold BelugaState.getValidator at h₂
+      rw [Option.map_eq_some_iff] at h₂
+      obtain ⟨p, h_p_mem, _⟩ := h₂
+      have h_p_in := List.mem_of_find?_eq_some h_p_mem
+      have h_match := List.find?_some h_p_mem
+      have h_p1 : p.1 = vid := by
+        match p, h_match with
+        | (_, _), h => simpa using h
+      rw [← h_p1]; exact List.mem_map.mpr ⟨p, h_p_in, rfl⟩
+    have h_vid_in_mid : vid ∈ (networkTraceWithPull system time k₂).base.validators.map Prod.fst := by
+      rw [h_mid_ids, ← h_succ_ids]; exact h_vid_in_succ
+    obtain ⟨bv_prev, hbv_prev⟩ : ∃ bv_prev,
+        (networkTraceWithPull system time k₂).base.getValidator vid = some bv_prev := by
+      obtain ⟨p, h_p_mem, h_p_eq⟩ := List.mem_map.mp h_vid_in_mid
+      refine ⟨p.2, ?_⟩
+      have h_pair : p = (vid, p.2) := Prod.ext h_p_eq rfl
+      rw [h_pair] at h_p_mem
+      exact networkTraceWithPull_getValidator_of_mem system time k₂ vid p.2 h_p_mem
+    have h_step_bound : bv₂.currentRound ≤ bv_prev.currentRound + 1 := by
+      apply networkStepWithPull_round_at_most_one system (networkTraceWithPull system time k₂)
+        (time (k₂ + 1)) (networkTraceWithPull_validators_nodup system time k₂) vid bv_prev bv₂
+        hbv_prev (h_step_eq ▸ h₂)
+    by_cases h_prev_ge : bv_prev.currentRound ≥ r
+    · obtain ⟨k, hk_lo, hk_hi, bv_int, h_int, h_int_round⟩ := ih bv₁ bv_prev h₁ hbv_prev hr₁ h_prev_ge
+      exact ⟨k, hk_lo, le_trans hk_hi (Nat.le_succ _), bv_int, h_int, h_int_round⟩
+    · have h_lt : bv_prev.currentRound < r := Nat.not_le.mp h_prev_ge
+      have h_le_succ : r ≤ bv_prev.currentRound + 1 := le_trans hr₂ h_step_bound
+      have h_eq_r : bv₂.currentRound = r := by
+        have : bv_prev.currentRound + 1 ≤ r := h_lt
+        have h_upper : bv₂.currentRound ≤ r := le_trans h_step_bound this
+        exact Nat.le_antisymm h_upper hr₂
+      refine ⟨k₂ + 1, Nat.le_succ_of_le hk, le_rfl, bv₂, h₂, h_eq_r⟩
+
+/-- Trace invariant: at every step of `networkTraceWithPull`, every
+validator at round R has proposed for every r' < R. -/
+theorem network_proposed_for_lt_currentRoundWithPull
+    (system : BlockSynchroniserSystem) (time : Nat → Nat) :
+    ∀ k vid bv, (networkTraceWithPull system time k).base.getValidator vid = some bv →
+      ∀ r' < bv.currentRound, hasProposedFor (networkTraceWithPull system time k).base vid r' = true := by
+  intro k
+  induction k with
+  | zero =>
+    intro vid bv h_get r' h_lt
+    have h_get' : (BelugaState.init system).getValidator vid = some bv := h_get
+    have h_round : bv.currentRound = 0 :=
+      network_getValidator_init_round_zero system vid bv h_get'
+    rw [h_round] at h_lt
+    exact absurd h_lt (Nat.not_lt_zero _)
+  | succ k ih =>
+    intro vid bv h_get r' h_lt
+    have h_present_k : ∃ bv_prev, (networkTraceWithPull system time k).base.getValidator vid = some bv_prev := by
+      by_contra h_none
+      push_neg at h_none
+      have h_get_none : (networkTraceWithPull system time k).base.getValidator vid = none :=
+        Option.eq_none_iff_forall_ne_some.mpr h_none
+      have h_succ_none : (networkTraceWithPull system time (k+1)).base.getValidator vid = none := by
+        show (networkStepWithPull system (networkTraceWithPull system time k) (time (k+1))).base.getValidator vid = none
+        exact networkStepWithPull_preserves_none system _ _ vid h_get_none
+      rw [h_succ_none] at h_get
+      contradiction
+    obtain ⟨bv_prev, h_prev⟩ := h_present_k
+    have h_nodup_k := networkTraceWithPull_validators_nodup system time k
+    have h_get_step : (networkStepWithPull system (networkTraceWithPull system time k)
+        (time (k+1))).base.getValidator vid = some bv := h_get
+    have h_mono : bv_prev.currentRound ≤ bv.currentRound :=
+      networkStepWithPull_round_monotone system _ _ h_nodup_k vid bv_prev bv h_prev h_get_step
+    have h_at_most_one : bv.currentRound ≤ bv_prev.currentRound + 1 :=
+      networkStepWithPull_round_at_most_one system _ _ h_nodup_k vid bv_prev bv h_prev h_get_step
+    by_cases h_eq : bv.currentRound = bv_prev.currentRound
+    · rw [h_eq] at h_lt
+      have h_prop_k := ih vid bv_prev h_prev r' h_lt
+      exact network_hasProposedFor_monotoneWithPull system time vid r' k (k+1) (Nat.le_succ k) h_prop_k
+    · have h_advance : bv.currentRound = bv_prev.currentRound + 1 := by
+        rcases Nat.lt_or_ge bv_prev.currentRound bv.currentRound with h_lt | h_ge
+        · have : bv.currentRound ≤ bv_prev.currentRound + 1 := h_at_most_one
+          have : bv_prev.currentRound + 1 ≤ bv.currentRound := h_lt
+          exact Nat.le_antisymm ‹bv.currentRound ≤ bv_prev.currentRound + 1› ‹_›
+        · exact absurd (Nat.le_antisymm h_ge h_mono) h_eq
+      by_cases h_lt' : r' < bv_prev.currentRound
+      · have h_prop_k := ih vid bv_prev h_prev r' h_lt'
+        exact network_hasProposedFor_monotoneWithPull system time vid r' k (k+1) (Nat.le_succ k) h_prop_k
+      · have h_eq_r : r' = bv_prev.currentRound := by
+          push_neg at h_lt'
+          rw [h_advance] at h_lt
+          have : r' ≤ bv_prev.currentRound := Nat.le_of_lt_succ h_lt
+          exact Nat.le_antisymm this h_lt'
+        rw [h_eq_r]
+        have h_prop_k :=
+          networkStepWithPull_advance_implies_hasProposedFor system _ _ vid bv_prev bv
+            h_nodup_k h_prev h_get_step h_advance
+        exact network_hasProposedFor_monotoneWithPull system time vid bv_prev.currentRound k (k+1)
+          (Nat.le_succ k) h_prop_k
+
+/-- Find the step where vid's round transitioned from r to r+1 along
+`networkTraceWithPull`. -/
+theorem network_find_advance_stepWithPull
+    (system : BlockSynchroniserSystem) (time : Nat → Nat) (vid : ValidatorId) (r : Round) :
+    ∀ {k₀ k_target}, k₀ ≤ k_target →
+    ∀ bv₀ bv_t,
+    (networkTraceWithPull system time k₀).base.getValidator vid = some bv₀ →
+    (networkTraceWithPull system time k_target).base.getValidator vid = some bv_t →
+    bv₀.currentRound = r →
+    bv_t.currentRound ≥ r + 1 →
+    ∃ k_a bv bv',
+      k₀ ≤ k_a ∧ k_a < k_target ∧
+      (networkTraceWithPull system time k_a).base.getValidator vid = some bv ∧
+      (networkTraceWithPull system time (k_a + 1)).base.getValidator vid = some bv' ∧
+      bv.currentRound = r ∧ bv'.currentRound = r + 1 := by
+  intros k₀ k_target hle
+  induction hle with
+  | refl =>
+    intros bv₀ bv_t h₀ h_t hr₀ hr_t
+    rw [h₀] at h_t
+    have h_eq : bv₀ = bv_t := Option.some.inj h_t
+    exfalso
+    rw [h_eq] at hr₀
+    rw [hr₀] at hr_t
+    exact absurd hr_t (Nat.lt_irrefl _ ∘ Nat.lt_of_succ_le)
+  | @step k_target' h ih =>
+    intros bv₀ bv_t h₀ h_t hr₀ hr_t
+    have h_persistent_prev :
+        ∃ bv_prev, (networkTraceWithPull system time k_target').base.getValidator vid = some bv_prev := by
+      by_contra h_none
+      push_neg at h_none
+      have h_get_none : (networkTraceWithPull system time k_target').base.getValidator vid = none :=
+        Option.eq_none_iff_forall_ne_some.mpr h_none
+      have h_succ_none :
+          (networkTraceWithPull system time (k_target' + 1)).base.getValidator vid = none := by
+        show (networkStepWithPull system (networkTraceWithPull system time k_target')
+                (time (k_target' + 1))).base.getValidator vid = none
+        exact networkStepWithPull_preserves_none system _ _ vid h_get_none
+      rw [h_succ_none] at h_t; contradiction
+    obtain ⟨bv_prev, h_prev⟩ := h_persistent_prev
+    have h_step_at_most : bv_t.currentRound ≤ bv_prev.currentRound + 1 := by
+      apply networkStepWithPull_round_at_most_one system (networkTraceWithPull system time k_target')
+        (time (k_target' + 1)) (networkTraceWithPull_validators_nodup system time k_target')
+        vid bv_prev bv_t h_prev
+      show (networkStepWithPull system (networkTraceWithPull system time k_target')
+              (time (k_target' + 1))).base.getValidator vid = some bv_t
+      exact h_t
+    by_cases h_case : bv_prev.currentRound ≥ r + 1
+    · obtain ⟨k_a, bv_a, bv_a', h_le, h_lt, h_a, h_a', h_eq_r, h_eq_r1⟩ :=
+        ih bv₀ bv_prev h₀ h_prev hr₀ h_case
+      exact ⟨k_a, bv_a, bv_a', h_le, Nat.lt_succ_of_lt h_lt, h_a, h_a', h_eq_r, h_eq_r1⟩
+    · push_neg at h_case
+      have hbp_le_r : bv_prev.currentRound ≤ r := Nat.le_of_lt_succ h_case
+      have hbp_ge_r : bv_prev.currentRound ≥ r := by
+        have : r + 1 ≤ bv_prev.currentRound + 1 := le_trans hr_t h_step_at_most
+        exact Nat.le_of_succ_le_succ this
+      have hbp_eq : bv_prev.currentRound = r := le_antisymm hbp_le_r hbp_ge_r
+      have hbt_eq : bv_t.currentRound = r + 1 := by
+        have h1 : bv_t.currentRound ≤ r + 1 := by rw [← hbp_eq]; exact h_step_at_most
+        exact le_antisymm h1 hr_t
+      exact ⟨k_target', bv_prev, bv_t, h, Nat.lt_succ_self _, h_prev, h_t, hbp_eq, hbt_eq⟩
+
+/-- The accepted-block-exists invariant on `networkTraceWithPull`. -/
+theorem network_acceptedBlockExists_traceWithPull
+    (system : BlockSynchroniserSystem) (time : Nat → Nat)
+    (vid : ValidatorId) (k : Nat) :
+    ∀ d, HasAccepted (networkTraceWithPull system time k).base vid d →
+      ∃ B ∈ (networkTraceWithPull system time k).base.blocks, B.d = d := by
+  induction k with
+  | zero =>
+    intro d h_acc
+    exfalso
+    have h_emp : (networkTraceWithPull system time 0).base.emittedOperations = [] := by
+      show ({ NetworkState.init system with currentTime := time 0 }
+        : NetworkState).base.emittedOperations = []
+      rfl
+    unfold HasAccepted Emitted at h_acc
+    change ValidatorOperation.block_accept vid d ∈
+      (networkTraceWithPull system time 0).base.emittedOperations at h_acc
+    rw [h_emp] at h_acc
+    simp at h_acc
+  | succ k ih =>
+    intro d h_acc
+    have h_step_eq : (networkTraceWithPull system time (k + 1)).base =
+        (networkStepWithPull system (networkTraceWithPull system time k) (time (k + 1))).base := rfl
+    rw [h_step_eq] at h_acc
+    show ∃ B ∈ (networkStepWithPull system (networkTraceWithPull system time k)
+      (time (k + 1))).base.blocks, B.d = d
+    set s_pre : NetworkState := networkTraceWithPull system time k with h_s_pre
+    have h_del_base :
+        ({ s_pre with currentTime := time (k + 1) } : NetworkState).deliverPending.base = s_pre.base := by
+      rw [NetworkState.deliverPending_preserves_base]
+    have h_pull_del_base :
+        (({ s_pre with currentTime := time (k + 1) } : NetworkState).deliverPending.deliverPullPending).base
+          = s_pre.base := by
+      rw [NetworkState.deliverPullPending_preserves_base]; exact h_del_base
+    have h_pulled_base :
+        (pullStep system (({ s_pre with currentTime := time (k + 1) } : NetworkState).deliverPending.deliverPullPending)).base
+          = s_pre.base := by
+      rw [pullStep_preserves_base]; exact h_pull_del_base
+    unfold networkStepWithPull at h_acc ⊢
+    simp only at h_acc ⊢
+    split
+    case _ s_post h_fs =>
+      simp only [h_fs] at h_acc
+      rw [List.findSome?_eq_some_iff] at h_fs
+      obtain ⟨_, ⟨vid_a, bv_a⟩, _, _, h_act, _⟩ := h_fs
+      unfold networkTryActFor at h_act
+      simp only at h_act
+      split at h_act
+      case isTrue _ =>
+        injection h_act with h_eq
+        subst h_eq
+        rw [network_doPropose_HasAccepted_iff] at h_acc
+        rw [h_pulled_base] at h_acc
+        obtain ⟨B', hB'_mem, hB'_d⟩ := ih d h_acc
+        refine ⟨B', ?_, hB'_d⟩
+        show B' ∈ (doPropose system (pullStep system _).base vid_a bv_a.currentRound).blocks
+        rw [h_pulled_base]
+        exact doPropose_blocks system _ vid_a bv_a.currentRound B' hB'_mem
+      case isFalse _ =>
+        split at h_act
+        case h_1 B_acc h_findAcc =>
+          injection h_act with h_eq
+          subst h_eq
+          rw [network_doAccept_HasAccepted_iff] at h_acc
+          rcases h_acc with h_old | ⟨_, h_d⟩
+          · rw [h_pulled_base] at h_old
+            obtain ⟨B', hB'_mem, hB'_d⟩ := ih d h_old
+            refine ⟨B', ?_, hB'_d⟩
+            show B' ∈ (doAccept (pullStep system _).base vid_a B_acc).blocks
+            rw [doAccept_blocks_eq, h_pulled_base]; exact hB'_mem
+          · have hB_mem : B_acc ∈
+                (pullStep system (({ s_pre with currentTime := time (k + 1) }
+                  : NetworkState).deliverPending.deliverPullPending)).base.blocks :=
+              List.mem_of_find?_eq_some h_findAcc
+            refine ⟨B_acc, ?_, h_d.symm⟩
+            show B_acc ∈ (doAccept (pullStep system _).base vid_a B_acc).blocks
+            rw [doAccept_blocks_eq]; exact hB_mem
+        case h_2 _ =>
+          split at h_act
+          case h_1 B_sto h_findSto =>
+            injection h_act with h_eq
+            subst h_eq
+            rw [network_doStore_HasAccepted_iff] at h_acc
+            rw [h_pulled_base] at h_acc
+            obtain ⟨B', hB'_mem, hB'_d⟩ := ih d h_acc
+            refine ⟨B', ?_, hB'_d⟩
+            show B' ∈ (doStore (pullStep system _).base vid_a B_sto).blocks
+            rw [doStore_blocks_eq, h_pulled_base]; exact hB'_mem
+          case h_2 _ =>
+            split at h_act
+            case isTrue _ =>
+              injection h_act with h_eq
+              subst h_eq
+              rw [updateValidator_HasAccepted_iff] at h_acc
+              rw [h_pulled_base] at h_acc
+              obtain ⟨B', hB'_mem, hB'_d⟩ := ih d h_acc
+              refine ⟨B', ?_, hB'_d⟩
+              show B' ∈ (updateValidator (pullStep system _).base vid_a _).blocks
+              rw [updateValidator_blocks_eq, h_pulled_base]; exact hB'_mem
+            case isFalse _ => simp at h_act
+    case _ h_fs =>
+      simp only [h_fs] at h_acc
+      rw [h_pulled_base] at h_acc
+      obtain ⟨B', hB'_mem, hB'_d⟩ := ih d h_acc
+      refine ⟨B', ?_, hB'_d⟩
+      show B' ∈ (pullStep system _).base.blocks
+      rw [h_pulled_base]; exact hB'_mem
+
 /-! ## Pull-mechanism liveness: every honest pushed block is eventually accepted -/
 
 /-- Foundational liveness lemma: under the with-pull primitives, an
