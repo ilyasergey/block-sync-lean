@@ -35,9 +35,7 @@ of `schedulerFairness_holds`. -/
 theorem network_lemma1_honest_round_entry
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
     (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
-    (h_delivery : NetworkDelivery system time)
-    (h_scheduling : ActionScheduling system time)
-    (h_spread : BoundedRoundSpread_networkTrace system time) :
+    (h_prim : PartiallySynchronousFairness system time) :
     ∀ vid_ref r k₀, isHonestValidator system vid_ref = true →
       time k₀ ≥ system.GST →
       (∃ bv_ref, (networkTrace system time k₀).base.getValidator vid_ref = some bv_ref ∧
@@ -50,7 +48,8 @@ theorem network_lemma1_honest_round_entry
   have h_persistent : ∀ vid k, isHonestValidator system vid = true →
       ∃ bv, (networkTrace system time k).base.getValidator vid = some bv :=
     fun vid k h => network_honest_validator_persistent_trace system time vid h k
-  exact schedulerFairness_holds system time h_mono h_delivery h_scheduling h_spread
+  exact schedulerFairness_holds system time h_mono
+    h_prim.networkDelivery h_prim.actionScheduling h_prim.boundedRoundSpread
     h_persistent
     k₀ r h_post_gst ⟨vid_ref, bv_ref, h_honest, h_bv_ref, h_round⟩
 
@@ -64,9 +63,7 @@ given an honest validator `vid` at round `r`, by some step within
 theorem network_lemma2_round_latency
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
     (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
-    (h_delivery : NetworkDelivery system time)
-    (h_scheduling : ActionScheduling system time)
-    (h_spread : BoundedRoundSpread_networkTrace system time) :
+    (h_prim : PartiallySynchronousFairness system time) :
     ∀ vid r k,
       isHonestValidator system vid = true →
       time k ≥ system.GST →
@@ -78,7 +75,7 @@ theorem network_lemma2_round_latency
   intro vid r k h_honest h_post_gst ⟨bv, h_bv, h_round⟩
   -- Apply network_lemma1_honest_round_entry to get all honest at ≥ r + 1.
   obtain ⟨k', hk'le, hk'time, hk'all⟩ :=
-    network_lemma1_honest_round_entry system time h_mono h_delivery h_scheduling h_spread
+    network_lemma1_honest_round_entry system time h_mono h_prim
       vid r k h_honest h_post_gst ⟨bv, h_bv, h_round⟩
   obtain ⟨bv', hbv', hbv'rnd⟩ := hk'all vid h_honest
   -- Apply intermediate value to get an exact-r+1 step in [k, k'].
@@ -119,9 +116,7 @@ theorem network_theorem1_block_availability
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
     (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
     (h_time_unbounded : ∀ T, ∃ k, time k ≥ T)
-    (h_delivery : NetworkDelivery system time)
-    (h_scheduling : ActionScheduling system time)
-    (h_spread : BoundedRoundSpread_networkTrace system time) :
+    (h_prim : PartiallySynchronousFairness system time) :
     Properties.BlockAvailability system (networkBelugaTrace system time) := by
   intro k vid d h_honest h_acc
   -- Step 1: Find a post-GST step.
@@ -137,7 +132,8 @@ theorem network_theorem1_block_availability
       ∃ bv, (networkTrace system time k).base.getValidator vid = some bv :=
     fun vid k h => network_honest_validator_persistent_trace system time vid h k
   obtain ⟨k_target, hk_target_le, _, h_target_all⟩ :=
-    schedulerFairness_holds system time h_mono h_delivery h_scheduling h_spread h_persistent
+    schedulerFairness_holds system time h_mono
+      h_prim.networkDelivery h_prim.actionScheduling h_prim.boundedRoundSpread h_persistent
       k_post r hk_post_gst ⟨vid, bv_post, h_honest, h_bv_post, hr_def.symm⟩
   obtain ⟨bv_target, h_bv_target, hbv_target_rnd⟩ := h_target_all vid h_honest
   -- Step 4: Find the step where vid's round transitioned r → r + 1.
@@ -233,9 +229,7 @@ theorem network_theorem3_round_progression
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
     (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
     (h_time_unbounded : ∀ T, ∃ k, time k ≥ T)
-    (h_delivery : NetworkDelivery system time)
-    (h_scheduling : ActionScheduling system time)
-    (h_spread : BoundedRoundSpread_networkTrace system time) :
+    (h_prim : PartiallySynchronousFairness system time) :
     Properties.RoundProgression system (networkBelugaTrace system time) := by
   intro round
   -- Honest pair list non-empty (system has honestBound ≥ 2f+1 ≥ 1).
@@ -263,7 +257,8 @@ theorem network_theorem3_round_progression
   obtain ⟨k₀, h_k₀_gst⟩ := h_time_unbounded system.GST
   -- Apply iterated fairness to get all honest at round ≥ round + 1.
   obtain ⟨k, _, _, h_all⟩ :=
-    network_all_honest_eventually_at_round system time h_mono h_delivery h_scheduling h_spread
+    network_all_honest_eventually_at_round system time h_mono
+      h_prim.networkDelivery h_prim.actionScheduling h_prim.boundedRoundSpread
       vid_w h_w_honest k₀ h_k₀_gst (round + 1)
   refine ⟨k, ?_⟩
   set honest_vids := honest_pairs.map Prod.fst with h_hv_def
@@ -423,17 +418,13 @@ theorem networkTrace_isBlockSynchronizer
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
     (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
     (h_time_unbounded : ∀ T, ∃ k, time k ≥ T)
-    (h_delivery : NetworkDelivery system time)
-    (h_scheduling : ActionScheduling system time)
-    (h_spread : BoundedRoundSpread_networkTrace system time)
+    (h_prim : PartiallySynchronousFairness system time)
     (h_eventual_causal : EventualCausalAcceptance system (networkBelugaTrace system time))
     (h_eventual_round : EventualRoundAcceptance system (networkBelugaTrace system time)) :
     Properties.BlockSynchronizer system (networkBelugaTrace system time) :=
-  ⟨network_theorem3_round_progression system time h_mono h_time_unbounded
-     h_delivery h_scheduling h_spread,
+  ⟨network_theorem3_round_progression system time h_mono h_time_unbounded h_prim,
    network_theorem4_round_termination system time h_eventual_round,
-   network_theorem1_block_availability system time h_mono h_time_unbounded
-     h_delivery h_scheduling h_spread,
+   network_theorem1_block_availability system time h_mono h_time_unbounded h_prim,
    network_theorem2_causal_availability system time h_eventual_causal⟩
 
 end Network

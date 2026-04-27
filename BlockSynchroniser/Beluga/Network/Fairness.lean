@@ -2015,6 +2015,46 @@ def BoundedRoundSpread_networkTrace
     (networkTrace system time k).base.getValidator vid₂ = some bv₂ →
     bv₁.currentRound ≤ bv₂.currentRound + 1
 
+/-! ## `PartiallySynchronousFairness` — bundled paper primitives
+
+Bundle of all six paper-named primitives needed by the §5 theorems
+on `networkTrace` and the T2/T4 `Eventual*` derivations on
+`networkTraceWithPull`. Symmetric to the existing conclusion-side
+`BelugaPostGSTLiveness` bundle; carries one named hypothesis per
+paper-stated assumption.
+
+| Field | Paper ref | Trace |
+|---|---|---|
+| `networkDelivery` | §2 `Δ`-delivery | `networkTrace` |
+| `actionScheduling` | §4.2 round-advance | `networkTrace` |
+| `boundedRoundSpread` | §4.2 + F-1b gap-1 | `networkTrace` |
+| `acceptScheduling` | §4.2 accept-action | `networkTraceWithPull` |
+| `pullRequestDelivery` | §4.3 pull-channel `Δ`-delivery | `networkTraceWithPull` |
+| `pullResponseScheduling` | §4.3 pull-response action | `networkTraceWithPull` |
+
+Top-level §5 wrappers consume this single hypothesis instead of
+threading 5–6 individual primitives. Internal proofs destructure
+to access individual fields. -/
+structure PartiallySynchronousFairness
+    (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop where
+  /-- Paper §2 `Δ`-bounded honest-honest block_propose delivery. -/
+  networkDelivery        : NetworkDelivery system time
+  /-- Paper §4.2 per-validator round-advance liveness. -/
+  actionScheduling       : ActionScheduling system time
+  /-- F-1b gap-1 invariant on the round spread between honest
+  validators (paper §4.2 protocol synchronization). -/
+  boundedRoundSpread     : BoundedRoundSpread_networkTrace system time
+  /-- Paper §4.2 per-action liveness for the accept action: when an
+  honest validator has an acceptable in-pool block (canAcceptBlock
+  = true), `doAccept` fires within `Δ` post-GST. -/
+  acceptScheduling       : AcceptScheduling system time
+  /-- Paper §4.3 pull-channel `Δ`-delivery: honest pull requests
+  reach honest responders' `pullRequestsInbox` within `Δ`. -/
+  pullRequestDelivery    : PullRequestDelivery system time
+  /-- Paper §4.3 pull-response action liveness: honest responder
+  with non-empty `pullInbox` drains the first request within `Δ`. -/
+  pullResponseScheduling : PullResponseScheduling system time
+
 /-- **The headline theorem.** Under the paper §2 + §4.2 + §4.3
 mechanisms (NetworkDelivery, ActionScheduling, BoundedRoundSpread),
 `networkTrace` satisfies paper L1's scheduler-fairness property:
