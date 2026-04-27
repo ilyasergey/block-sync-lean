@@ -492,6 +492,59 @@ private lemma authorOfDigest_of_propose
     | block_accept _ _ => exact absurd h_op_found_pred (by simp)
     | block_store _ _ => exact absurd h_op_found_pred (by simp)
 
+/-! ## Honest-list bridging helpers -/
+
+/-- The list `(system.validators.filter (·.2)).map Prod.fst` has
+nodup IDs. -/
+private lemma honestList_nodup (system : BlockSynchroniserSystem) :
+    ((system.validators.filter (fun p => p.2 = true)).map Prod.fst).Nodup := by
+  have h_v_nodup : (system.validators.map Prod.fst).Nodup := system.validatorsNodup
+  have h_sub : (system.validators.filter (fun p => p.2 = true)).map Prod.fst |>.Sublist
+        (system.validators.map Prod.fst) := by
+    exact (List.filter_sublist system.validators).map Prod.fst
+  exact h_v_nodup.sublist h_sub
+
+/-- Generic helper: in a list with nodup IDs, `find?` on an ID
+returns the matching pair. -/
+private lemma find_of_mem_nodup_id_eq {α β : Type*} [DecidableEq α]
+    (l : List (α × β)) (a : α) (b : β)
+    (h_mem : (a, b) ∈ l)
+    (h_nodup : (l.map Prod.fst).Nodup) :
+    l.find? (fun q => q.1 = a) = some (a, b) := by
+  induction l with
+  | nil => simp at h_mem
+  | cons hd tl ih =>
+    rw [List.find?_cons]
+    rw [List.mem_cons] at h_mem
+    rw [List.map_cons] at h_nodup
+    rcases h_mem with h_eq | h_in
+    · subst h_eq; simp
+    · by_cases h_match : hd.1 = a
+      · have h_a_in_tl : a ∈ tl.map Prod.fst :=
+          List.mem_map.mpr ⟨(a, b), h_in, rfl⟩
+        rw [← h_match] at h_a_in_tl
+        exact absurd h_a_in_tl h_nodup.notMem
+      · simp [h_match]
+        exact ih h_in h_nodup.of_cons
+
+/-- Each member of `honestList` is honest. -/
+private lemma honestList_all_honest (system : BlockSynchroniserSystem)
+    (p : ValidatorId)
+    (hp : p ∈ (system.validators.filter (fun q => q.2 = true)).map Prod.fst) :
+    isHonestValidator system p = true := by
+  rw [List.mem_map] at hp
+  obtain ⟨q, h_q_in, h_q_eq⟩ := hp
+  rw [List.mem_filter] at h_q_in
+  obtain ⟨h_q_in_v, h_q_honest⟩ := h_q_in
+  have h_q_pair : q = (p, true) := by
+    cases q with
+    | mk q1 q2 =>
+      simp at h_q_eq h_q_honest
+      subst h_q_eq; subst h_q_honest; rfl
+  rw [h_q_pair] at h_q_in_v
+  unfold isHonestValidator BlockSynchroniserSystem.isHonest
+  rw [find_of_mem_nodup_id_eq system.validators p true h_q_in_v system.validatorsNodup]
+
 end Network
 end Beluga
 end BlockSynchroniser
