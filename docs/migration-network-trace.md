@@ -116,10 +116,10 @@ or unify under the with-pull version. Update `formalization.md`
 and `mechanization-findings.md` (specifically F-1c) to reflect the
 fully-derived T2/T4. Update changelogs.
 
-### Phase 14 (FUTURE) — Bundle primitives
+### Phase 14 — Bundle primitives (DONE early, commit `143dce5`)
 
-After Phases 10–13 close, bundle the six paper-named primitives
-into a single record, mirroring the existing conclusion-side
+The six paper-named primitives are now bundled into a single
+record, mirroring the existing conclusion-side
 `BelugaPostGSTLiveness` bundle on the primitive side:
 
 ```lean
@@ -143,15 +143,25 @@ paper-stated post-GST primitives — the single name communicates
 "all assumptions about partial synchrony + honest validators
 acting promptly".
 
-**Why future, not now**: the Phase 10/11 proofs need to access
-individual primitives in their bodies. Bundling now would just
-force unbundling inside each proof. After those proofs settle and
-we know which primitives each one actually accesses, the bundle's
-shape can be informed by usage rather than guessed up-front.
+**Refactored consumers**: `Beluga/Network/Theorems.lean`'s §5
+wrappers (`network_lemma1_honest_round_entry`,
+`network_lemma2_round_latency`,
+`network_theorem1_block_availability`,
+`network_theorem3_round_progression`,
+`networkTrace_isBlockSynchronizer`) now take this single
+`h_prim : PartiallySynchronousFairness` hypothesis instead of
+threading 3 individual primitives. Internal proof bodies
+destructure `h_prim.networkDelivery`, `h_prim.actionScheduling`,
+`h_prim.boundedRoundSpread` etc. as needed. The `network_theorem4`
+and `network_theorem2` still take their individual `Eventual*`
+hypotheses pending Phases 10–11 (which will replace them with
+proofs that consume `h_prim.acceptScheduling`,
+`h_prim.pullRequestDelivery`, `h_prim.pullResponseScheduling`).
 
-**Companion projections** (also Phase 14): per-field projection
-lemmas like `PartiallySynchronousFairness.implies_NetworkDelivery`
-to let callers extract individual fields cleanly.
+**Pulled forward from post-10/11 to before-10/11** on user
+request: simplifies the calling convention before the remaining
+proofs land. The Phase 10/11 proofs will destructure `h_prim`
+the same way the existing wrappers do.
 
 **Alternative considered** — group by paper section
 (`NetworkChannelDelivery`, `ProtocolFairness`, plus a standalone
@@ -159,6 +169,12 @@ to let callers extract individual fields cleanly.
 boilerplate and less alignment with the existing single-bundle
 pattern. We chose the single-bundle approach for symmetry with
 `BelugaPostGSTLiveness`.
+
+**Future companion projections**: per-field projection lemmas like
+`PartiallySynchronousFairness.implies_NetworkDelivery` could be
+added if callers want individual fields without the verbose
+`h_prim.networkDelivery` syntax. Not added now since the
+field-access syntax is already clean.
 
 ---
 
