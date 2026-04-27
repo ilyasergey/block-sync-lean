@@ -1232,7 +1232,7 @@ private lemma networkStep_advance_implies_hasProposedFor
   (networkStep_advance_inversion system s newTime vid bv bv' h_nodup h h' h_advance).1
 
 /-- Projection: if round advanced, every accepted block was already stored. -/
-private lemma networkStep_advance_implies_stored
+theorem networkStep_advance_implies_stored
     (system : BlockSynchroniserSystem) (s : NetworkState) (newTime : Nat)
     (vid : ValidatorId) (bv bv' : BelugaValidator)
     (h_nodup : (s.base.validators.map Prod.fst).Nodup)
@@ -1406,7 +1406,7 @@ theorem network_acceptedBlockExists_trace
 /-! ## Phase 4: Trace-level helpers -/
 
 /-- Find the step where vid's round transitioned from r to r+1. -/
-private lemma network_find_advance_step
+theorem network_find_advance_step
     (system : BlockSynchroniserSystem) (time : Nat → Nat) (vid : ValidatorId) (r : Round) :
     ∀ {k₀ k_target}, k₀ ≤ k_target →
     ∀ bv₀ bv_t,
