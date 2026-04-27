@@ -132,6 +132,45 @@ def NetworkDelivery (system : BlockSynchroniserSystem) (time : Nat → Nat) : Pr
       ValidatorOperation.block_propose vid_s B r ∈
         (networkTrace system time k').inbox vid_r
 
+/-! ## Paper §2 + §4.2 primitives, with-pull variants
+
+The with-pull versions of `NetworkDelivery` and `ActionScheduling`,
+stated against `networkTraceWithPull`. Same shape as the originals
+but with the pull-aware trace. -/
+
+/-- Push-channel `Δ`-bounded delivery on `networkTraceWithPull`. -/
+def NetworkDeliveryWithPull (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
+  ∀ k vid_s vid_r B r,
+    isHonestValidator system vid_s = true →
+    isHonestValidator system vid_r = true →
+    time k ≥ system.GST →
+    ValidatorOperation.block_propose vid_s B r ∈
+      (networkTraceWithPull system time k).base.emittedOperations →
+    ∃ k', k ≤ k' ∧ time k' ≤ time k + system.Δ ∧
+      ValidatorOperation.block_propose vid_s B r ∈
+        (networkTraceWithPull system time k').inbox vid_r
+
+/-- Per-validator round-advance liveness on `networkTraceWithPull`. -/
+def ActionSchedulingWithPull (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
+  ∀ k vid bv,
+    isHonestValidator system vid = true →
+    time k ≥ system.GST →
+    (networkTraceWithPull system time k).base.getValidator vid = some bv →
+    ∃ k' bv', k ≤ k' ∧ time k' ≤ time k + system.Δ ∧
+      (networkTraceWithPull system time k').base.getValidator vid = some bv' ∧
+      bv'.currentRound > bv.currentRound
+
+/-- Round-spread invariant on `networkTraceWithPull`. -/
+def BoundedRoundSpread_networkTraceWithPull
+    (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
+  ∀ k vid₁ vid₂ bv₁ bv₂,
+    time k ≥ system.GST →
+    isHonestValidator system vid₁ = true →
+    isHonestValidator system vid₂ = true →
+    (networkTraceWithPull system time k).base.getValidator vid₁ = some bv₁ →
+    (networkTraceWithPull system time k).base.getValidator vid₂ = some bv₂ →
+    bv₁.currentRound ≤ bv₂.currentRound + 1
+
 /-! ## Paper §4.3 pull primitives
 
 The pull mechanism (paper §4.3) requires three liveness primitives,
@@ -2100,6 +2139,80 @@ theorem network_all_honest_eventually_at_round
     intro vid h_vid
     obtain ⟨bv', h_bv', h_bv'_round⟩ := h_all_succ vid h_vid
     exact ⟨bv', h_bv', le_trans (Nat.succ_le_succ h_bv_w_round) h_bv'_round⟩
+
+/-! ## Pull-mechanism liveness: every honest pushed block is eventually accepted -/
+
+/-- Foundational liveness lemma: under the with-pull primitives, an
+honest validator `vid_r` that has a `block_propose` op for `B` (round `r`)
+in its inbox post-GST eventually accepts `B.d`.
+
+Proof: `canAcceptBlock` is true (vid hasn't accepted yet, vid received
+via push), so by `AcceptScheduling`, vid's `doAccept` action fires
+within `Δ`, putting `B.d` in vid's accepted set. -/
+theorem network_eventually_accepts_received_withPull
+    (system : BlockSynchroniserSystem) (time : Nat → Nat)
+    (h_accept : AcceptScheduling system time)
+    (vid_r : ValidatorId) (B : Block) (r : Round)
+    (h_r : isHonestValidator system vid_r = true)
+    (k : Nat) (h_post_gst : time k ≥ system.GST)
+    (h_in_inbox : ValidatorOperation.block_propose B.author B r ∈
+                    (networkTraceWithPull system time k).inbox vid_r)
+    (h_in_pool : B ∈ (networkTraceWithPull system time k).base.blocks)
+    (h_not_accepted : hasAcceptedDigest (networkTraceWithPull system time k).base vid_r B.d
+                        = false)
+    (h_r_eq : B.r = r) :
+    ∃ k', k ≤ k' ∧ time k' ≤ time k + system.Δ ∧
+      hasAcceptedDigest (networkTraceWithPull system time k').base vid_r B.d = true := by
+  -- canAcceptBlock returns true: !accepted && (received || ImPoA).
+  -- We have !accepted (from h_not_accepted) and received (from h_in_inbox).
+  have h_received : (networkTraceWithPull system time k).hasReceivedPropose vid_r B r = true := by
+    unfold NetworkState.hasReceivedPropose
+    rw [List.any_eq_true]
+    refine ⟨_, h_in_inbox, ?_⟩
+    simp +decide
+  have h_can_accept :
+      (networkTraceWithPull system time k).canAcceptBlock system vid_r B = true := by
+    unfold NetworkState.canAcceptBlock
+    rw [Bool.and_eq_true]
+    refine ⟨?_, ?_⟩
+    · rw [Bool.not_eq_true']; exact h_not_accepted
+    · rw [Bool.or_eq_true]; left; rw [h_r_eq]; exact h_received
+  exact h_accept k vid_r B h_r h_post_gst h_in_pool h_can_accept
+
+/-! ## EventualRoundAcceptance: proof skeleton
+
+Phase 10's main theorem, derived from the with-pull primitives:
+
+```
+theorem network_eventualRoundAcceptance
+    (system : BlockSynchroniserSystem) (time : Nat → Nat)
+    (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
+    (h_time_unbounded : ∀ T, ∃ k, time k ≥ T)
+    (h_delivery : NetworkDeliveryWithPull system time)
+    (h_scheduling : ActionSchedulingWithPull system time)
+    (h_spread : BoundedRoundSpread_networkTraceWithPull system time)
+    (h_accept : AcceptScheduling system time) :
+    ∀ round vid, isHonestValidator system vid = true →
+      ∃ k, |acceptedAuthors_of_round_r_at_k_for_vid| ≥ 2f+1
+```
+
+Proof structure (~300-500 lines):
+1. Apply iterated `ActionSchedulingWithPull` to bring all honest
+   validators past round r+1.
+2. Each honest validator vid_p has proposed for r — block_propose op
+   in emittedOperations.
+3. By `NetworkDeliveryWithPull`, vid's inbox eventually contains
+   each of these block_propose ops.
+4. Apply `network_eventually_accepts_received_withPull` (above) for
+   each: vid accepts each block within Δ.
+5. By `system.honestBound ≥ 2f+1`, vid has accepted ≥ 2f+1 distinct
+   honest authors' round-r blocks.
+
+The iteration structure (step 4) requires extending from "single
+acceptance" to "multiple acceptances at a single later step". This
+needs a `accept_persistent` lemma (HasAccepted is monotone along
+the trace). Phase 10 deliverable. -/
+
 end Network
 end Beluga
 end BlockSynchroniser
