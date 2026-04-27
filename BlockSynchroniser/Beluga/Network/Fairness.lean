@@ -402,7 +402,7 @@ theorem networkTrace_validators_nodup
 
 /-- Generic helper: given `(vid, bv) ∈ l` and `l.map Prod.fst` is
 Nodup, then `l.find? (·.1 == vid) = some (vid, bv)`. -/
-private lemma find?_of_mem_nodup
+lemma find?_of_mem_nodup
     {α β : Type*} [BEq α] [LawfulBEq α] (l : List (α × β))
     (a : α) (b : β) (h_mem : (a, b) ∈ l)
     (h_nodup : (l.map Prod.fst).Nodup) :

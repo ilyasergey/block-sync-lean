@@ -187,6 +187,155 @@ theorem network_theorem1_block_availability
     · rw [h_d]; exact hB_d
   | _ => simp at hop_match
 
+/-! ## §5 Theorem 3 (network-trace) — Round Progression -/
+
+/-- Helper: hasProposedFor iff there's a block_propose op in emittedOperations. -/
+private lemma network_hasProposedFor_iff_mem (s : BelugaState)
+    (vid : ValidatorId) (r : Round) :
+    hasProposedFor s vid r = true ↔
+    ∃ B, ValidatorOperation.block_propose vid B r ∈ s.emittedOperations := by
+  unfold hasProposedFor
+  rw [List.any_eq_true]
+  constructor
+  · rintro ⟨op, hop_mem, hop_match⟩
+    cases op with
+    | block_propose v B r' =>
+      simp at hop_match
+      obtain ⟨h_v, h_r⟩ := hop_match
+      exact ⟨B, h_v ▸ h_r ▸ hop_mem⟩
+    | _ => simp at hop_match
+  · rintro ⟨B, h_mem⟩
+    refine ⟨ValidatorOperation.block_propose vid B r, h_mem, ?_⟩
+    simp +decide
+
+/-- Helper: under nodup, find? on a system-registered honest validator returns
+the honest pair. -/
+private lemma network_isHonestValidator_of_mem
+    (system : BlockSynchroniserSystem) (vid : ValidatorId)
+    (h_mem : (vid, true) ∈ system.validators) :
+    isHonestValidator system vid = true := by
+  unfold isHonestValidator BlockSynchroniserSystem.isHonest
+  have h_find : system.validators.find? (fun p => p.1 == vid) = some (vid, true) :=
+    find?_of_mem_nodup _ vid true h_mem system.validatorsNodup
+  have h_pred_eq :
+      (fun (x : ValidatorId × Bool) => match x with | (vid_1, _) => decide (vid_1 = vid))
+        = (fun p => p.1 == vid) := by
+    funext p
+    cases p
+    show decide _ = (_ == _)
+    rfl
+  rw [h_pred_eq, h_find]
+
+/-- **Theorem 3 (paper §5).** Network-trace formulation: every round
+eventually has 2f+1 distinct proposers (counted across honest validators
+who have advanced past that round). -/
+theorem network_theorem3_round_progression
+    (system : BlockSynchroniserSystem) (time : Nat → Nat)
+    (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
+    (h_time_unbounded : ∀ T, ∃ k, time k ≥ T)
+    (h_delivery : NetworkDelivery system time)
+    (h_scheduling : ActionScheduling system time)
+    (h_spread : BoundedRoundSpread_networkTrace system time) :
+    Properties.RoundProgression system (networkBelugaTrace system time) := by
+  intro round
+  -- Honest pair list non-empty (system has honestBound ≥ 2f+1 ≥ 1).
+  have hHonest := system.honestBound
+  set honest_pairs := system.validators.filter (fun p => p.2 = true) with h_hp_def
+  have h_hp_ne : honest_pairs ≠ [] := by
+    intro h_e
+    have : honest_pairs.length = 0 := by rw [h_e]; rfl
+    omega
+  set pair_w := honest_pairs.head h_hp_ne
+  have h_pair_w_mem : pair_w ∈ honest_pairs := List.head_mem _
+  have h_pw_filter := List.mem_filter.mp h_pair_w_mem
+  have h_pw_in : pair_w ∈ system.validators := h_pw_filter.1
+  have h_pw_true : pair_w.2 = true := by simpa using h_pw_filter.2
+  set vid_w := pair_w.1 with hv_w_def
+  have h_w_pair_eq : (vid_w, true) ∈ system.validators := by
+    have h_eq : pair_w = (vid_w, true) := by
+      apply Prod.ext
+      · rfl
+      · exact h_pw_true
+    rw [← h_eq]; exact h_pw_in
+  have h_w_honest : isHonestValidator system vid_w = true :=
+    network_isHonestValidator_of_mem system vid_w h_w_pair_eq
+  -- Get a post-GST step.
+  obtain ⟨k₀, h_k₀_gst⟩ := h_time_unbounded system.GST
+  -- Apply iterated fairness to get all honest at round ≥ round + 1.
+  obtain ⟨k, _, _, h_all⟩ :=
+    network_all_honest_eventually_at_round system time h_mono h_delivery h_scheduling h_spread
+      vid_w h_w_honest k₀ h_k₀_gst (round + 1)
+  refine ⟨k, ?_⟩
+  set honest_vids := honest_pairs.map Prod.fst with h_hv_def
+  have h_hv_len : honest_vids.length ≥ 2 * system.f + 1 := by
+    rw [h_hv_def, List.length_map]; exact hHonest
+  have h_sys_nodup := system.validatorsNodup
+  have h_hp_nodup_records : honest_pairs.Nodup := by
+    rw [h_hp_def]
+    apply List.Nodup.filter
+    exact List.Nodup.of_map _ h_sys_nodup
+  have h_hv_nodup : honest_vids.Nodup := by
+    rw [h_hv_def]
+    apply List.Nodup.map_on _ h_hp_nodup_records
+    intro x hx y hy h_eq
+    have hx_in : x ∈ system.validators := (List.mem_filter.mp hx).1
+    have hy_in : y ∈ system.validators := (List.mem_filter.mp hy).1
+    have hx_find : system.validators.find? (fun z => z.1 == x.1) = some x :=
+      find?_of_mem_nodup _ x.1 x.2 hx_in h_sys_nodup
+    have hy_find : system.validators.find? (fun z => z.1 == y.1) = some y :=
+      find?_of_mem_nodup _ y.1 y.2 hy_in h_sys_nodup
+    rw [h_eq] at hx_find
+    rw [hx_find] at hy_find
+    grind
+  set proposers_raw := (opsAt (networkBelugaTrace system time) k).filterMap (fun op =>
+    match op with
+    | .block_propose vid _ r => if r = round then some vid else none
+    | _ => none) with h_pr_def
+  have h_subset : ∀ vid ∈ honest_vids, vid ∈ proposers_raw := by
+    intro vid h_vid_mem
+    obtain ⟨pair, h_pair_mem, h_pair_fst⟩ := List.mem_map.mp h_vid_mem
+    have h_pair_filter := List.mem_filter.mp h_pair_mem
+    have h_pair_in : pair ∈ system.validators := h_pair_filter.1
+    have h_pair_true : pair.2 = true := by simpa using h_pair_filter.2
+    have h_vid_pair_in : (vid, true) ∈ system.validators := by
+      have h_pair_eq : pair = (vid, true) := by
+        apply Prod.ext
+        · exact h_pair_fst
+        · exact h_pair_true
+      rw [← h_pair_eq]; exact h_pair_in
+    have h_vid_honest : isHonestValidator system vid = true :=
+      network_isHonestValidator_of_mem system vid h_vid_pair_in
+    obtain ⟨bv, h_bv, h_bv_round⟩ := h_all vid h_vid_honest
+    have h_round_lt : round < bv.currentRound := by
+      have : round + 1 ≤ bv.currentRound := h_bv_round
+      exact this
+    have h_prop := network_proposed_for_lt_currentRound system time k vid bv h_bv round h_round_lt
+    obtain ⟨B, h_op⟩ := (network_hasProposedFor_iff_mem _ vid round).mp h_prop
+    rw [h_pr_def]
+    apply List.mem_filterMap.mpr
+    refine ⟨ValidatorOperation.block_propose vid B round, h_op, ?_⟩
+    simp +decide
+  show proposers_raw.eraseDups.length ≥ 2 * system.f + 1
+  have h_fin_subset : honest_vids.toFinset ⊆ proposers_raw.toFinset := by
+    intro x hx
+    rw [List.mem_toFinset] at hx ⊢
+    exact h_subset x hx
+  have h_card_le : honest_vids.toFinset.card ≤ proposers_raw.toFinset.card :=
+    Finset.card_le_card h_fin_subset
+  have h_hv_card : honest_vids.toFinset.card = honest_vids.length :=
+    List.toFinset_card_of_nodup h_hv_nodup
+  have h_eraseDups_ge_toFinset : ∀ (l : List ValidatorId),
+      l.eraseDups.length ≥ l.toFinset.card := by
+    intro l
+    induction' l using List.reverseRecOn with l a ih
+    · rfl
+    · simp +decide [ List.eraseDups_append ]
+      by_cases h : a ∈ l.toFinset <;> simp_all +decide [ List.removeAll ]
+      exact Nat.lt_succ_of_le ‹_›
+  have h_pr_ge : proposers_raw.eraseDups.length ≥ proposers_raw.toFinset.card :=
+    h_eraseDups_ge_toFinset proposers_raw
+  omega
+
 end Network
 end Beluga
 end BlockSynchroniser
