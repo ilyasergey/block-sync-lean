@@ -914,6 +914,41 @@ theorem network_eventualCausalAcceptance_modulo_gap
     · rw [hasAcceptedDigest_iff_HasAccepted] at h_acc_parent
       exact h_acc_parent
 
+/-! ## Partial discharge of Phase 11 gap: honest-authored case -/
+
+/-- Honest-authored in-pool blocks are eventually accepted by every
+honest validator. Discharges the Phase 11 gap for honest authors via
+the Phase 10 single-author lemma + the propose-op block-shape
+invariant (which gives `B.d = digest system B.r B.author`). -/
+theorem network_in_pool_honest_author_eventually_accepted_withPull
+    (system : BlockSynchroniserSystem) (time : Nat → Nat)
+    (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
+    (h_time_unbounded : ∀ T, ∃ k, time k ≥ T)
+    (h_delivery : NetworkDeliveryWithPull system time)
+    (h_scheduling : ActionSchedulingWithPull system time)
+    (h_spread : BoundedRoundSpread_networkTraceWithPull system time)
+    (h_accept : AcceptScheduling system time)
+    (k : Nat) (vid : ValidatorId) (B : Block)
+    (h_vid_honest : isHonestValidator system vid = true)
+    (h_author_honest : isHonestValidator system B.author = true)
+    (h_in_pool : B ∈ (networkTraceWithPull system time k).base.blocks)
+    (h_propose_op : ValidatorOperation.block_propose B.author B B.r ∈
+                      (networkTraceWithPull system time k).base.emittedOperations) :
+    ∃ k', k ≤ k' ∧
+      hasAcceptedDigest (networkTraceWithPull system time k').base vid B.d = true := by
+  -- B.d = digest system B.r B.author by the propose-op invariant.
+  obtain ⟨_, _, h_d_eq, _⟩ :=
+    network_propose_op_invariant_traceWithPull system time k B.author B B.r h_propose_op
+  -- Phase 10 single-author lemma gives k' where vid accepts digest system B.r B.author.
+  obtain ⟨k', h_acc⟩ :=
+    network_each_honest_block_eventually_accepted_withPull system time h_mono h_time_unbounded
+      h_delivery h_scheduling h_spread h_accept B.r vid B.author h_vid_honest h_author_honest
+  -- The acceptance is at SOME k', not necessarily ≥ k. Get k_lift = max k k', use mono.
+  refine ⟨max k k', le_max_left _ _, ?_⟩
+  rw [h_d_eq]
+  exact network_hasAcceptedDigest_monotone_withPull system time vid (digest system B.r B.author)
+    k' (max k k') (le_max_right _ _) h_acc
+
 /-! ## With-pull T2 (CausalAvailability) wrapper -/
 
 /-- **Theorem 2 (paper §5), with-pull.** Mirror of T2 on
