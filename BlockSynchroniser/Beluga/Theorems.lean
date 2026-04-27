@@ -341,22 +341,6 @@ which underpins the L2 derivation from the lockstep `SchedulerFairness`.
 -/
 
 /-
-`doAdvance` for `vid'` sets `currentRound` to `bv.currentRound + 1` for
-the target validator, and leaves other validators unchanged. In either
-case the new round is at most `bv.currentRound + 1`.
--/
-lemma doAdvance_round_at_most_one (s : BelugaState) (vid vid' : ValidatorId)
-    (bv : BelugaValidator) (h : s.getValidator vid = some bv) :
-    ∃ bv', (doAdvance s vid').getValidator vid = some bv' ∧
-           bv'.currentRound ≤ bv.currentRound + 1 := by
-  by_cases h : vid = vid';
-  · subst h;
-    exact ⟨ _, updateValidator_getValidator_eq _ _ _ _ h, by simp +decide ⟩;
-  · have h_getValidator_ne : (doAdvance s vid').getValidator vid = s.getValidator vid := by
-      exact updateValidator_getValidator_ne s vid vid' ( fun bv => { bv with currentRound := bv.currentRound + 1 } ) h;
-    aesop
-
-/-
 The `step` function increases any validator's `currentRound` by at most 1.
 -/
 set_option maxHeartbeats 800000 in
@@ -483,26 +467,6 @@ that block the strict form. -/
 Two paper-§2 side conditions surface in nearly every theorem in
 this file. Naming them lets the public signatures stay readable
 and centralizes their justification. -/
-
-/-- BFT honest-count side condition (paper §2). T3 (round_progression)
-and T4 (round_termination) both need to count `2f + 1` distinct
-honest validators that propose / accept; the bundle is vacuously
-satisfied otherwise (`SchedulerFairness` ranges over honest
-validators but is trivial when the honest set is empty).
-
-We take the **lower-bound form** `≥ 2 * f + 1` rather than the
-exact `= 2 * f + 1` form the rest of the project tends to use:
-- Paper §2 only commits to `f < n / 3` (Byzantine strictly
-  fewer than a third), from which honest count is `n - f > 2f`,
-  i.e., honest ≥ 2f + 1.
-- The exact equality follows only under F-2's pinning of
-  `n = 3f + 1` (a notational tightening we recommend the paper
-  adopt, but not yet committed to globally in this bundle).
-- T3 / T4 only need the lower bound (counting argument).
-Using `≥` keeps the bundle independent of F-2's pinning while
-still being directly supported by the paper text. -/
-abbrev HonestBFTBound (system : BlockSynchroniserSystem) : Prop :=
-  (system.validators.filter (fun p => p.2 = true)).length ≥ 2 * system.f + 1
 
 /-- Paper §2 implicit: validator IDs are distinct (one record per
 registered validator). Threaded through the trace via
@@ -2339,41 +2303,6 @@ theorem network_eventualCausalAcceptance
     (fun k vid B h_v h_g h_p =>
       network_in_pool_eventually_accepted_withPull system time h_mono
         h_in_pool_delivery h_accept k vid B h_v h_g h_p)
-
-/-! ## Honest-author specialization of in-pool acceptance -/
-
-/-- Honest-authored in-pool blocks are eventually accepted by every
-honest validator, derived from the single-author acceptance lemma
-combined with the propose-op block-shape invariant (which gives
-`B.d = digest system B.r B.author`). -/
-theorem network_in_pool_honest_author_eventually_accepted_withPull
-    (system : BlockSynchroniserSystem) (time : Nat → Nat)
-    (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
-    (h_time_unbounded : ∀ T, ∃ k, time k ≥ T)
-    (h_delivery : NetworkDeliveryWithPull system time)
-    (h_scheduling : ActionSchedulingWithPull system time)
-    (h_spread : BoundedRoundSpread_networkTraceWithPull system time)
-    (h_accept : AcceptScheduling system time)
-    (k : Nat) (vid : ValidatorId) (B : Block)
-    (h_vid_honest : isHonestValidator system vid = true)
-    (h_author_honest : isHonestValidator system B.author = true)
-    (h_in_pool : B ∈ (networkTraceWithPull system time k).base.blocks)
-    (h_propose_op : ValidatorOperation.block_propose B.author B B.r ∈
-                      (networkTraceWithPull system time k).base.emittedOperations) :
-    ∃ k', k ≤ k' ∧
-      hasAcceptedDigest (networkTraceWithPull system time k').base vid B.d = true := by
-  -- B.d = digest system B.r B.author by the propose-op invariant.
-  obtain ⟨_, _, h_d_eq, _⟩ :=
-    network_propose_op_invariant_traceWithPull system time k B.author B B.r h_propose_op
-  -- single-author lemma gives k' where vid accepts digest system B.r B.author.
-  obtain ⟨k', h_acc⟩ :=
-    network_each_honest_block_eventually_accepted_withPull system time h_mono h_time_unbounded
-      h_delivery h_scheduling h_spread h_accept B.r vid B.author h_vid_honest h_author_honest
-  -- The acceptance is at SOME k', not necessarily ≥ k. Get k_lift = max k k', use mono.
-  refine ⟨max k k', le_max_left _ _, ?_⟩
-  rw [h_d_eq]
-  exact network_hasAcceptedDigest_monotone_withPull system time vid (digest system B.r B.author)
-    k' (max k k') (le_max_right _ _) h_acc
 
 /-! ## With-pull T2 (CausalAvailability) wrapper -/
 
