@@ -132,6 +132,52 @@ def NetworkDelivery (system : BlockSynchroniserSystem) (time : Nat → Nat) : Pr
       ValidatorOperation.block_propose vid_s B r ∈
         (networkTrace system time k').inbox vid_r
 
+/-! ## Paper §4.3 pull primitives
+
+The pull mechanism (paper §4.3) requires three liveness primitives,
+each mirroring an existing one for the push channel. These let us
+derive `EventualCausalAcceptance` and `EventualRoundAcceptance` as
+theorems on `networkTraceWithPull`. -/
+
+/-- **`PullRequestDelivery`** — pull-channel analog of
+`NetworkDelivery`: post-GST, every pull request issued by an honest
+requester to an honest responder is delivered to the responder's
+`pullRequestsInbox` within `Δ`. Mirrors paper §2's `Δ`-bounded
+delivery for the pull-request channel. -/
+def PullRequestDelivery (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
+  ∀ k (req : PullRequest),
+    isHonestValidator system req.requester = true →
+    isHonestValidator system req.responder = true →
+    time k ≥ system.GST →
+    req ∈ (networkTraceWithPull system time k).pullRequestsInflight →
+    ∃ k', k ≤ k' ∧ time k' ≤ time k + system.Δ ∧
+      req ∈ (networkTraceWithPull system time k').pullInbox req.responder
+
+/-- **`PullResponseScheduling`** — analog of `ActionScheduling` for
+the pull-response action: post-GST, when an honest responder has a
+pending pull request in its inbox, it processes the first request
+within `Δ` (`pullStepOne`'s respond branch fires). -/
+def PullResponseScheduling (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
+  ∀ k (vid_resp : ValidatorId) (req : PullRequest),
+    isHonestValidator system vid_resp = true →
+    time k ≥ system.GST →
+    req ∈ (networkTraceWithPull system time k).pullInbox vid_resp →
+    ∃ k', k ≤ k' ∧ time k' ≤ time k + system.Δ ∧
+      req ∉ (networkTraceWithPull system time k').pullInbox vid_resp
+
+/-- **`AcceptScheduling`** — paper §4.2's per-action liveness for
+the accept action: post-GST, when an honest validator has an
+acceptable in-pool block (canAcceptBlock = true), the validator's
+`doAccept` action fires within `Δ`. -/
+def AcceptScheduling (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
+  ∀ k vid B,
+    isHonestValidator system vid = true →
+    time k ≥ system.GST →
+    B ∈ (networkTraceWithPull system time k).base.blocks →
+    (networkTraceWithPull system time k).canAcceptBlock system vid B = true →
+    ∃ k', k ≤ k' ∧ time k' ≤ time k + system.Δ ∧
+      hasAcceptedDigest (networkTraceWithPull system time k').base vid B.d = true
+
 /-! ## Trace structure: monotonicity + timeout firing
 
 The full derivation requires several structural lemmas about
