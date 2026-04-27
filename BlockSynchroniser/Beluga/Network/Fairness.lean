@@ -3379,6 +3379,159 @@ theorem network_propose_op_invariant_traceWithPull
     rw [h_step]
     exact networkStepWithPull_propose_op_invariant system _ _ ih
 
+/-! ## Propose-op author-bound invariant
+
+Companion to `network_propose_op_invariant_traceWithPull`: every
+emitted propose op's author is registered in `system.validators`.
+Combined with `system.validIds`, this gives the bound `vid < n + 1`
+needed by `digest_injective`. -/
+
+/-- Per-step author-bound: if every existing propose op's author is
+in `s.base.validators`'s ID list, and that list matches `system`'s,
+then every post-step propose op's author is in `system`'s. -/
+private lemma networkStepWithPull_propose_op_author_preserved
+    (system : BlockSynchroniserSystem) (s : NetworkState) (newTime : Nat)
+    (h_ids : s.base.validators.map Prod.fst = system.validators.map Prod.fst)
+    (h_inv : ∀ vid B r, ValidatorOperation.block_propose vid B r ∈ s.base.emittedOperations →
+      vid ∈ system.validators.map Prod.fst) :
+    ∀ vid B r, ValidatorOperation.block_propose vid B r ∈
+                 (networkStepWithPull system s newTime).base.emittedOperations →
+      vid ∈ system.validators.map Prod.fst := by
+  intro vid B r h_op_new
+  unfold networkStepWithPull at h_op_new
+  have h_del_base :
+      ({ s with currentTime := newTime } : NetworkState).deliverPending.base = s.base := by
+    rw [NetworkState.deliverPending_preserves_base]
+  have h_pull_del_base :
+      (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending).base
+        = s.base := by
+    rw [NetworkState.deliverPullPending_preserves_base]; exact h_del_base
+  have h_pulled_base :
+      (pullStep system (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending)).base
+        = s.base := by
+    rw [pullStep_preserves_base]; exact h_pull_del_base
+  have h_inv_pulled : ∀ vid' B' r', ValidatorOperation.block_propose vid' B' r' ∈
+        (pullStep system (({ s with currentTime := newTime }
+          : NetworkState).deliverPending.deliverPullPending)).base.emittedOperations →
+      vid' ∈ system.validators.map Prod.fst := by
+    intro vid' B' r' h
+    rw [h_pulled_base] at h
+    exact h_inv vid' B' r' h
+  have h_pulled_ids :
+      (pullStep system (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending)).base.validators.map Prod.fst
+        = system.validators.map Prod.fst := by
+    rw [h_pulled_base]; exact h_ids
+  simp only at h_op_new
+  split at h_op_new
+  case _ s' h_fs =>
+    rw [List.findSome?_eq_some_iff] at h_fs
+    obtain ⟨_, ⟨vid_a, bv_a⟩, _, h_l_split, h_act, _⟩ := h_fs
+    -- vid_a ∈ pulled.base.validators IDs = system's IDs.
+    have h_a_mem : (vid_a, bv_a) ∈
+        (pullStep system (({ s with currentTime := newTime }
+          : NetworkState).deliverPending.deliverPullPending)).base.validators := by
+      rw [h_l_split]; simp
+    have h_a_in_system : vid_a ∈ system.validators.map Prod.fst := by
+      rw [← h_pulled_ids]
+      exact List.mem_map.mpr ⟨(vid_a, bv_a), h_a_mem, rfl⟩
+    unfold networkTryActFor at h_act
+    simp only at h_act
+    split at h_act
+    case isTrue _ =>
+      injection h_act with h_eq
+      have h_base_eq : s'.base = doPropose system
+          (pullStep system (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending)).base
+          vid_a bv_a.currentRound := by rw [← h_eq]
+      rw [h_base_eq] at h_op_new
+      simp only [doPropose] at h_op_new
+      simp only [List.mem_append, List.mem_singleton] at h_op_new
+      rcases h_op_new with h_old | h_new
+      · exact h_inv_pulled vid B r h_old
+      · injection h_new with hv _ _
+        subst hv; exact h_a_in_system
+    case isFalse _ =>
+      split at h_act
+      case h_1 B_acc h_findAcc =>
+        injection h_act with h_eq
+        have h_base_eq : s'.base = doAccept
+            (pullStep system (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending)).base
+            vid_a B_acc := by rw [← h_eq]
+        rw [h_base_eq] at h_op_new
+        simp only [doAccept, updateValidator] at h_op_new
+        simp only [List.mem_append, List.mem_singleton] at h_op_new
+        rcases h_op_new with h_old | h_bad
+        · exact h_inv_pulled vid B r h_old
+        · cases h_bad
+      case h_2 _ =>
+        split at h_act
+        case h_1 B_sto h_findSto =>
+          injection h_act with h_eq
+          have h_base_eq : s'.base = doStore
+              (pullStep system (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending)).base
+              vid_a B_sto := by rw [← h_eq]
+          rw [h_base_eq] at h_op_new
+          simp only [doStore, updateValidator] at h_op_new
+          simp only [List.mem_append, List.mem_singleton] at h_op_new
+          rcases h_op_new with h_old | h_bad
+          · exact h_inv_pulled vid B r h_old
+          · cases h_bad
+        case h_2 _ =>
+          split at h_act
+          case isTrue _ =>
+            injection h_act with h_eq
+            have h_base_eq : s'.base = updateValidator
+                (pullStep system (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending)).base
+                vid_a (fun bv0 => { bv0 with currentRound := bv0.currentRound + 1,
+                                              roundEntryTime :=
+                  (pullStep system (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending)).currentTime }) := by
+              rw [← h_eq]
+            rw [h_base_eq] at h_op_new
+            rw [updateValidator_emittedOperations_eq] at h_op_new
+            exact h_inv_pulled vid B r h_op_new
+          case isFalse _ => simp at h_act
+  case _ _ =>
+    exact h_inv_pulled vid B r h_op_new
+
+/-- Trace-level: every propose op's author in `networkTraceWithPull`
+is in `system.validators`'s ID list. Combined with `system.validIds`,
+gives `vid < n + 1`. -/
+theorem network_propose_op_author_in_system_traceWithPull
+    (system : BlockSynchroniserSystem) (time : Nat → Nat) :
+    ∀ k vid B r, ValidatorOperation.block_propose vid B r ∈
+                   (networkTraceWithPull system time k).base.emittedOperations →
+      vid ∈ system.validators.map Prod.fst := by
+  intro k
+  induction k with
+  | zero =>
+    intro vid B r h_op
+    have h_emp : (networkTraceWithPull system time 0).base.emittedOperations = [] := by
+      show ({ NetworkState.init system with currentTime := time 0 }
+        : NetworkState).base.emittedOperations = []
+      rfl
+    rw [h_emp] at h_op
+    simp at h_op
+  | succ k ih =>
+    show ∀ vid B r, _ → _
+    have h_step : (networkTraceWithPull system time (k + 1)).base =
+        (networkStepWithPull system (networkTraceWithPull system time k)
+          (time (k + 1))).base := rfl
+    rw [h_step]
+    have h_ids : (networkTraceWithPull system time k).base.validators.map Prod.fst
+        = system.validators.map Prod.fst := networkTraceWithPull_validators_ids system time k
+    exact networkStepWithPull_propose_op_author_preserved system _ _ h_ids ih
+
+/-- Combined: propose op author is bounded by `system.n + 1`. -/
+theorem network_propose_op_author_bounded_traceWithPull
+    (system : BlockSynchroniserSystem) (time : Nat → Nat)
+    (k : Nat) (vid : ValidatorId) (B : Block) (r : Round)
+    (h_op : ValidatorOperation.block_propose vid B r ∈
+              (networkTraceWithPull system time k).base.emittedOperations) :
+    vid < system.n + 1 := by
+  have h_in_ids := network_propose_op_author_in_system_traceWithPull system time k vid B r h_op
+  obtain ⟨p, h_p_mem, h_p_eq⟩ := List.mem_map.mp h_in_ids
+  rw [← h_p_eq]
+  exact system.validIds p h_p_mem
+
 /-! ## Single-author eventual acceptance -/
 
 /-- Under the with-pull primitives, every honest validator eventually
