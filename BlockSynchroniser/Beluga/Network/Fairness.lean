@@ -724,6 +724,32 @@ theorem networkTraceWithPull_validators_nodup
   rw [networkTraceWithPull_validators_ids]
   exact system.validatorsNodup
 
+/-- `pullStep` preserves `inboxes`. -/
+theorem pullStep_preserves_inboxes (system : BlockSynchroniserSystem)
+    (s : NetworkState) :
+    (pullStep system s).inboxes = s.inboxes := by
+  unfold pullStep
+  suffices h : ∀ (l : List (ValidatorId × Bool)) (s' : NetworkState),
+      s'.inboxes = s.inboxes →
+      (l.foldl (fun acc x => pullStepOne system acc x.1) s').inboxes = s.inboxes by
+    apply h; rfl
+  intro l
+  induction l with
+  | nil => intro s' h; exact h
+  | cons hd tl ih =>
+    intro s' h
+    apply ih
+    show (pullStepOne system s' hd.1).inboxes = s.inboxes
+    unfold pullStepOne
+    split
+    · unfold doPullResponse
+      split
+      · simp only [NetworkState.removeFromPullInbox]; exact h
+      · simp only [NetworkState.removeFromPullInbox]; exact h
+    · split
+      · unfold doPullRequest; exact h
+      · exact h
+
 /-- Generic helper: given `(vid, bv) ∈ l` and `l.map Prod.fst` is
 Nodup, then `l.find? (·.1 == vid) = some (vid, bv)`. -/
 lemma find?_of_mem_nodup
