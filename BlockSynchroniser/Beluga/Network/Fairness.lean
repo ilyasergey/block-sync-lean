@@ -2338,6 +2338,41 @@ theorem network_all_honest_eventually_at_round
     obtain ⟨bv', h_bv', h_bv'_round⟩ := h_all_succ vid h_vid
     exact ⟨bv', h_bv', le_trans (Nat.succ_le_succ h_bv_w_round) h_bv'_round⟩
 
+/-- With-pull analog of `network_all_honest_eventually_at_round`. -/
+theorem network_all_honest_eventually_at_roundWithPull
+    (system : BlockSynchroniserSystem) (time : Nat → Nat)
+    (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
+    (h_delivery : NetworkDeliveryWithPull system time)
+    (h_scheduling : ActionSchedulingWithPull system time)
+    (h_spread : BoundedRoundSpread_networkTraceWithPull system time)
+    (vid_w : ValidatorId) (h_w : isHonestValidator system vid_w = true)
+    (k₀ : Nat) (h_gst : time k₀ ≥ system.GST) :
+    ∀ R, ∃ k, k₀ ≤ k ∧ time k ≥ system.GST ∧
+      ∀ vid, isHonestValidator system vid = true →
+        ∃ bv, (networkTraceWithPull system time k).base.getValidator vid = some bv ∧
+              bv.currentRound ≥ R := by
+  intro R
+  have h_persistent : ∀ vid k, isHonestValidator system vid = true →
+      ∃ bv, (networkTraceWithPull system time k).base.getValidator vid = some bv :=
+    fun vid k h => network_honest_validator_persistent_traceWithPull system time vid h k
+  induction R with
+  | zero =>
+    refine ⟨k₀, le_refl _, h_gst, ?_⟩
+    intro vid h_vid
+    obtain ⟨bv, h_bv⟩ := network_honest_validator_persistent_traceWithPull system time vid h_vid k₀
+    exact ⟨bv, h_bv, Nat.zero_le _⟩
+  | succ R ih =>
+    obtain ⟨k_R, h_k_R_le, h_k_R_gst, h_all_R⟩ := ih
+    obtain ⟨bv_w, h_bv_w, h_bv_w_round⟩ := h_all_R vid_w h_w
+    obtain ⟨k', h_k'_le, _, h_all_succ⟩ :=
+      schedulerFairness_holds_withPull system time h_mono h_delivery h_scheduling h_spread h_persistent
+        k_R bv_w.currentRound h_k_R_gst ⟨vid_w, bv_w, h_w, h_bv_w, rfl⟩
+    refine ⟨k', le_trans h_k_R_le h_k'_le,
+      le_trans h_k_R_gst (h_mono _ _ h_k'_le), ?_⟩
+    intro vid h_vid
+    obtain ⟨bv', h_bv', h_bv'_round⟩ := h_all_succ vid h_vid
+    exact ⟨bv', h_bv', le_trans (Nat.succ_le_succ h_bv_w_round) h_bv'_round⟩
+
 /-! ## emittedOperations monotonicity for `networkTraceWithPull` -/
 
 /-- `networkTryActFor` only appends to `emittedOperations` (already proved
