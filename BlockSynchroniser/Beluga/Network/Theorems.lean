@@ -545,6 +545,129 @@ private lemma honestList_all_honest (system : BlockSynchroniserSystem)
   unfold isHonestValidator BlockSynchroniserSystem.isHonest
   rw [find_of_mem_nodup_id_eq system.validators p true h_q_in_v system.validatorsNodup]
 
+/-! ## Main theorem: `network_eventualRoundAcceptance` -/
+
+/-- **Phase 10 main theorem.** Under the with-pull primitives,
+`networkBelugaTraceWithPull` satisfies `EventualRoundAcceptance`.
+This replaces the `EventualRoundAcceptance` axiom on T4 (cf. F-1c)
+with a derived theorem. -/
+theorem network_eventualRoundAcceptance
+    (system : BlockSynchroniserSystem) (time : Nat → Nat)
+    (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
+    (h_time_unbounded : ∀ T, ∃ k, time k ≥ T)
+    (h_delivery : NetworkDeliveryWithPull system time)
+    (h_scheduling : ActionSchedulingWithPull system time)
+    (h_spread : BoundedRoundSpread_networkTraceWithPull system time)
+    (h_accept : AcceptScheduling system time) :
+    EventualRoundAcceptance system (networkBelugaTraceWithPull system time) := by
+  intro round vid h_vid_honest_prop
+  have h_vid_honest : isHonestValidator system vid = true := h_vid_honest_prop
+  -- Step 1: post-GST step.
+  obtain ⟨k_gst, h_k_gst⟩ : ∃ k, time k ≥ system.GST := h_time_unbounded system.GST
+  -- Step 2: bring all honest to currentRound ≥ round + 1 by some k_R.
+  obtain ⟨k_R, _, _, h_all_at_R⟩ :=
+    network_all_honest_eventually_at_roundWithPull system time h_mono h_delivery
+      h_scheduling h_spread vid h_vid_honest k_gst h_k_gst (round + 1)
+  -- The honest validator ID list.
+  set honestList : List ValidatorId :=
+    (system.validators.filter (fun p => p.2 = true)).map Prod.fst with h_honestList_def
+  -- Step 3: iterate to get k_acc where vid accepts every honest digest.
+  obtain ⟨k_acc, h_acc⟩ :=
+    all_honest_in_list_eventually_accepted system time h_mono h_time_unbounded
+      h_delivery h_scheduling h_spread h_accept round vid h_vid_honest
+      honestList (fun p hp => honestList_all_honest system p hp)
+  -- Step 4: take k_final = max k_acc k_R; both conditions lift by monotonicity.
+  set k_final := max k_acc k_R with h_k_final_def
+  refine ⟨k_final, ?_⟩
+  -- Lift acceptance to k_final.
+  have h_acc_final : ∀ p ∈ honestList,
+      hasAcceptedDigest (networkTraceWithPull system time k_final).base vid
+        (digest system round p) = true := by
+    intro p hp
+    exact network_hasAcceptedDigest_monotone_withPull system time vid (digest system round p)
+      k_acc k_final (le_max_left _ _) (h_acc p hp)
+  -- At k_R, every honest has proposed for round; lift to k_final via monotonicity.
+  have h_propose_final : ∀ p ∈ honestList,
+      hasProposedFor (networkTraceWithPull system time k_final).base p round = true := by
+    intro p hp
+    have h_p_honest := honestList_all_honest system p hp
+    obtain ⟨bv_p, h_bv_p, h_bv_p_round⟩ := h_all_at_R p h_p_honest
+    have h_proposed_at_R :
+        hasProposedFor (networkTraceWithPull system time k_R).base p round = true :=
+      network_proposed_for_lt_currentRoundWithPull system time k_R p bv_p h_bv_p round
+        h_bv_p_round
+    exact network_hasProposedFor_monotoneWithPull system time p round k_R k_final
+      (le_max_right _ _) h_proposed_at_R
+  -- For each honest p, get the propose op witness.
+  have h_propose_op_final : ∀ p ∈ honestList, ∃ B,
+      ValidatorOperation.block_propose p B round ∈
+        (networkTraceWithPull system time k_final).base.emittedOperations := by
+    intro p hp
+    exact hasProposedFor_implies_propose_op _ p round (h_propose_final p hp)
+  -- Set up acceptedAuthors at k_final.
+  set ops : List ValidatorOperation := opsAt (networkBelugaTraceWithPull system time) k_final
+    with h_ops_def
+  set acceptedAuthors_pre : List ValidatorId :=
+    ops.filterMap (fun op =>
+      match op with
+      | .block_accept vid' d =>
+        if vid' = vid then authorOfDigest ops round d else none
+      | _ => none) with h_acceptedAuthors_pre_def
+  -- Show honestList.toFinset ⊆ acceptedAuthors_pre.toFinset.
+  have h_subset : honestList.toFinset ⊆ acceptedAuthors_pre.toFinset := by
+    intro p hp
+    rw [List.mem_toFinset] at hp ⊢
+    have h_p_honest := honestList_all_honest system p hp
+    -- Get the accept op.
+    have h_acc_p := h_acc_final p hp
+    rw [hasAcceptedDigest_iff_HasAccepted] at h_acc_p
+    have h_accept_op : ValidatorOperation.block_accept vid (digest system round p) ∈ ops :=
+      h_acc_p
+    -- Get the propose op witness.
+    obtain ⟨B, h_propose_op⟩ := h_propose_op_final p hp
+    -- Apply authorOfDigest_of_propose.
+    have h_inv := network_propose_op_invariant_traceWithPull system time k_final
+    have h_authors_bound : ∀ vid B' r', .block_propose vid B' r' ∈ ops →
+        vid < system.n + 1 := fun v B' r' h =>
+      network_propose_op_author_bounded_traceWithPull system time k_final v B' r' h
+    have h_inv' : ∀ vid B' r', .block_propose vid B' r' ∈ ops →
+        B'.author = vid ∧ B'.r = r' ∧ B'.d = digest system r' vid := fun v B' r' h => by
+      exact (h_inv v B' r' h).imp_right (·.imp_right (·.left))
+    have h_v_bound : p < system.n + 1 :=
+      network_propose_op_author_bounded_traceWithPull system time k_final p B round h_propose_op
+    have h_aod : authorOfDigest ops round (digest system round p) = some p :=
+      authorOfDigest_of_propose system ops p round h_v_bound h_inv' h_authors_bound B
+        h_propose_op
+    -- Now show p ∈ acceptedAuthors_pre via filterMap.
+    rw [h_acceptedAuthors_pre_def, List.mem_filterMap]
+    refine ⟨ValidatorOperation.block_accept vid (digest system round p), h_accept_op, ?_⟩
+    simp [h_aod]
+  -- honestList.toFinset has card ≥ 2f+1.
+  have h_honestList_card : honestList.toFinset.card ≥ 2 * system.f + 1 := by
+    rw [List.toFinset_card_of_nodup (honestList_nodup system)]
+    rw [h_honestList_def, List.length_map]
+    exact system.honestBound
+  -- Combine: 2f+1 ≤ honestList.toFinset.card ≤ acceptedAuthors_pre.toFinset.card
+  --              ≤ acceptedAuthors_pre.eraseDups.length.
+  have h_card_le : acceptedAuthors_pre.toFinset.card ≥ 2 * system.f + 1 :=
+    le_trans h_honestList_card (Finset.card_mono h_subset)
+  exact le_trans h_card_le (length_eraseDups_ge_card_toFinset acceptedAuthors_pre)
+
+/-- **Theorem 4 (paper §5).** Network-trace formulation, with the
+`EventualRoundAcceptance` derived from the with-pull primitives. -/
+theorem network_theorem4_round_termination_proved
+    (system : BlockSynchroniserSystem) (time : Nat → Nat)
+    (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
+    (h_time_unbounded : ∀ T, ∃ k, time k ≥ T)
+    (h_delivery : NetworkDeliveryWithPull system time)
+    (h_scheduling : ActionSchedulingWithPull system time)
+    (h_spread : BoundedRoundSpread_networkTraceWithPull system time)
+    (h_accept : AcceptScheduling system time) :
+    Properties.RoundTermination system (networkBelugaTraceWithPull system time) := by
+  intro round vid h_honest
+  exact network_eventualRoundAcceptance system time h_mono h_time_unbounded
+    h_delivery h_scheduling h_spread h_accept round vid h_honest
+
 end Network
 end Beluga
 end BlockSynchroniser
