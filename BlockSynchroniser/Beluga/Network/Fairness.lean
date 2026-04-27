@@ -2144,6 +2144,53 @@ theorem schedulerFairness_holds
     have h_chain : r + 2 ≤ bv_vid.currentRound + 1 := le_trans h_lower h_sp
     exact Nat.le_of_succ_le_succ h_chain
 
+/-- `networkTraceWithPull` analog of `schedulerFairness_holds`. Same
+proof structure (pure round arithmetic over the with-pull primitives). -/
+theorem schedulerFairness_holds_withPull
+    (system : BlockSynchroniserSystem) (time : Nat → Nat)
+    (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
+    (_h_delivery : NetworkDeliveryWithPull system time)
+    (h_scheduling : ActionSchedulingWithPull system time)
+    (h_spread : BoundedRoundSpread_networkTraceWithPull system time)
+    (h_persistent : ∀ vid k, isHonestValidator system vid = true →
+      ∃ bv, (networkTraceWithPull system time k).base.getValidator vid = some bv)
+    : ∀ k r,
+        time k ≥ system.GST →
+        (∃ vid bv, isHonestValidator system vid = true ∧
+          (networkTraceWithPull system time k).base.getValidator vid = some bv ∧
+          bv.currentRound = r) →
+        ∃ k', k ≤ k' ∧ time k' ≤ time k + 3 * system.Δ ∧
+          ∀ vid, isHonestValidator system vid = true →
+            ∃ bv, (networkTraceWithPull system time k').base.getValidator vid = some bv ∧
+                  bv.currentRound ≥ r + 1 := by
+  intro k r h_post_gst ⟨vid_w, bv_w, h_w_honest, h_w_get, h_w_round⟩
+  obtain ⟨k₁, bv_w₁, hk₁_le, hk₁_time, h_w₁_get, h_w₁_round⟩ :=
+    h_scheduling k vid_w bv_w h_w_honest h_post_gst h_w_get
+  have h_post_gst₁ : time k₁ ≥ system.GST :=
+    le_trans h_post_gst (h_mono k k₁ hk₁_le)
+  obtain ⟨k₂, bv_w₂, hk₂_le, hk₂_time, h_w₂_get, h_w₂_round⟩ :=
+    h_scheduling k₁ vid_w bv_w₁ h_w_honest h_post_gst₁ h_w₁_get
+  have h_w₂_ge : bv_w₂.currentRound ≥ r + 2 := by
+    have h1 : bv_w.currentRound + 1 ≤ bv_w₁.currentRound := h_w₁_round
+    have h2 : bv_w₁.currentRound + 1 ≤ bv_w₂.currentRound := h_w₂_round
+    have h_step1 : r + 1 ≤ bv_w₁.currentRound := by
+      rw [← h_w_round]; exact h1
+    exact le_trans (Nat.add_le_add_right h_step1 1) h2
+  have h_post_gst₂ : time k₂ ≥ system.GST :=
+    le_trans h_post_gst₁ (h_mono k₁ k₂ hk₂_le)
+  refine ⟨k₂, le_trans hk₁_le hk₂_le, ?_, ?_⟩
+  · have h_t1 : time k₁ ≤ time k + system.Δ := hk₁_time
+    have h_t2 : time k₂ ≤ time k₁ + system.Δ := hk₂_time
+    omega
+  · intro vid h_vid_honest
+    obtain ⟨bv_vid, h_vid_get⟩ := h_persistent vid k₂ h_vid_honest
+    refine ⟨bv_vid, h_vid_get, ?_⟩
+    have h_sp : bv_w₂.currentRound ≤ bv_vid.currentRound + 1 :=
+      h_spread k₂ vid_w vid bv_w₂ bv_vid h_post_gst₂ h_w_honest h_vid_honest
+        h_w₂_get h_vid_get
+    have h_chain : r + 2 ≤ bv_vid.currentRound + 1 := le_trans h_w₂_ge h_sp
+    exact Nat.le_of_succ_le_succ h_chain
+
 /-- Iterated `schedulerFairness_holds`: every honest validator
 eventually reaches round ≥ R. -/
 theorem network_all_honest_eventually_at_round
