@@ -20,7 +20,7 @@ import BlockSynchroniser.Properties
 import BlockSynchroniser.Timing
 import BlockSynchroniser.Beluga.Protocol
 import BlockSynchroniser.Beluga.AdmissionInvariant
-import BlockSynchroniser.Beluga.Network.Fairness
+import BlockSynchroniser.Beluga.Network
 
 namespace BlockSynchroniser
 namespace Beluga

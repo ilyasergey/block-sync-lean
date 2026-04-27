@@ -23,6 +23,7 @@ import BlockSynchroniser.Beluga.StepPreservation
 import BlockSynchroniser.Beluga.AdmissionInvariant
 import BlockSynchroniser.Beluga.Order
 import BlockSynchroniser.Beluga.Examples
+import BlockSynchroniser.Beluga.Network
 import BlockSynchroniser.Beluga.Theorems
 import BlockSynchroniser.Beluga.PerformanceLemmas
 import BlockSynchroniser.Mysticeti.Consensus
