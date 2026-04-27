@@ -389,7 +389,6 @@ def belugaTrace (system : BlockSynchroniserSystem) : Trace BelugaState :=
 
 /-! ### Bool/Prop bridge lemmas for `hasAcceptedDigest` -/
 
--- proof: aristotle (project 116385ce)
 private lemma hasAcceptedDigest_false_imp (s : BelugaState) (vid : ValidatorId)
     (d : BlockDigest) (h : hasAcceptedDigest s vid d = false) :
     ¬ HasAccepted s vid d := by
@@ -424,7 +423,6 @@ The proof proceeds in three stages:
 3. `CausallyClosed` follows from `AcceptInv` by induction on `Reaches`.
 -/
 
--- proof: aristotle (project 3f6cf619) — round 4-followup
 -- The `ValidIds` / `CausallyClosed` / `BlockInv` / `AcceptInv` chain
 -- and all supporting lemmas through `causallyClosed_trace` were
 -- introduced and proved by this round.
@@ -942,7 +940,6 @@ private lemma not_honest_imp_byzantine (system : BlockSynchroniserSystem)
   unfold BlockSynchroniserSystem.isByzantine;
   grind
 
--- proof: aristotle (project a8889396) — round 4
 -- Helper: the "no-op" case always satisfies HonestStep via ByzantineStep with []
 private lemma honestStep_of_no_op
     (system : BlockSynchroniserSystem) (s : BelugaState) :

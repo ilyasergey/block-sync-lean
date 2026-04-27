@@ -40,7 +40,6 @@ lemma tryActFor_preserves_reputation (system : BlockSynchroniserSystem) (s : Bel
     (h : s.getValidator vid = some bv) (s' : BelugaState)
     (h' : tryActFor system s vid_actor bv_actor = some s') :
     ∃ bv', s'.getValidator vid = some bv' ∧ bv'.reputation = bv.reputation := by
-  -- proof: aristotle (project bb79d236)
   revert h'
   unfold tryActFor
   cases h'' : List.find? _ s.blocks <;> simp +decide
@@ -105,7 +104,6 @@ theorem init_getValidator_honest (system : BlockSynchroniserSystem) (vid : Valid
     unfold isHonestValidator at h;
     unfold BlockSynchroniserSystem.isHonest at h;
     grind;
-  -- proof: aristotle (project 91c97602)
   unfold BelugaState.getValidator; simp +decide [ BelugaState.init ] ;
   use vid; simp_all +decide
   exact Or.inr h_find
@@ -116,7 +114,6 @@ Honest validators have a `getValidator` entry at every trace step.
 theorem belugaTrace_getValidator_honest (system : BlockSynchroniserSystem) (vid : ValidatorId)
     (h : isHonestValidator system vid = true) (k : Nat) :
     ∃ bv, (belugaTrace system k).getValidator vid = some bv := by
-  -- proof: aristotle (project 91c97602)
   induction' k with k ih;
   · exact init_getValidator_honest system vid h;
   · exact step_getValidator_reputation system ( belugaTrace system k ) vid _ ih.choose_spec |> fun h => by tauto;

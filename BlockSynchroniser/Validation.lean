@@ -203,7 +203,6 @@ def goldenTrace : Trace DefaultSystemState := goldenStateAt
 
 /-! ## Helper lemmas for golden trace proofs -/
 
--- proof: aristotle (project be7c0245)
 theorem gRoundOps_length (r : Round) : (gRoundOps r).length = 36 := by
   -- The length of `List.range 4` is 4.
   simp [gRoundOps, List.length_range, List.length_map]
@@ -268,7 +267,6 @@ theorem isHonest_goldenSystem_iff (vid : ValidatorId) :
 /-
 **Definition 1.1 — Round-Progression** holds for `goldenTrace`.
 -/
--- proof: aristotle (project be7c0245)
 theorem golden_roundProgression : RoundProgression goldenSystem goldenTrace := by
   intro r;
   refine' ⟨ 36 * ( r + 1 ), _ ⟩;
@@ -286,7 +284,6 @@ theorem golden_roundProgression : RoundProgression goldenSystem goldenTrace := b
 /-
 **Definition 1.2 — Round-Termination** holds for `goldenTrace`.
 -/
--- proof: aristotle (project be7c0245)
 theorem golden_roundTermination : RoundTermination goldenSystem goldenTrace := by
   -- For any round r and honest validator vid, we can choose k = 36 * (r + 1).
   intro r vid hvid
@@ -341,7 +338,6 @@ theorem golden_roundTermination : RoundTermination goldenSystem goldenTrace := b
 /-
 **Definition 1.3 — Block availability** holds for `goldenTrace`.
 -/
--- proof: aristotle (project be7c0245)
 theorem golden_blockAvailability : BlockAvailability goldenSystem goldenTrace := by
   intro k vid d hvid hacc
   obtain ⟨r, i, hr, hi, hd⟩ : ∃ r i, r ≤ k / 36 ∧ i < 4 ∧ d = r * 4 + i := by
@@ -369,7 +365,6 @@ theorem golden_blockAvailability : BlockAvailability goldenSystem goldenTrace :=
 /-
 **Definition 1.4 — Causal availability** holds for `goldenTrace`.
 -/
--- proof: aristotle (project be7c0245)
 theorem golden_causalAvailability : CausalAvailability goldenSystem goldenTrace := by
   intro k vid d B h_honest h_accept h_block B' h_reaches;
   -- By definition of `goldenTrace`, we know that `B'` is of the form `gBlock r' i'` for some `r' ≤ k/36` and `i' < 4`.

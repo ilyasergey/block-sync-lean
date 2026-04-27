@@ -87,7 +87,6 @@ private lemma noEquivocation_of_blockInv
 
 /-! ## Helper lemmas for `authorsValid` -/
 
--- proof: aristotle (project c2ca4a2e) — mysticeti-safety-authorsValid round
 /-- `updateValidator` preserves the list of validator IDs (first
 components). -/
 lemma updateValidator_validators_map_fst (s : BelugaState) (vid : ValidatorId)
@@ -95,20 +94,17 @@ lemma updateValidator_validators_map_fst (s : BelugaState) (vid : ValidatorId)
     (updateValidator s vid f).validators.map Prod.fst = s.validators.map Prod.fst := by
   unfold updateValidator; aesop
 
--- proof: aristotle (project c2ca4a2e) — mysticeti-safety-authorsValid round
 /-- `doAccept` preserves validator IDs. -/
 lemma doAccept_validators_map_fst (s : BelugaState) (vid : ValidatorId) (B : Block) :
     (doAccept s vid B).validators.map Prod.fst = s.validators.map Prod.fst := by
   apply updateValidator_validators_map_fst
 
--- proof: aristotle (project c2ca4a2e) — mysticeti-safety-authorsValid round
 /-- `doStore` preserves validator IDs. -/
 lemma doStore_validators_map_fst (s : BelugaState) (vid : ValidatorId) (B : Block) :
     (doStore s vid B).validators.map Prod.fst = s.validators.map Prod.fst := by
   convert updateValidator_validators_map_fst s vid
     (fun bv => { bv with storedBlocks := B.d :: bv.storedBlocks }) using 1
 
--- proof: aristotle (project c2ca4a2e) — mysticeti-safety-authorsValid round
 /-- `doAdvance` preserves validator IDs. -/
 lemma doAdvance_validators_map_fst (s : BelugaState) (vid : ValidatorId) :
     (doAdvance s vid).validators.map Prod.fst = s.validators.map Prod.fst := by
@@ -130,7 +126,6 @@ lemma doAdvance_blocks (s : BelugaState) (vid : ValidatorId) :
     (doAdvance s vid).blocks = s.blocks := by
   unfold doAdvance updateValidator; rfl
 
--- proof: aristotle (project c2ca4a2e) — mysticeti-safety-authorsValid round
 /-- `doPropose` prepends exactly one block with `author = vid`, leaving
 the rest of the block list unchanged. -/
 lemma doPropose_blocks (system : BlockSynchroniserSystem) (s : BelugaState)
@@ -138,14 +133,12 @@ lemma doPropose_blocks (system : BlockSynchroniserSystem) (s : BelugaState)
     ∃ B, (doPropose system s vid r).blocks = B :: s.blocks ∧ B.author = vid := by
   exact ⟨_, rfl, rfl⟩
 
--- proof: aristotle (project c2ca4a2e) — mysticeti-safety-authorsValid round
 /-- `doPropose` does not change validator IDs. -/
 lemma doPropose_validators_map_fst (system : BlockSynchroniserSystem) (s : BelugaState)
     (vid : ValidatorId) (r : Round) :
     (doPropose system s vid r).validators.map Prod.fst = s.validators.map Prod.fst := by
   unfold doPropose; aesop
 
--- proof: aristotle (project c2ca4a2e) — mysticeti-safety-authorsValid round
 set_option maxHeartbeats 800000 in
 /-- Every block in `step system s` is either already in `s.blocks` or has
 its author among the first components of `s.validators`. -/
@@ -184,7 +177,6 @@ lemma init_validators_ids (system : BlockSynchroniserSystem) :
   obtain ⟨pair, hpair_mem, hpair_eq⟩ := hvid
   exact ⟨pair, hpair_mem, hpair_eq⟩
 
--- proof: aristotle (project c2ca4a2e) — mysticeti-safety-authorsValid round
 /-- The `authorsValid` conjunct holds for every step of the Beluga
 trace; jointly with the validator-IDs-stable invariant, this is the
 right inductive carrier. -/

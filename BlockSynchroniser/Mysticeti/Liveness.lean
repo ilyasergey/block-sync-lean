@@ -32,7 +32,6 @@ execution. They are stated as standalone lemmas so the main theorems
 compose them cleanly, matching the paper's proof structure.
 -/
 
--- proof: aristotle (project d32908b4) — round 5
 
 /-- Membership in `eraseDups l` implies membership in `l`. -/
 private lemma mem_of_mem_eraseDups {α : Type*} [BEq α] [LawfulBEq α]
@@ -209,7 +208,6 @@ Byzantine count bound: in any nodup list of registered validator IDs,
 at most `f` entries are non-honest. Follows from the system constraints
 `n = 3f+1`, `|honest| = 2f+1`, and `n = |validators|`.
 -/
--- proof: aristotle (project 2300aa5f) — mysticeti-liveness-bundle-no-exfalso round
 private lemma byz_bound_of_system_constraints
     (system : BlockSynchroniserSystem)
     (hN : system.n = 3 * system.f + 1)
@@ -253,7 +251,6 @@ through verbatim, and `byz_bound` is proved sorry-free by
 The remaining 8 fields are the genuine post-GST liveness conjuncts
 (paper §D.2 territory) and are stub `sorry`s pending future
 inductive trace analysis. -/
--- proof: aristotle (project 2300aa5f) — mysticeti-liveness-bundle-no-exfalso round
 -- (system-constraint scaffolding + byz_bound proof; 8 liveness conjuncts pending)
 theorem belugaTrace_satisfies_mysticeti_post_gst_liveness
     (system : BlockSynchroniserSystem)

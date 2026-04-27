@@ -13,7 +13,6 @@ import BlockSynchroniser.Beluga.Protocol
 
 set_option maxHeartbeats 800000
 
--- proof: aristotle (project 9f17cf80) — admission-invariant round
 -- The compound `TraceInv` carrier, all per-action preservation
 -- lemmas, and the trace-induction proof of
 -- `belugaTrace_admissionWellFormed` were introduced by this round.

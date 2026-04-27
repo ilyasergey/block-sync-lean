@@ -22,7 +22,6 @@ namespace BlockSynchroniser
 
 /-- Transitivity of the `Reaches` relation: if `a` reaches `b` and `b`
 reaches `c`, then `a` reaches `c`. -/
--- proof: aristotle (project 9d7e8e08) — added in round 6
 theorem Reaches.trans {S : Type} [SystemState S] {state : S} {a b c : Block}
     (hab : Reaches state a b) (hbc : Reaches state b c) : Reaches state a c := by
   induction hbc with
@@ -62,7 +61,6 @@ contradiction: each of the `n = 3f+1` triples `(i, i+1, i+2)` has a
 false member; but each false position covers exactly 3 triples
 (by the wrap-around), total coverage `3f < 3f+1`, contradiction.
 -/
--- proof: aristotle (project 4cda6cb1) — round 2
 lemma consecutive_triple_exists (n f : Nat) (g : Nat → Bool)
     (hn : n = 3 * f + 1)
     (h_false_count : (Finset.range n |>.filter (fun i => g i = false)).card ≤ f)
@@ -107,7 +105,6 @@ contains `⌈(6f+3)/(3f+1)⌉ = 3` honest leader blocks.
 
 The Lean statement returns the explicit start round of the
 consecutive-honest triple. -/
--- proof: aristotle (project 4cda6cb1) — round 2
 theorem lemma10_round_robin_pigeonhole
     (system : BlockSynchroniserSystem) (startRound : Round)
     (hN : system.n = 3 * system.f + 1)
@@ -233,7 +230,6 @@ not equivocate, every round `B.r + 2` block must reference a
 certificate for `B`. Induction on rounds propagates to all
 `r' > B.r + 1`.
 -/
--- proof: aristotle (project 9f17cf80) — admission-invariant round
 theorem lemma13_cert_persistence
     (system : BlockSynchroniserSystem) {S} [SystemState S] (state : S)
     (_h_no_eq : NoEquivocationInParents system state)
@@ -441,7 +437,6 @@ a liveness consequence the paper invokes silently. This is finding
   invariant that all consensus decisions originate from direct
   DAG-pattern observations on leader blocks.
 -/
--- proof: aristotle (project 9d7e8e08) — round 6
 theorem lemma16_consistent_status
     (system : BlockSynchroniserSystem) {S} [SystemState S] (state : S)
     (view : ConsensusView)
@@ -513,7 +508,6 @@ Paper proof (verbatim):
   eventually all decide the same way, upgrading `Consistent`
   (no conflicting non-`Undecided`) to full view equality.
 -/
--- proof: aristotle (project 9d7e8e08) — round 6
 theorem theorem7_consensus_safety
     (system : BlockSynchroniserSystem) {S} [SystemState S] (_state : S)
     (view : ConsensusView) (order : TransactionOrder)

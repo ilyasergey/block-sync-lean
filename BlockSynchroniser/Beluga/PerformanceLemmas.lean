@@ -71,7 +71,6 @@ theorem lemma3_honest_not_blamed
           (∃ bv, (belugaTrace system k).getValidator vid₂ = some bv ∧
             ∃ bv', (belugaTrace system k').getValidator vid₂ = some bv' ∧
               bv'.reputation.lookup vid₁ ≥ bv.reputation.lookup vid₁) := by
-  -- proof: aristotle (project 91c97602)
   intro vid₁ vid₂ h₁ h₂ k hk k' hk';
   have := belugaTrace_getValidator_honest system vid₂ h₂ k;
   exact ⟨ _, this.choose_spec, by obtain ⟨ bv', hbv', hrep ⟩ := belugaTrace_getValidator_reputation system vid₂ k _ this.choose_spec k' hk'; exact ⟨ bv', hbv', by simp +decide [ hrep ] ⟩ ⟩
@@ -93,7 +92,6 @@ private lemma round_advance_chain
         (∀ vid, isHonestValidator system vid = true →
           ∃ bv, (belugaTrace system k').getValidator vid = some bv ∧
                 bv.currentRound = r + d + 1) := by
-  -- proof: aristotle (project 91c97602)
   intro d r k hk h_round
   induction' d with d ih generalizing r k;
   · exact h_lt r k hk h_round |> fun ⟨ k', hk₁, hk₂, hk₃ ⟩ => ⟨ k', hk₁, by simpa using hk₂, hk₃ ⟩;
@@ -128,7 +126,6 @@ theorem lemma4_round_latency_delta
           ∀ vid, isHonestValidator system vid = true →
             ∃ bv, (belugaTrace system k').getValidator vid = some bv ∧
                   bv.currentRound = r' + 1 := by
-  -- proof: aristotle (project 91c97602)
   intros r k_r hk_r hr hr' r' hr'';
   have := round_advance_chain system time h_time h_lt ( r' - r ) r k_r hk_r hr;
   grind
@@ -173,7 +170,6 @@ theorem lemma5_round_latency_or_blamed
                         bv'.reputation.lookup vid_m + R_L ≤
                         bv₀.reputation.lookup vid_m) ∧
             time k' ≤ time k_r + (r' - r) * system.Δ + 3 * system.Δ) := by
-  -- proof: aristotle (project 91c97602)
   contrapose! h_lt;
   intro h;
   obtain ⟨ r, k_r, h₁, h₂, r', hr', h₃, h₄ ⟩ := h_lt;
