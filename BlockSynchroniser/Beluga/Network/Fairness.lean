@@ -3444,6 +3444,75 @@ theorem network_each_honest_block_eventually_accepted_withPull
     refine ⟨k₃, ?_⟩
     rw [h_B_d] at h_acc; exact h_acc
 
+/-! ## Bridge: hasAcceptedDigest ↔ HasAccepted -/
+
+/-- Bridge between the boolean `hasAcceptedDigest` predicate and the
+`HasAccepted` proposition (which is membership of a block_accept op
+in `emittedOperations`). -/
+theorem hasAcceptedDigest_iff_HasAccepted (s : BelugaState)
+    (vid : ValidatorId) (d : BlockDigest) :
+    hasAcceptedDigest s vid d = true ↔ HasAccepted s vid d := by
+  unfold hasAcceptedDigest HasAccepted Emitted
+  rw [List.any_eq_true]
+  constructor
+  · rintro ⟨op, hop_mem, hop_match⟩
+    cases op with
+    | block_accept v d' =>
+      simp at hop_match
+      obtain ⟨h_v, h_d⟩ := hop_match
+      rw [← h_v, ← h_d]; exact hop_mem
+    | _ => simp at hop_match
+  · intro h_mem
+    refine ⟨ValidatorOperation.block_accept vid d, h_mem, ?_⟩
+    simp +decide
+
+/-- `hasAcceptedDigest = true` is monotone along `networkTraceWithPull`. -/
+theorem network_hasAcceptedDigest_monotone_withPull
+    (system : BlockSynchroniserSystem) (time : Nat → Nat)
+    (vid : ValidatorId) (d : BlockDigest)
+    (k₁ k₂ : Nat) (h_le : k₁ ≤ k₂)
+    (h : hasAcceptedDigest (networkTraceWithPull system time k₁).base vid d = true) :
+    hasAcceptedDigest (networkTraceWithPull system time k₂).base vid d = true := by
+  rw [hasAcceptedDigest_iff_HasAccepted] at h ⊢
+  exact network_HasAccepted_monotone_withPull system time vid d k₁ k₂ h_le h
+
+/-! ## Iteration over honest validators: all-accepted-by-some-step -/
+
+/-- Iteration lemma: for any list `l` of honest validator IDs, there
+exists a step `k` at which `vid` has accepted the round-`r` digest of
+every member of `l`. Inductive over `l`. -/
+private lemma all_honest_in_list_eventually_accepted
+    (system : BlockSynchroniserSystem) (time : Nat → Nat)
+    (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
+    (h_time_unbounded : ∀ T, ∃ k, time k ≥ T)
+    (h_delivery : NetworkDeliveryWithPull system time)
+    (h_scheduling : ActionSchedulingWithPull system time)
+    (h_spread : BoundedRoundSpread_networkTraceWithPull system time)
+    (h_accept : AcceptScheduling system time)
+    (r : Round) (vid : ValidatorId) (h_vid_honest : isHonestValidator system vid = true) :
+    ∀ l : List ValidatorId, (∀ p ∈ l, isHonestValidator system p = true) →
+      ∃ k, ∀ vid_p ∈ l,
+        hasAcceptedDigest (networkTraceWithPull system time k).base vid
+          (digest system r vid_p) = true := by
+  intro l
+  induction l with
+  | nil => intro _; exact ⟨0, fun _ h => by simp at h⟩
+  | cons hd tl ih =>
+    intro h_all
+    obtain ⟨k_tl, h_tl⟩ := ih (fun p hp => h_all p (List.mem_cons_of_mem _ hp))
+    obtain ⟨k_hd, h_hd⟩ := network_each_honest_block_eventually_accepted_withPull
+      system time h_mono h_time_unbounded h_delivery h_scheduling h_spread h_accept
+      r vid hd h_vid_honest (h_all hd List.mem_cons_self)
+    refine ⟨max k_tl k_hd, ?_⟩
+    intro p hp
+    rw [List.mem_cons] at hp
+    rcases hp with h_eq | h_in
+    · subst h_eq
+      exact network_hasAcceptedDigest_monotone_withPull system time vid (digest system r p)
+        k_hd (max k_tl k_hd) (le_max_right _ _) h_hd
+    · exact network_hasAcceptedDigest_monotone_withPull system time vid (digest system r p)
+        k_tl (max k_tl k_hd) (le_max_left _ _) (h_tl p h_in)
+
 /-! ## EventualRoundAcceptance: proof skeleton
 
 Phase 10's main theorem, derived from the with-pull primitives:
