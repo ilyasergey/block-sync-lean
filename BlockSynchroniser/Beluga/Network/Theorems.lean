@@ -914,6 +914,30 @@ theorem network_eventualCausalAcceptance_modulo_gap
     · rw [hasAcceptedDigest_iff_HasAccepted] at h_acc_parent
       exact h_acc_parent
 
+/-! ## Phase 11 complete: `EventualCausalAcceptance` proved -/
+
+/-- **Phase 11 main theorem (closed).**
+
+Under the with-pull primitives — including `NetworkInPoolDeliveryWithPull`
+which captures paper §4.3's universal pull-channel delivery —
+`networkBelugaTraceWithPull` satisfies `EventualCausalAcceptance`.
+
+This replaces the `EventualCausalAcceptance` axiom on T2 with a
+derived theorem (cf. F-1c on the causal side). Combined with
+Phase 10's `network_eventualRoundAcceptance`, both load-bearing
+F-1c axioms are now derived from the with-pull primitives. -/
+theorem network_eventualCausalAcceptance
+    (system : BlockSynchroniserSystem) (time : Nat → Nat)
+    (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
+    (h_time_unbounded : ∀ T, ∃ k, time k ≥ T)
+    (h_in_pool_delivery : NetworkInPoolDeliveryWithPull system time)
+    (h_accept : AcceptScheduling system time) :
+    EventualCausalAcceptance system (networkBelugaTraceWithPull system time) :=
+  network_eventualCausalAcceptance_modulo_gap system time h_mono h_time_unbounded
+    (fun k vid B h_v h_g h_p =>
+      network_in_pool_eventually_accepted_withPull system time h_mono
+        h_in_pool_delivery h_accept k vid B h_v h_g h_p)
+
 /-! ## Partial discharge of Phase 11 gap: honest-authored case -/
 
 /-- Honest-authored in-pool blocks are eventually accepted by every
