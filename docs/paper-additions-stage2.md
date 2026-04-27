@@ -89,6 +89,58 @@ adversary's scheduling. Item 6 ranges only over honest validators
 as recipients; the *senders* of the pulled blocks may be anyone.
 This is faithful to the paper's adversary model.
 
+### Where ImPoA enters the bundle, and where it does not
+
+`ImPoA` (paper §4.3) is the structural property of the DAG that
+says *"a block is implicitly available iff f+1 in-pool blocks
+reference it"*. It is the substrate on which the §4.3 pull
+mechanism is built. The bundle's items relate to it as follows.
+
+- **Items 1, 2, 3, 4, 5 do not depend on ImPoA.**
+  - Items 1, 2 are clock and §2 push delivery — pure §2.
+  - Item 3 (round-advance liveness) holds because the round-advance
+    rule has a *timeout* path: an honest validator advances either
+    when `allProposedFor` fires or when its per-round timeout
+    `T_rd = 4Δ` elapses. The timeout fires unconditionally on the
+    validator's local clock; ImPoA is not consulted.
+  - Item 4 (protocol synchronization) follows from items 2 and 3
+    plus the propose-before-advance gate, again with no ImPoA.
+  - Item 5 (accept-action liveness) is a scheduling claim about
+    the `accept` action, not about *what makes it enabled*; it
+    fires within `Δ` whenever `canAcceptBlock` is true. ImPoA
+    affects the predicate `canAcceptBlock` (see below) but not
+    item 5's scheduling guarantee.
+- **Item 6 is what ImPoA enables.** "Every block in the global
+  pool is eventually known to every honest validator post-GST" is
+  exactly the §4.3 conclusion the pull mechanism is designed to
+  deliver. The pull mechanism's correctness rests on the
+  ImPoA structural fact: when an honest validator `v` issues a
+  pull request for a block `B` that it has not received via push,
+  the pull *succeeds* because some honest validator already has
+  `B` (this is the f+1-references quorum-intersection argument
+  of §4.3). Without ImPoA, an honest validator that missed `B`
+  via push would have no structural witness on which to base a
+  pull request, and item 6 would no longer follow from items 2,
+  3, 4 alone.
+
+So ImPoA is **necessary for item 6** at the paper's level of
+abstraction: the §4.3 mechanism delivering the conclusion of item
+6 is built on ImPoA. ImPoA is **not consumed directly** by items
+1–5, nor by any of the §5 lemmas/theorems below (their proofs
+take item 6 as a black box).
+
+The accept rule's structure also has an ImPoA disjunct: a
+validator may accept `B` either because it received `B` via push
+or pull, or because `B`'s parents are implicitly available. The
+proof sketches below take the **`received`** disjunct (acceptance
+fires after item 6 lands the block in the inbox), so they never
+inspect the ImPoA disjunct of `canAcceptBlock`. The ImPoA disjunct
+is what makes the protocol's runtime *practical* — a validator
+can keep advancing without waiting for direct delivery of every
+parent — but it does not feature as a load-bearing step in any
+§5 proof, because the §5 proofs use item 6 to deliver the parents
+themselves.
+
 ## 2. Restated §5 lemmas and theorems
 
 Under `BelugaPartialSynchrony`, the §5 lemmas and theorems are
@@ -201,34 +253,18 @@ Block `d`'s corresponding block `B` is in the pool at time `t`
 `B` remains in the pool. Therefore at the advance step, `B`'s
 digest is already stored — `v_i` has emitted `block_store_i`. □
 
-**Why this sketch does not need ImPoA.** The paper's current T1
-proof routes through ImPoA: "the parent blocks are referenced by
-`f + 1` subsequent blocks → at least one honest validator stored
-them → the validator pulls them → the validator eventually
-accepts them, then stores them." This argument is needed if T1
-is read as "even when a validator is missing some parents at the
-moment of acceptance, it will eventually catch up", because then
-the catch-up step has to be justified — and ImPoA + pull is the
-mechanism §4.3 supplies for that.
-
-The sketch above does not need this catch-up step because it
-relies only on the *action-priority order* of §4 (`accept ≻
-store ≻ advance`, all above `propose`). The argument is
-structural rather than temporal: at the moment `v_i` advances —
-which it does within `Δ` of becoming able to, by per-action
+The proof relies only on the *action-priority order* of §4
+(`accept ≻ store ≻ advance`, all above `propose`). The argument
+is structural rather than temporal: at the moment `v_i` advances
+— which it does within `Δ` of becoming able to, by per-action
 liveness — every accepted-and-still-in-pool digest is *already*
 stored, because otherwise the higher-priority `store` action
-would have fired first instead of the `advance`. No pull, no
-ImPoA, no f+1-references quorum is consulted; the conclusion is
-forced by the priority order alone.
-
-ImPoA is still required for the *runtime* of the protocol: it is
-what enables a validator to *accept* a block whose parents it has
-not directly received, by trusting the f+1-reference quorum
-instead. T1 is downstream of the accept rule and does not need to
-re-derive what made acceptance valid in the first place — once
-`v_i` has accepted `d`, the structural action-priority argument
-takes over.
+would have fired first instead of the `advance`. The paper's
+current T1 proof routes through ImPoA + the f+1-references / pull
+argument; it is correct, but the action-priority structure
+already forces the conclusion without consulting ImPoA. T1 is
+downstream of the accept rule and does not need to re-derive what
+made acceptance valid in the first place.
 
 ### T2 (Causal Availability) — proof sketch
 
@@ -249,64 +285,15 @@ Induction on the length of the causal-ancestor chain `B → B'`.
   (accept-action liveness), `v_i` accepts `B'` within `Δ` of `t'`.
   □
 
-**Why this sketch does not need a separate ImPoA / f+1-references
-argument.** The paper's current T2 proof folds two things into
-one: (i) the recursion through causal ancestors, and (ii) the
-liveness step that says each ancestor will eventually be received.
-For (ii), the paper invokes ImPoA + f+1-references + the pull
-mechanism inline.
-
-In the sketch above, (i) and (ii) are separated. (i) is just the
-length-induction over `Reaches`, with no protocol content. (ii)
-is item 6 of `BelugaPartialSynchrony` — "every block in the pool
-is eventually received" — which is exactly the conclusion ImPoA +
-the pull mechanism are designed to deliver. By naming the
-conclusion as a stated assumption, the paper does not need to
-re-derive it inside T2: T2 just cites it, and the structural
-recursion is the entire content of the proof.
-
-The atomic §4.3 derivation (every f+1-referenced block is pulled
-within `2Δ` after the witness honest references it) is still
-where item 6 *comes from*; making it explicit lets §5's prose
-treat the conclusion as a black box.
-
-## ImPoA: where it is used and where it is not
-
-It is worth being precise about what ImPoA buys. The accept rule
-of §4.3 reads "an honest validator may accept a block `B` whose
-parents have *all* been observed — either explicitly accepted, or
-implicitly available because `f + 1` subsequent in-pool blocks
-reference them." The ImPoA disjunct (the "implicit availability"
-half) is what lets a validator accept without having directly
-received every parent.
-
-This makes ImPoA *load-bearing for the runtime of the protocol*:
-without it, an honest validator that hasn't received a parent via
-push, and isn't fast enough to issue a pull request before the
-round timeout fires, would be stuck. With it, the f+1-reference
-quorum gives the validator structural permission to accept.
-
-ImPoA is **not** load-bearing for the §5 *correctness* proofs:
-
-- **T1** (Block Availability) is structural in the action-priority
-  order, downstream of the accept rule: it says "if you've
-  accepted, you'll store before advancing", regardless of *how*
-  you accepted.
-- **T2** (Causal Availability) recurses on `Reaches` and at each
-  step uses item 6 (universal in-pool delivery) to argue the
-  ancestor is received. The ancestor is then accepted via the
-  `received` disjunct of the accept rule, not the ImPoA disjunct.
-- **T3** (Round Progression) uses the propose-before-advance
-  gate and round liveness — no acceptance argument at all.
-- **T4** (Round Termination) again accepts via `received`, not
-  via ImPoA, once item 6 lands the block in the inbox.
-
-So the §5 proofs can be read as:
-**ImPoA + pull mechanism ⟹ item 6 (universal in-pool delivery)
-⟹ T1 / T2 / T3 / T4** — without §5 needing to look inside the
-arrow. This separation simplifies the §5 prose substantially and
-matches the formalization, which similarly never opens the ImPoA
-disjunct in any §5 proof.
+The structural part of T2 is the `Reaches` induction, with no
+protocol content. The "the ancestor will eventually be received"
+step is exactly item 6 of `BelugaPartialSynchrony` — the
+conclusion the §4.3 pull mechanism is designed to deliver, and
+the place where ImPoA enters the bundle (see "Where ImPoA enters
+the bundle" above). By naming this conclusion as a stated
+assumption, the paper does not need to re-derive it inside T2:
+T2 just cites it, and the structural recursion is the entire
+content of the proof.
 
 ### T3 (Round Progression) — proof sketch
 
