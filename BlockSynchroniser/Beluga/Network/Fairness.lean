@@ -447,6 +447,45 @@ theorem currentTime_tracks_time (system : BlockSynchroniserSystem)
       time (k + 1)
     exact networkStep_currentTime system (networkTrace system time k) (time (k + 1))
 
+/-! ## Foundational lemmas on `networkStepWithPull` and `networkTraceWithPull` -/
+
+/-- `networkStepWithPull` sets `currentTime` to `newTime`. -/
+theorem networkStepWithPull_currentTime
+    (system : BlockSynchroniserSystem) (s : NetworkState) (newTime : Nat) :
+    (networkStepWithPull system s newTime).currentTime = newTime := by
+  have h_del_ct : ({ s with currentTime := newTime }
+      : NetworkState).deliverPending.currentTime = newTime := by
+    rw [NetworkState.deliverPending_preserves_currentTime]
+  have h_pull_del_ct :
+      (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending).currentTime = newTime := by
+    rw [NetworkState.deliverPullPending_preserves_currentTime]; exact h_del_ct
+  have h_pulled_ct :
+      (pullStep system (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending)).currentTime = newTime := by
+    rw [pullStep_preserves_currentTime]; exact h_pull_del_ct
+  unfold networkStepWithPull
+  simp only
+  split
+  case _ s' h_fs =>
+    rw [List.findSome?_eq_some_iff] at h_fs
+    obtain ⟨_, ⟨vid, bv⟩, _, _, h_act, _⟩ := h_fs
+    have := networkTryActFor_preserves_currentTime system _ vid bv s' h_act
+    rw [this]; exact h_pulled_ct
+  case _ _ => exact h_pulled_ct
+
+/-- `currentTime` of `networkTraceWithPull` at step `k` equals `time k`. -/
+theorem currentTime_tracks_time_withPull (system : BlockSynchroniserSystem)
+    (time : Nat → Nat) (k : Nat) :
+    (networkTraceWithPull system time k).currentTime = time k := by
+  induction k with
+  | zero =>
+    show ({ NetworkState.init system with currentTime := time 0 } : NetworkState).currentTime
+        = time 0
+    rfl
+  | succ k _ =>
+    show (networkStepWithPull system (networkTraceWithPull system time k) (time (k + 1))).currentTime =
+      time (k + 1)
+    exact networkStepWithPull_currentTime system (networkTraceWithPull system time k) (time (k + 1))
+
 /-! ## Network-trace structural invariants
 
 These invariants are the network-aware analogues of `belugaTrace`'s
