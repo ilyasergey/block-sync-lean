@@ -987,10 +987,12 @@ theorem network_theorem2_causal_availability_withPull
 
 /-! ## Unified with-pull corollary: Beluga-with-pull is a block synchronizer -/
 
-/-- **Phase 12 main corollary.** Under the with-pull primitives,
-`networkBelugaTraceWithPull` satisfies all four block-synchronizer
-properties. T1, T3, T4 are derived; T2 still takes
-`EventualCausalAcceptance` (Phase 11 work). -/
+/-- **Phase 12 main corollary (axiom-free).** Under the with-pull
+primitives, `networkBelugaTraceWithPull` satisfies all four
+block-synchronizer properties. All four theorems (T1/T2/T3/T4) are
+fully derived; no `Eventual*` axioms. The migration goal is reached:
+both F-1c axioms (`EventualRoundAcceptance` and
+`EventualCausalAcceptance`) are now proved theorems. -/
 theorem networkTraceWithPull_isBlockSynchronizer
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
     (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
@@ -999,8 +1001,7 @@ theorem networkTraceWithPull_isBlockSynchronizer
     (h_scheduling : ActionSchedulingWithPull system time)
     (h_spread : BoundedRoundSpread_networkTraceWithPull system time)
     (h_accept : AcceptScheduling system time)
-    (h_eventual_causal :
-      EventualCausalAcceptance system (networkBelugaTraceWithPull system time)) :
+    (h_in_pool_delivery : NetworkInPoolDeliveryWithPull system time) :
     Properties.BlockSynchronizer system (networkBelugaTraceWithPull system time) :=
   ⟨network_theorem3_round_progression_withPull system time h_mono h_time_unbounded
      h_delivery h_scheduling h_spread,
@@ -1008,7 +1009,9 @@ theorem networkTraceWithPull_isBlockSynchronizer
      h_delivery h_scheduling h_spread h_accept,
    network_theorem1_block_availability_withPull system time h_mono h_time_unbounded
      h_delivery h_scheduling h_spread,
-   network_theorem2_causal_availability_withPull system time h_eventual_causal⟩
+   network_theorem2_causal_availability_withPull system time
+     (network_eventualCausalAcceptance system time h_mono h_time_unbounded
+       h_in_pool_delivery h_accept)⟩
 
 end Network
 end Beluga
