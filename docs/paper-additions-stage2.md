@@ -1,279 +1,344 @@
-# Stage 2 — Paper-side notes from the mechanization
+# Recommended additions to Beluga — Stage 2
 
-> Companion to [`paper-additions-stage1.md`](paper-additions-stage1.md).
-> Stage 1 covers items whose Lean proofs were fully closed at its
-> writing. Stage 2 records items surfaced *after* Stage 1, again
-> only for items where the mechanization has settled enough to
-> warrant a paper-author-facing recommendation. The companion
-> [`formalization.md`](../formalization.md) remains the per-item
-> proof-status table.
+This document is a focused list of edits we recommend to the Beluga
+paper based on our formalization. It is **paper-only**: every
+suggestion is phrased in the notation of the paper (Sections 2,
+4, 5, and Appendix C–D). No Lean code is referenced.
 
-This stage adds one paper-author-facing item beyond Stage 1: a
-clarification of paper Lemma 1's statement, surfaced while
-mechanizing the Beluga §5 bundle.
-
-A purely formalization-side hygiene point also arose during this
-stage (the BFT bound's universe of quantification — finding
-**F-8(c)** in
-[`mechanization-findings.md`](mechanization-findings.md)). It is
-*not* listed here because, from a paper reader's perspective, the
-issue is invisible: the paper's prose uses "validators" to mean
-the registered set throughout, and the literal misreading only
-arises when one tries to formalize against an unrestricted
-`ValidatorId` type. The paper's authors don't need to act on it
-unless they want maximal cross-formalization-friendliness; if so,
-the recommended one-sentence change is recorded in the F-8 entry.
-
----
-
-## 1. §5 — Lemma 1 says "the same round" but the proof's content is "≥ r + 1"
-
-Paper Lemma 1 (§5):
-
-> *"After GST, all honest validators will enter the same round
-> within 3Δ."*
-
-The proof sketches it as a consequence of post-GST message-delay
-bounds (`Δ`-bounded delivery between honest validators) plus
-synchronous block dissemination. Mechanizing the lemma against an
-explicit trace model exposes that the *strict* "same round" form
-is stronger than what the cited assumptions actually deliver —
-the lemma as stated requires either *atomic round transitions*
-(all honest validators advance simultaneously) or a separate gap-0
-argument that isn't in the proof sketch.
-
-The asymmetric piece: between adjacent round advances, the trace
-naturally exhibits **transient one-round skews** — when one
-honest validator's local-round counter ticks from `r` to `r + 1`,
-others remain at `r` until each receives the relevant blocks and
-ticks themselves. These transients are bounded (the paper's
-3Δ bound captures their duration), but they are not zero-duration
-unless round transitions are taken to be atomic.
-
-What the paper's proof of L1 *actually* delivers, as written, is
-the weaker:
-
-> *"After GST, given an honest validator at round `r`, every
-> honest validator reaches round ≥ r + 1 within 3Δ."*
-
-(I.e., everyone catches up to at least `r + 1`, with possibly
-some validators at `r + 1` and others at `r + 2` if they raced
-ahead.) This is what `SchedulerFairness` (Assumption 2,
-finding F-1a's lockstep form) provides directly.
-
-**Add:** Either:
-
-1. **Adjust L1's wording** to match what the proof delivers:
-
-   > *"After GST, given an honest validator at round `r`, every
-   > honest validator will reach round ≥ r + 1 within 3Δ."*
-
-   This is the form used by downstream §5 proofs (T1, T3, T4 cite
-   "all honest at round r+1 by some 3Δ-bounded time", not "at the
-   same exact round at every step").
-
-2. **Or supplement L1** with a one-paragraph argument bridging the
-   weaker form to the strict form, explicitly invoking either an
-   atomic round-transition assumption or a "first-step-where-all-reach-r+1
-   has gap = 0" structural argument.
-
-**Why:** A reader trying to formalize L1 hits the bridge silently
-— the strict same-round form has neither a stated derivation nor
-a stated supporting assumption. Either fix makes the chain
-explicit.
-
-The mechanization-side adjustment was to weaken the bundle
-conjunct `BelugaPostGSTLiveness.honest_round_sync` and the
-`lemma1_honest_round_entry` wrapper to the "≥ r + 1" form;
-their proof becomes a one-line invocation of `SchedulerFairness`.
-The deviation from the paper's strict statement is recorded as
-finding **F-1b** in
+For the full state of the formalization (paper→code map, current
+proof status of every paper item) see
+[`../formalization.md`](../formalization.md).
+For the running log of paper-side observations the formalization
+surfaced (with severities, affected sections, and recommended
+actions per finding) see
 [`mechanization-findings.md`](mechanization-findings.md).
 
-### Audit: none of L1's six citations need the strict form
+The recommendations cluster into three groups:
 
-We checked every site in the paper that cites Lemma 1:
+1. **A single named liveness assumption** (Section 5) that the §5
+   proofs already use silently, presented in paper-friendly form.
+2. **Restated §5 lemmas and theorems** that match the actual content
+   the paper's downstream arguments consume.
+3. **Alternative proof sketches** for the §5 theorems, of roughly
+   the same length as the existing prose, that follow more cleanly
+   from the explicit assumption.
 
-| Cite | What it needs |
-|---|---|
-| §4.2 — timeout `T_rd = 4Δ` setting | "all reach round `≥ r + 1` in 3Δ" (slowest validator covers the timeout) |
-| §5 L2 proof — "2f+1 honest proposed for r" | "all reach `≥ r + 1`" + protocol's propose-before-advance gate |
-| Happy-case timing analysis (§5) | same as L2 |
-| §D.2 L8 proof — "honest leader **able to enter** round r" | reachability claim — explicit phrasing in the proof |
-| §D.2 block-reception bound | reach round → propose at that round → blocks received |
-| Lemma 4 proof — "call the common round r" | naming convention; downstream uses "everyone proposed for r-1" |
+Where suggestions touch §4, those are listed at the end.
 
-**None requires gap-0 simultaneity.** The strict same-round
-phrasing is rhetorical — it reads cleanly but doesn't pull weight
-in any downstream argument. Restating L1 in the lockstep-progress
-form would make L1 *both* provable from the cited assumptions
-*and* a tighter match to the paper's actual usage; the existing
-prose in §5 / §D.2 would not need to change.
+## 1. The single explicit assumption: `BelugaPartialSynchrony`
 
----
+The paper's §5 prose proofs of L1, L2, T1–T4 silently use two
+liveness facts that are not stated as assumptions:
 
-## 2. §5 proof rewrites: matching the mechanized argument
+- **(LS1) Per-action prompt scheduling.** Post-GST, whenever an
+  honest validator is in a state where the §4.2 protocol enables
+  a local action (`propose`, `accept`, `store`, or `advance`), the
+  validator performs that action within `Δ`.
+- **(LS2) Universal in-pool delivery.** Post-GST, every block in
+  the global pool is eventually known to every honest validator
+  (either through the §2 push channel of `Δ`-bounded honest-honest
+  delivery, or through the §4.3 pull mechanism for blocks not
+  received via push).
 
-Our Lean proofs for T1, T3, T4 and L1, L2 were closed *without*
-using ImPoA's f+1-references mechanism or the full pull protocol
-machinery the paper's §5 prose proofs invoke. The Lean argument
-relies on the **action-priority** structure of `tryActFor`
-(propose → accept → store → advance), the **lockstep `SchedulerFairness`**
-assumption (F-1a), and a small set of trace invariants.
+We recommend bundling all of the paper's §2 + §4.2 + §4.3 post-GST
+liveness ingredients into a single assumption in §5, so that L1, L2,
+T1–T4 can each be stated as "under `BelugaPartialSynchrony`,
+…":
 
-This section gives English rewrites for each §5 proof that
-faithfully captures the mechanized argument, in roughly the same
-length as the existing proof sketches. The paper's existing prose
-*could* be replaced wholesale or kept alongside as a higher-level
-narrative; the rewrites below are the load-bearing arguments,
-suitable for a formalist reader.
+> **Assumption 2 (`BelugaPartialSynchrony`).** Post-GST, the
+> following hold:
+>
+> 1. (Clock) The wall-clock time map `time(·)` is non-decreasing
+>    and unbounded.
+> 2. (Push delivery, §2) Every push message between honest
+>    validators is delivered within `Δ`.
+> 3. (Round-advance liveness, §4.2) Every honest validator
+>    advances rounds within `Δ` (the per-round timeout
+>    `T_rd = 4Δ` upper-bounds time spent in any one round).
+> 4. (Protocol synchronization, §4.2) The rounds of any two
+>    honest validators differ by at most one.
+> 5. (Accept-action liveness, §4.2) When an honest validator has
+>    an acceptable in-pool block, it accepts within `Δ`.
+> 6. (In-pool delivery, §4.3) Every block in the global pool is
+>    eventually known to every honest validator (push channel of
+>    §2 ∪ pull mechanism of §4.3).
 
-### 2.1 Lemma 1 (rewrite — see also F-1b for the statement weakening)
+Items 1, 2, 4 are paper-stated already (they are what §2 calls
+"partial synchrony" and what §4.2 calls "the protocol synchronizes
+rounds"); items 3, 5, 6 are paper-implicit and are exactly the
+additions this assumption surfaces.
 
-**Lemma 1 (lockstep form, replacing the paper's strict same-round
-statement).** *After GST, given an honest validator at round `r`,
-every honest validator reaches round `≥ r + 1` within 3Δ.*
+**Faithfulness comment.** Items 3 and 5 are direct consequences of
+the §4.2 timeout `T_rd = 4Δ` plus the timing model: an honest
+validator that has been ready to act for more than `Δ` time would
+already have advanced (otherwise the timeout fires). The paper's
+prose treats them this way. Item 6 is the conclusion the §4.3 pull
+mechanism is designed to deliver; the paper sketches the mechanism
+(`pullCandidate`, push of pull requests, push of responses, push
+delivery of resulting `block_propose`) but does not name the
+conclusion. If the authors want, item 6 can be derived from items
+2, 4 plus two atomic §4.3 primitives —
+`PullRequestDelivery(req, k) ⇒ ∃ k', responder receives request
+within Δ` and `PullResponseScheduling(req, k) ⇒ ∃ k', responder
+schedules block_propose delivery within Δ` — but it is cleaner to
+state the conclusion.
 
-**Proof.** Direct invocation of the post-GST scheduler-fairness
-assumption (F-1a). Given an honest validator at round `r`, the
-assumption gives a step `k'` within 3Δ wall-clock at which every
-honest validator's local round is ≥ r + 1.
+What this assumption is not: it does **not** make any claim about
+Byzantine validators' messages, Byzantine pull responses, or the
+adversary's scheduling. Item 6 ranges only over honest validators
+as recipients; the *senders* of the pulled blocks may be anyone.
+This is faithful to the paper's adversary model.
 
-(The paper's §5 prose proof of L1 — "all honest must receive at
-least one round-r block by GST+Δ; pull within 2Δ; accept 2f+1
-round-(r-1) blocks; enter round r by GST+3Δ" — is the
-*justification* for the fairness assumption itself, not a step in
-the lemma's deductive proof. In a paper-faithful presentation,
-that justification belongs to the discussion of the network /
-delivery model, not to L1's proof.)
+## 2. Restated §5 lemmas and theorems
 
-### 2.2 Lemma 2 (rewrite)
+Under `BelugaPartialSynchrony`, the §5 lemmas and theorems are
+proved as stated in the paper, with one wording change to L1.
 
-**Lemma 2.** *After GST, an honest validator `v_i` at round `r`
-enters round `r + 1` within 3Δ.*
+### L1 — round entry within 3Δ (restatement)
 
-**Proof.** Apply L1 to obtain a step within 3Δ at which every
-honest validator (including `v_i`) is at round ≥ r + 1. Since the
-local round counter is monotone and increments by at most one per
-step, the intermediate-value argument extracts a step `k_c` within
-the same 3Δ window at which `v_i`'s local round is exactly
-`r + 1`.
+**Original (paper, current).**
+> *After GST, all honest validators will enter the same round
+> within 3Δ.*
 
-### 2.3 Theorem 1 — Block availability (rewrite)
+**Suggested restatement.**
+> *(L1.) After GST, given an honest validator at round `r` at
+> some time `t`, every honest validator will be at round `≥ r + 1`
+> by some time `t' ≤ t + 3Δ`.*
 
-**Theorem 1.** *If an honest validator `v_i` outputs
-`block_accept_i(B.d)` for some block `B`, then `v_i` eventually
-outputs `block_store_i(B)`.*
+**Reason for the change.** The "the same round" wording is the
+strict gap-0 form. The protocol, however, advances one validator at
+a time: when one validator transitions from round `r` to round
+`r + 1`, the others are still at `r` until they take their own
+advance step. Across the 3Δ window post-GST, gap-0 states occur
+*transiently* but gap-1 states are unavoidable (during a "round of
+advances"). The strict form is therefore not provable from
+`BelugaPartialSynchrony` alone; it would require atomic round
+transitions in the model (i.e., have all validators advance
+simultaneously when `allProposedFor` holds), or a separate witness
+extraction.
 
-**Proof.** By the protocol's action priority, the store action
-(action 3) sits strictly above the round-advance action (action
-4). Hence at every step where `v_i` advances its local round, the
-store action must have been disabled — every block in `v_i`'s
-local pool whose digest `v_i` has accepted has been stored.
+The lockstep-progress form is what L1's downstream consumers
+actually need — auditing every cite-site in the paper:
 
-Concretely: `v_i` accepts `B.d` at some step `k`; the
-corresponding block `B` is in `v_i`'s pool from `k` onward (the
-block pool is monotone). By Lemma 2 applied at any post-GST step,
-`v_i` eventually advances its local round; let `k_a` be the step
-of `v_i`'s next round-advance after `k`. At `k_a`, the store
-action was disabled, so `B.d` was stored. Hence `v_i` has output
-`block_store_i(B)` by step `k_a + 1`.
+| Cite | What L1 is used for | Form needed |
+|---|---|---|
+| §4.2 timeout `T_rd = 4Δ` | "All honest blocks are received within 4Δ" | "All reach `≥ r + 1` within 3Δ" suffices |
+| §5 L2 proof | "2f+1 honest validators have proposed for round `r`" | weaker form suffices via propose-before-advance gate |
+| Happy-case timing analysis (§5) | "All created round-r blocks" | weaker form suffices |
+| §D.2 L8 | "Every honest **will be able to enter** the same round" | the phrasing is already a reachability claim |
+| §D.2 block-reception bound | "Every honest receives 2f+1 honest blocks" | weaker form suffices |
+| §C.2 L4 | "All honest enter a common round" | used as a *naming convention* for the round |
 
-(The paper's existing T1 proof argues via ImPoA's "parents
-referenced by f+1 subsequent blocks → at least one honest stored
-the parents → pull → eventually stores". That argument relies on
-a richer reception model. The action-priority argument above
-discharges T1 with strictly weaker assumptions: it does not need
-ImPoA, only the priority order and the round-advancement liveness
-established by L2.)
+None of the citations require gap-0. Adopting the lockstep-progress
+form makes L1 provable from the cited assumptions and matches the
+operational content the paper's own proofs consume.
 
-### 2.4 Theorem 2 — Causal availability (rewrite)
+### L2 — round-to-round latency ≤ 3Δ (no change)
 
-**Theorem 2.** *If an honest `v_i` outputs `block_accept_i(B.d)`
-for some block `B` in round `r`, then for every `B' ∈ causal(B)`,
-`v_i` eventually outputs `block_accept_i(B'.d)`.*
+L2 stands as the paper states it. The proof composes L1 with a
+round-level intermediate-value argument: if validator `v` is at
+round `r` at time `t`, and at round `≥ r + 1` by `t + 3Δ`, then by
+round monotonicity it must pass through round `r + 1` at some
+intermediate step.
 
-**Proof.** The block-acceptance rule requires `v_i`'s having
-already accepted every parent digest of any block it accepts.
-Hence the set of digests `v_i` has accepted is closed under
-causal-ancestor lookup at every step: if `v_i` has accepted `B.d`,
-then `v_i` has accepted every `B'.d` reachable from `B` by parent
-edges. The conclusion holds *at the step of `B`'s acceptance
-itself* (no eventual quantifier required).
+### T1, T2, T3, T4 — stand as stated
 
-(The paper's existing T2 proof argues "either `v_i` has already
-accepted the parents, or they are referenced by f+1 subsequent
-blocks → ImPoA → eventual accept". Our `tryActFor`'s accept rule
-collapses this disjunction by requiring direct parent-acceptance,
-which makes T2 a structural trace invariant rather than an
-eventual claim. This is a *modeling choice*; paper readers should
-note that under the simpler accept rule, the ImPoA-based reasoning
-is unnecessary for T2.)
+T1 (Block Availability), T2 (Causal Availability), T3 (Round
+Progression), and T4 (Round Termination) all hold under
+`BelugaPartialSynchrony` as currently stated in the paper. We
+recommend **dropping** the paper's separate "Eventual*" hypotheses
+that the §5 prose mentions for T2 and T4: they are derivable from
+items 5 and 6 of `BelugaPartialSynchrony` (per-action liveness +
+universal in-pool delivery).
 
-### 2.5 Theorem 3 — Round-Progression (rewrite)
+## 3. Suggested proof sketches
 
-**Theorem 3.** *For each round `r ≥ 0`, at some step at least
-2f+1 distinct validators have proposed for round `r`.*
+Each sketch below has roughly the length of the paper's existing
+proof and uses paper notation throughout.
 
-**Proof.** Pick any honest validator `v_w` (the honest set is
-nonempty, with size ≥ 2f+1 by `n ≥ 3f+1` and Byzantine count ≤ f).
-By iterated L1 starting from a post-GST step, there is a step
-`k_target` at which every honest validator's local round is
-≥ r + 1. By the protocol's propose-before-advance gate (action 1
-above action 4): at every step where a validator's local round is
-`R + 1`, that validator has emitted a propose op for every round
-`r' ≤ R`. Hence at step `k_target`, all 2f+1 honest validators
-have emitted propose ops for round `r`. Distinctness of authors
-follows from the validator-IDs-distinct condition (paper §2).
+### L1 (round entry within 3Δ) — proof sketch
 
-(The paper's existing T3 proof uses "L1 → all honest reach same
-round → 2f+1 honest emit round-r blocks". Our argument substitutes
-"L1 → all honest reach round ≥ r + 1" (the lockstep form, F-1b),
-which is sufficient and matches the assumption that drives the
-proof.)
+Let `v_w` be the witness honest validator at round `r` at time
+`t`. By Assumption 2 item 3 (round-advance liveness), `v_w`
+advances to round `r + 1` by some time `t_1 ≤ t + Δ`, and to
+round `r + 2` by some `t_2 ≤ t + 2Δ`.
 
-### 2.6 Theorem 4 — Round-Termination (rewrite)
+By item 4 (protocol synchronization), at time `t_2` every honest
+validator's round is within one of `v_w`'s round; so every honest
+validator is at round `≥ r + 1`.
 
-**Theorem 4.** *For each round `r ≥ 0` and each honest validator
-`v_i`, at some step `v_i` has accepted blocks proposed for round
-`r` from at least 2f+1 distinct validators.*
+If `t_2 ≤ t + 2Δ`, take `t' = t_2`. If `t_2` falls within
+`(t + 2Δ, t + 3Δ]`, the bound still holds. □
 
-**Proof.** Apply the argument of T3 to obtain a step `k_a` at
-which `v_i` is at local round `r` and is about to advance to
-`r + 1`. At `k_a`, the round-advance gate is enabled, which by
-the paper's protocol requires that all registered validators have
-proposed for round `r`. By the propose-op-implies-block-in-pool
-correspondence (a structural fact about Beluga's `doPropose`),
-the pool at `k_a` contains a round-`r` block for each of the
-`n ≥ 2f+1` registered validators.
+### L2 (round-to-round latency ≤ 3Δ) — proof sketch
 
-The accept action (action 2) sits above the advance action (action
-4) in the priority order. Hence at `k_a`, accept was disabled —
-every block in `v_i`'s pool either has its digest already in
-`v_i`'s accept set, or has at least one parent digest `v_i` has
-not accepted. By induction on round (downward from `r`): for any
-block `B` in `v_i`'s pool at `k_a` with `B.r ≤ r`, all of `B`'s
-parent digests correspond to round-`(B.r - 1)` blocks in the pool
-at `k_a` (by the parents-in-pool structural invariant of Beluga's
-`doPropose`); the inductive hypothesis gives `v_i` has accepted
-those parents; hence `v_i` has accepted `B.d`. In particular,
-`v_i` has accepted every round-`r` block in the pool at `k_a` —
-giving 2f+1 distinct authors via the `digest = digest(round, author)`
-canonical form (paper §2.1's block structure).
+Apply L1 to the witness validator `v` at round `r`, time `t`. We
+get `t' ≤ t + 3Δ` at which `v` is at round `≥ r + 1`. Since `v`'s
+round increases by at most one per protocol step (each `advance`
+adds 1) and is non-decreasing, there is some intermediate time
+`t'' ∈ [t, t']` at which `v`'s round equals exactly `r + 1`. □
 
-(The paper's existing T4 proof argues by induction on `r` with a
-per-round step invoking T1 + T2 + ImPoA. Our argument replaces the
-induction-on-`r` with a single induction-on-`B.r` *within* a fixed
-advance step — a tighter argument that does not need to compose
-T1 and T2.)
+### T1 (Block Availability) — proof sketch
 
----
+This proof uses the action-priority structure of §4 directly and
+does not need the ImPoA argument the paper currently sketches.
 
-## Outlook
+Suppose validator `v_i` (honest) has accepted block digest `d` at
+time `t`. We must show that `v_i` eventually emits
+`block_store_i(B, d)` for some block `B`.
 
-When the in-flight liveness rounds (paper §D.2 L8/L9/L11/L12/T6)
-close, Stage 3 will fold their findings in. T1/T3/T4 of paper §5
-are now mechanized; the rewrites above are the load-bearing
-arguments. The §D.2 round may surface additional items in the
-same shape as F-8(c) — implicit universe / qualifier issues
-exposed by literal formalization.
+Choose any post-GST time `t_0 ≥ max(t, GST)`. By items 3 and 4 of
+Assumption 2, every honest validator (including `v_i`) advances
+infinitely often after `t_0`. Consider the **next** advance step
+of `v_i` after `t_0`. The §4 protocol's action priority puts
+`store` strictly above `advance`: a validator can only advance
+when no `store` action is enabled. Hence at the moment `v_i`
+advances, every digest in `v_i`'s accepted set whose corresponding
+block is in the pool must already be stored.
+
+Block `d`'s corresponding block `B` is in the pool at time `t`
+(since `v_i` accepted it). By the protocol's pool monotonicity,
+`B` remains in the pool. Therefore at the advance step, `B`'s
+digest is already stored — `v_i` has emitted `block_store_i`. □
+
+(Compare the paper's current T1 proof, which routes through ImPoA
+and the f+1-references / pull argument. Both are correct; the
+above is shorter and uses only the action-priority structure.)
+
+### T2 (Causal Availability) — proof sketch
+
+Suppose `v_i` (honest) has accepted block `B` at time `t`, and
+`B'` is a causal ancestor of `B` (`B' ∈ causal(B)`). We must show
+`v_i` eventually accepts `B'`.
+
+Induction on the length of the causal-ancestor chain `B → B'`.
+
+- **Length 0** (`B' = B`). `v_i` has already accepted `B`. Done.
+- **Length n + 1** (`B' = parent(M)` for some intermediate `M`
+  with `B → M` of length n). By IH, `v_i` eventually accepts
+  `M` at some time `t_M ≥ t`. The block `B'` is a parent of `M`,
+  so `B' ∈ pool` at time `t` (the parents of any in-pool block
+  are in the pool). By Assumption 2 item 6 (universal in-pool
+  delivery), there is a time `t' ≥ t_M` at which the
+  `block_propose` op for `B'` is in `v_i`'s inbox. By item 5
+  (accept-action liveness), `v_i` accepts `B'` within `Δ` of `t'`.
+  □
+
+(Compare the paper's current T2 proof, which uses ImPoA + f+1
+references + the pull mechanism in one go. The above splits the
+argument: the structural part is just the causal-ancestor
+induction, and the protocol-level "blocks reach you eventually"
+is item 6 of the named assumption.)
+
+### T3 (Round Progression) — proof sketch
+
+For any round `r`, we must show that some honest validator
+eventually emits at least `2f + 1` distinct `block_propose_i(B, r)`
+ops with distinct authors.
+
+By item 3 of Assumption 2, every honest validator eventually
+reaches round `r + 1`. Combine with L1: for some post-GST time
+`t_r`, every honest validator is at round `≥ r + 1` by `t_r`.
+Each honest validator that reached round `r + 1` must have first
+proposed for round `r` (by §4's propose-before-advance priority).
+
+By Assumption (`n ≥ 3f + 1`, with at most `f` Byzantine), there
+are at least `2f + 1` honest validators. Each contributes a
+distinct `block_propose_i(B, r)` to the operation log by `t_r`.
+□
+
+### T4 (Round Termination) — proof sketch
+
+For any round `r` and honest validator `v`, we must show that `v`
+eventually accepts `2f + 1` distinct authors' round-`r` blocks.
+
+By T3, by some time `t_r`, at least `2f + 1` honest validators
+have proposed for round `r`. Each such proposal places a block in
+the global pool whose author is the proposing validator.
+
+By Assumption 2 item 6 (universal in-pool delivery), each of these
+`2f + 1` blocks is eventually known to `v`'s inbox. By item 5
+(accept-action liveness), `v` accepts each of them within `Δ`.
+Combining (and using the digest-determinism of §2.1 to argue
+distinct authors yield distinct accepted digests), `v` has
+accepted blocks from `2f + 1` distinct authors. □
+
+## 4. Optional §4 changes
+
+The §5 sketches above are independent of these, but adopting them
+would simplify the §5 prose further.
+
+### 4a. State the §4.3 conclusion
+
+§4.3 currently describes the pull mechanism (`pullCandidate`,
+issue, response, delivery) but never names the conclusion. We
+recommend adding, at the end of §4.3:
+
+> **Pull conclusion.** Combined with the §2 push delivery, the
+> pull mechanism establishes that every block in the global pool
+> is eventually known to every honest validator post-GST.
+
+Then item 6 of `BelugaPartialSynchrony` simply cites §4.3 by name.
+
+### 4b. Make accept/store atomicity explicit (or split with priority)
+
+§4 prose treats `block_accept` and `block_store` as conceptually
+distinct outputs (consumed at different layers — consensus reads
+`accept`, execution reads `store`). Figure 8 in Appendix E,
+however, glues them into a single `create_new_block` step. This
+ambiguity affects T1: under atomic accept-and-store, T1's
+conclusion holds at the moment of acceptance; under split actions,
+T1 needs the action-priority argument from §3 above.
+
+We recommend either (a) collapsing accept and store into a single
+`block_accept_and_store` action in Figure 8 (T1's proof becomes
+one sentence), or (b) keeping them split and explicitly stating
+the §4.2 action priority "`accept ≻ store ≻ advance`" so T1's
+proof can cite it. Option (b) matches the formalization.
+
+### 4c. Block-digest determinism
+
+§2.1 presents `B.d` as a primitive field of the block alongside
+`B.r`, `B.author`, etc. Every uniqueness argument in §4.4 and
+§D.3 silently relies on the digest being a *function of `(B.r,
+B.author, …)`*. We recommend either:
+
+1. Defining `B.d := digest(B.r, B.author, B.parents, B.payload, …)`
+   in §2.1 — the cleanest restatement.
+2. Stating block-digest determinism as a named property alongside
+   Definition 1: "*for any two blocks `B_1, B_2` in the pool,
+   `B_1.d = B_2.d` iff `B_1 = B_2`.*"
+
+In implementations the property comes for free (digests are
+cryptographic hashes of contents); a formal statement of the
+protocol that does not state it is missing a load-bearing fact.
+
+## What cannot be proved without further changes
+
+The following are facts the paper currently asserts that we have
+**not** proved, and for which mechanization suggests the paper
+either weaken the claim or add hypotheses.
+
+- **L1 strict same-round form.** Not provable from the cited
+  assumptions for the reason given in §2 above. We recommend the
+  lockstep-progress restatement.
+
+- **T7 (consensus safety) as currently stated.** T7's prose proof
+  conflates two ingredients: (a) "consistent views" (paper L16's
+  conclusion) is *not* equivalent to "identical views" — bridging
+  the two requires a *liveness* premise (decision completeness),
+  which is a §D.2 result, not a §D.3 safety result; and (b) the
+  paper's "transaction ordering respects view equality" treats
+  `order` as separable from `view` when in fact `order` is
+  *computed* from `view`. We recommend either (1) restating T7's
+  conclusion to prefix-consistency on the *intersection of decided
+  positions* (which is what atomic-broadcast safety actually means
+  and what L16 alone delivers), or (2) explicitly importing
+  decision completeness as a named premise of T7 with a citation
+  to Theorem 6 / §D.2 for its discharge, or (3) defining `order`
+  as a function of `view` in §D.3 so the "respects view equality"
+  step becomes trivial.
+
+- **Probabilistic latency bounds (Theorem 5, Lemmas 6 and 7).**
+  These require a probability framework which is out of scope for
+  the current formalization.

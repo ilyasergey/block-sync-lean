@@ -13,77 +13,148 @@ table explains the specific issue and proposed change in full.
 
 Findings are listed in **decreasing order of importance**.
 
-## Summary
+## What the paper assumes, what we prove, and what we leave assumed
+
+The §5 mechanization concludes with a single Prop bundle,
+`BelugaWithPullFairness`, that names every assumption the paper
+relies on but does not always state. The bundle has seven fields,
+each corresponding to a single sentence one could add to the paper:
+
+| Field                | Paper reference / paper-language statement |
+|----------------------|--------------------------------------------|
+| `timeMonotone`       | the global wall clock is non-decreasing along the trace |
+| `timeUnbounded`      | the wall clock eventually passes any time bound |
+| `networkDelivery`    | §2 — every push message between honest validators is delivered within `Δ` after GST |
+| `actionScheduling`   | §4.2 — every honest validator advances rounds within `Δ` after GST (per-round timeout `T_rd = 4Δ`) |
+| `boundedRoundSpread` | §4.2 — at any post-GST step, the rounds of any two honest validators differ by at most one |
+| `acceptScheduling`   | §4.2 — when an honest validator has an acceptable in-pool block, it accepts within `Δ` after GST |
+| `inPoolDelivery`     | §4.3 — every block in the global pool is eventually known to every honest validator (push channel of §2 ∪ pull mechanism of §4.3) |
+
+Under exactly these seven assumptions, the §5 corollary
+`beluga_isBlockSynchronizer` derives all four block-synchronizer
+properties — T1 (Block Availability), T2 (Causal Availability), T3
+(Round Progression), T4 (Round Termination) — together with L1
+(round entry within `3Δ`) and L2 (round-to-round latency `≤ 3Δ`).
+**Both `EventualCausalAcceptance` and `EventualRoundAcceptance`,
+which earlier had to be taken as axioms, are now derived theorems.**
+
+What the paper assumes implicitly that we surface here:
+
+- The **per-action liveness rates** of §4.2 — `actionScheduling`,
+  `acceptScheduling` — are what the paper writes as "honest
+  validators run the protocol" and uses to derive the `3Δ` round
+  bound. The paper does not state them as separate primitives.
+- The **§4.3 pull mechanism's liveness conclusion** — that any
+  in-pool block is eventually known to every honest validator — is
+  the load-bearing fact used by T2's prose proof. The paper sketches
+  the mechanism but never names the conclusion. We give it as
+  `inPoolDelivery`, which is provable from the more atomic
+  `PullRequestDelivery` + `PullResponseScheduling` + push-delivery
+  primitives also defined in `Beluga/Network.lean`; we surface the
+  consolidated form for headline use, leaving the atomic
+  decomposition as the structural fact it derives from.
+- The **gap-1 round-spread invariant** — `boundedRoundSpread` — is
+  what the paper's §5 prose calls "all honest validators are at
+  comparable rounds". The paper's L1 phrasing ("the same round")
+  suggests gap-0; our trace model surfaces gap-1 transient states
+  unavoidable when one validator advances at a time. See F-1.
+
+What we leave as assumptions (do not derive from anything else):
+
+- All seven fields of `BelugaWithPullFairness`. They are paper-stated
+  liveness primitives (in the case of §2 + §4.2) or paper-implicit
+  liveness conclusions of §4.3 (in the case of `inPoolDelivery`).
+  No further mechanization can derive them without modelling
+  individual messages and per-validator clocks at finer granularity.
+
+What we prove from `BelugaWithPullFairness` alone:
+
+- L1 (`lemma1_honest_round_entry`), L2 (`lemma2_round_latency`).
+- T1 (`network_theorem1_block_availability_withPull`),
+  T2 (`network_theorem2_causal_availability_withPull`),
+  T3 (`network_theorem3_round_progression_withPull`),
+  T4 (`network_theorem4_round_termination_proved`).
+- The `BlockSynchronizer` corollary (`beluga_isBlockSynchronizer`).
+- Internally: `EventualCausalAcceptance` and
+  `EventualRoundAcceptance` as theorems
+  (`network_eventualCausalAcceptance`,
+  `network_eventualRoundAcceptance`).
+
+## Summary of findings
 
 Findings are grouped by status. Within each group, listed by severity.
 
 **Status legend:**
 
-- ✅ **Resolved** — hypothesis explicit / invariant named **and** proofs
-  go through (or, for documentation findings, the choice has been
-  settled).
-- ◐ **Pending** — statement-level fix in place (hypothesis surfaced or
-  restatement applied), but proofs / derivation aren't all closed yet.
+- ✅ **Resolved** — hypothesis explicit / invariant named **and**
+  proofs go through (or, for documentation findings, the choice
+  has been settled).
 - ⚠️ **Open** — not addressed yet.
 
 ### ⚠️ Open
 
-| ID | Severity | Category | Affected | Headline | Recommended action | Our address |
-|---|---|---|---|---|---|---|
-| **F-7** | High | Missing assumption (safety/liveness boundary) | §D.3 T7 (still); T6 (separate `order` axiom resolved) | T7's prose proof equates "consistent views" (L16) with "identical views" (needs liveness — F-7(a)) and treats `order` as separable from `view` (it isn't — F-7(b)). Two non-paper ingredients hidden in one short paragraph. | Either weaken T7's conclusion to prefix-consistency on the *intersection* of decided positions, or import decision-completeness from §D.2 explicitly. For F-7(b): define `order` as a function of state. | **F-7(b) closed for T6** via the *acceptance-history-based* `Beluga.belugaTransactionOrder` + `accepted_implies_in_belugaTransactionOrder` (both sorry-free) — sufficient for T6's liveness claim ("every accepted tx eventually appears"). **T7 needs a different `order` definition**: a *view-based* commit-walk of decided leaders, since T7's consistency claim ("two honest validators with the same view have prefix-consistent orders") cannot be discharged from acceptance history alone. That order is downstream of the Mysticeti consensus protocol's commit rule, which we model abstractly via `view : ConsensusView`. **Status:** F-7(b) for T7 is *partially specified* (acceptance-based order isn't the right shape; view-based order requires defining `order = orderOfView view` against the Mysticeti commit rule) — left for a future round once the consensus protocol's order-derivation is concretely modelled. F-7(a) remains a liveness-derived fact awaiting §D.2's L11 + L12 (in-flight bundle round `03f5fe3f`). |
-
-### ◐ Pending
-
-| ID | Severity | Category | Affected | Headline | Recommended action | Our address |
-|---|---|---|---|---|---|---|
-| **F-1** | High | Missing assumption | §5 L1, L2 (and downstream §5 T1–T4) | Paper's `3Δ` round-synchronisation bound does not follow from the stated assumptions; prose proofs silently use a *scheduler-fairness* step. | Add **Assumption 2 (scheduler fairness)** stating honest validators act within Δ of becoming enabled. | Decomposed into a six-field bundle **`PartiallySynchronousFairness`** in `Beluga/Network/Fairness.lean`. Each field corresponds to a paper assumption: `NetworkDelivery` (§2 Δ-delivery), `ActionScheduling` (§4.2 round-advance), `BoundedRoundSpread_networkTrace` (F-1b gap-1), `AcceptScheduling` (§4.2 accept-action), `PullRequestDelivery` (§4.3 pull-channel), `PullResponseScheduling` (§4.3 pull-response). The `Beluga/Network/Theorems.lean` §5 wrappers consume this single bundle. L1/L2/T1/T3 proved structurally; T2/T4 currently take additional `EventualCausalAcceptance` / `EventualRoundAcceptance` Prop hypotheses with Phases 10–12 of the in-progress pull-mechanization migration aiming to prove them as theorems from the same bundle. |
-| **F-1a** | High | Sub-finding of F-1 | §5 L2 derivation | The round-level shadow of Assumption 2 actually needed by L2 is the **lockstep** form (`≥ r + 1` within `3Δ`), not the catch-up form (`≥ r` within `3Δ`). The catch-up form is too weak to give L2's "round `r + 1` within `3Δ`" conclusion. | State Assumption 2's round-level corollary in lockstep form. | `ActionScheduling` (in the bundle) is the lockstep-shaped primitive. `network_lemma2_round_latency` is derived from `network_lemma1_honest_round_entry` + `network_round_intermediate_value`. |
-| **F-1b** | High | Sub-finding of F-1 | §5 L1 statement | Paper L1 says "all honest validators will enter the same round within 3Δ" — the strict same-round (gap-0) form. Our trace model has a gap-1 currentRound invariant (max−min ≤ 1) but not a gap-0 one: `networkStep` advances one validator at a time, so transient gap-1 states are unavoidable. The strict form is therefore **unprovable from `PartiallySynchronousFairness` alone**. | Weaken L1's claim to "all honest reach round `≥ r + 1` within 3Δ" (the lockstep-progress form). | `network_lemma1_honest_round_entry` states the weakened form. Proved sorry-free from the bundle's three networkTrace primitives via `schedulerFairness_holds`. |
-| **F-1c** | High | Sub-finding of F-1 (resolved 2026-04-27) | §4.3 pull mechanism | Earlier mechanization required a `NetworkBelugaCoherence` axiom to bridge the network model and the simpler abstraction §5 prose uses. The pull mechanism (§4.3) was implicit. | Model the pull mechanism explicitly so `EventualCausalAcceptance` / `EventualRoundAcceptance` (T2/T4's load-bearing axioms) can be derived as theorems. | **Pull mechanism now modeled explicitly**: `PullRequest` events, `pullRequestsInflight` / `pullRequestsInbox` queues on `NetworkState`, `doPullRequest` / `doPullResponse` actions, `pullStep` driver, `networkStepWithPull` / `networkTraceWithPull` step/trace functions. Three new paper-named primitives correspond to §4.3 + §4.2 per-action liveness: `AcceptScheduling`, `PullRequestDelivery`, `PullResponseScheduling`. `NetworkBelugaCoherence` is **deleted**. The §5 conclusions are stated against the explicitly-modeled trace; no two-abstraction bridge axiom is needed. Phases 10–12 (in progress) prove `EventualCausalAcceptance` / `EventualRoundAcceptance` as theorems from the bundle. |
+| ID | Severity | Category | Affected | Headline |
+|---|---|---|---|---|
+| **F-1b** | High | Statement-level wording | §5 L1 | Paper L1 reads "all honest validators enter the same round within 3Δ" (the strict gap-0 form). Our model exposes a gap-1 invariant: when one validator advances, others are transiently one behind. The strict same-round form is therefore not provable from the paper's stated assumptions. The lockstep-progress form ("all reach round `≥ r + 1` within 3Δ") is what L1's downstream consumers actually need. |
+| **F-7** | High | Missing assumption (safety/liveness boundary) | §D.3 T7 | T7's prose proof equates "consistent views" (L16) with "identical views" (needs liveness — F-7a) and treats `order` as separable from `view` (it isn't — F-7b). Two non-paper ingredients hidden in one short paragraph. |
 
 ### ✅ Resolved
 
-| ID | Severity | Category | Affected | Headline | Recommended action | Our address |
-|---|---|---|---|---|---|---|
-| **F-2** | Medium | Scope-pinning | §2 (model), used throughout | The `\|A∩B\| ≥ f+1` bound for two `(2f+1)`-quorums only holds at `n = 3f+1` exactly; the paper writes `f < n/3` but uses fixed `2f+1` quorums uniformly. | Pin `n = 3f+1` explicitly, or scale quorum size to `n − f`. | `n = 3 * f + 1` explicit hypothesis on `quorumIntersection`, `certified_unique`, `lemma15_unique_cert`, `lemma10_round_robin_pigeonhole`; all proved. |
-| **F-3** | Medium | Surfaced invariant | §4.4 (uniqueness consequence), §D.3 L13 | Paper's "honest validators don't equivocate" is stated within-block; uniqueness proofs need both: **(a)** the cross-block parent-set agreement form, and **(b)** the block-uniqueness form (an honest validator authors at most one block per `(author, round)` pair). | State both forms alongside the within-block form. | Form (a) as `NoEquivocationInParents` (used by `certified_unique`); form (b) as `h_honest_unique` on L13. Both proved sorry-free under the hypotheses; **for `belugaTrace`, both are now derived sorry-free** (no honesty needed, even) from `BlockInv.uniquePropose` via `Mysticeti.MysticetiSafetyInv` (see F-5 row). |
-| **F-5** | Medium | Surfaced invariant | §D.3 L13 + L15 | Each proof relies on protocol-invariant DAG facts the paper takes as obvious — DAG admission well-formedness (cert-base parents + parent-set distinct authors), author-round uniqueness, no-equivocation in parents, authors-are-registered. None are stated as lemmas. | Promote each to a named lemma in §D.3. | Closed for the `belugaTrace` instantiation. The `MysticetiSafetyInv` bundle ([`Mysticeti/SafetyInvariant.lean`](../BlockSynchroniser/Mysticeti/SafetyInvariant.lean)) packages all four conjuncts as a single trace invariant — `admission` (via `belugaTrace_admissionWellFormed`), `uniqueByAuthorRound`, `noEquivocation`, `authorsValid` — and `belugaTrace_satisfies_mysticetiSafetyInv` proves the bundle sorry-free. The belugaTrace-specialised wrappers `lemma13_cert_persistence_belugaTrace` and `lemma15_unique_cert_belugaTrace` retain only the genuine BFT side conditions (`hN`, `h_byz_bound`, `hids`). The originally listed "view-traceback" and "decision-completeness" facts are *not* DAG invariants — they concern external `view`/`order` parameters, and are tracked under F-7 instead. |
-| **F-11** | Medium | Notation / definition | §2.1 block structure | Block digest `B.d` is treated as a primitive field, but every uniqueness argument silently relies on it being a *function of `(B.r, B.author)`* — i.e., the digest is determined by who wrote the block and at what round. | Define `B.d` as a function of `(r, author)` rather than a free field, or state the determinism as a named hypothesis. | `BlockInv` (in `causal_history` invariant chain) carries `B.d = digest system B.r B.author` as a trace invariant; `digest_injective` derived. |
-| **F-4** | Low | Surfaced invariant (naming) | §C.2 L4, L5 | Proofs of L4/L5 invoke Assumption 1 (latency triangle) implicitly to derive per-round Δ advancement. | Cite Assumption 1 explicitly, or state the round-advancement corollary as a named consequence. | `LatencyTriangle` explicit hypothesis on L4 and L5; both proved sorry-free. |
-| **F-8** | Low | Notational hygiene | §D.1.2 (round-robin), §D.3 L10, §4.2 (digest), §2 (BFT bound) | Three related ID-bound assumptions are silent: **(a)** `r mod n` round-robin presumes IDs are exactly `{0, …, n−1}` (used by L10); **(b)** `digest`'s injectivity presumes IDs are bounded by `n+1` (used by trace-invariant proofs); **(c)** the "at most `f` Byzantine" bound is implicitly *over the registered validator set* — for an arbitrary list of `ValidatorId`s the bound trivially fails (a list of `f+1` unregistered IDs satisfies `isHonest = false` for all entries). See also: paper-additions-stage2 doc. | State that the validator set has IDs `{0, …, n−1}` (covers (a), (b)) and qualify the BFT bound as "for any subset/list of *registered* validators" (covers (c)). | Form (a) as `h_ids` on L10; form (b) as `ValidIds` in the `Beluga/Protocol.lean` trace-invariant chain; form (c) surfaced by the (failed) `byz_bound` conjunct of `MysticetiPostGSTLiveness` — restructured to take a registered-list-restricted hypothesis instead. |
-| **F-6** | Low | Editorial | §4.2 prose vs Figure 8 | Reputation-update trigger is `r−1` in the prose and `r−2` in the pseudocode (off-by-one due to round-increment timing). | Align prose and pseudocode. | Followed the prose (`r-1`); flagged in `formalization.md`'s "Notes on paper consistency" section. |
+| ID | Severity | Category | Affected | Headline | Our address |
+|---|---|---|---|---|---|
+| **F-1** | High | Missing assumptions surfaced as a bundle | §5 L1, L2 (and downstream §5 T1–T4) | Paper's §5 proofs silently use a *scheduler-fairness* step ("validators act promptly") that is not stated anywhere. The paper also leaves the §4.3 pull mechanism's liveness conclusion implicit. | The seven paper-stated and paper-implicit assumptions of §2 + §4.2 + §4.3 are bundled in `BelugaWithPullFairness` (`Beluga/Theorems.lean`); the §5 corollary `beluga_isBlockSynchronizer` consumes the bundle once. |
+| **F-1a** | High | Sub-finding of F-1 | §5 L2 derivation | The round-level shadow of "validators act promptly" actually used by L2 is the **lockstep** form (`≥ r + 1` within `3Δ`), not the catch-up form (`≥ r` within `3Δ`). The catch-up form is too weak to give L2's "round `r + 1` within `3Δ`" conclusion. | `actionScheduling` (in the bundle) is the lockstep-shaped primitive. `lemma2_round_latency` is derived from `lemma1_honest_round_entry` + the round-level intermediate-value theorem `network_round_intermediate_valueWithPull`. |
+| **F-1c** | High | Pull-mechanism modelling | §4.3 pull mechanism | An earlier mechanization left the pull mechanism implicit and required a `NetworkBelugaCoherence` axiom to bridge the network model and the simpler abstraction §5 prose uses. | The pull mechanism is now modelled explicitly: `PullRequest` events, `pullRequestsInflight` / `pullRequestsInbox` queues on `NetworkState`, `doPullRequest` / `doPullResponse` actions, the `pullStep` driver, and the `networkStepWithPull` / `networkTraceWithPull` step/trace functions. The paper §4.3 + §4.2 per-action liveness primitives `AcceptScheduling`, `PullRequestDelivery`, `PullResponseScheduling`, and the consolidated `NetworkInPoolDeliveryWithPull` are stated against this trace. `EventualCausalAcceptance` and `EventualRoundAcceptance` are now derived theorems; `NetworkBelugaCoherence` is deleted. |
+| **F-2** | Medium | Scope-pinning | §2 (model), used throughout | The `\|A∩B\| ≥ f+1` bound for two `(2f+1)`-quorums only holds at `n = 3f+1` exactly; the paper writes `f < n/3` but uses fixed `2f+1` quorums uniformly. | `n = 3 * f + 1` explicit hypothesis on `quorumIntersection`, `certified_unique`, `lemma15_unique_cert`, `lemma10_round_robin_pigeonhole`; all proved. |
+| **F-3** | Medium | Surfaced invariant | §4.4 (uniqueness), §D.3 L13 | Paper's "honest validators don't equivocate" is stated within-block; uniqueness proofs need both the cross-block parent-set agreement form and the block-uniqueness form (an honest validator authors at most one block per `(author, round)` pair). | Form (a) as `NoEquivocationInParents`; form (b) as `h_honest_unique` on L13. Both proved sorry-free; for `belugaTrace` both are derived sorry-free from `BlockInv.uniquePropose` via `Mysticeti.MysticetiSafetyInv`. |
+| **F-4** | Low | Editorial — naming an invocation | §C.2 L4, L5 | Proofs of L4/L5 invoke Assumption 1 (latency triangle) implicitly to derive per-round Δ advancement. | `LatencyTriangle` explicit hypothesis on L4 and L5; both proved sorry-free. |
+| **F-5** | Medium | Surfaced invariant | §D.3 L13 + L15 | Each proof relies on protocol-invariant DAG facts the paper takes as obvious — DAG admission well-formedness, author-round uniqueness, no-equivocation in parents, authors-are-registered. None are stated as lemmas. | The four conjuncts are bundled in `Mysticeti.MysticetiSafetyInv` and `belugaTrace_satisfies_mysticetiSafetyInv` proves the bundle sorry-free. |
+| **F-6** | Low | Editorial | §4.2 prose vs Figure 8 | Reputation-update trigger is `r−1` in the prose and `r−2` in the pseudocode (off-by-one due to round-increment timing). | Followed the prose (`r-1`); flagged in `formalization.md`'s "Notes on paper consistency" section. |
+| **F-8** | Low | Notational hygiene | §D.1.2 (round-robin), §D.3 L10, §4.2 (digest), §2 (BFT bound) | Three related ID-bound assumptions are silent: `r mod n` round-robin presumes IDs `{0, …, n−1}`; digest injectivity presumes IDs bounded by `n+1`; the "at most `f` Byzantine" bound is implicitly *over the registered validator set*. | Form (a) as `h_ids` on L10; form (b) as `ValidIds` in the trace-invariant chain; form (c) surfaced by the registered-list hypothesis in the Mysticeti liveness layer. |
+| **F-11** | Medium | Notation / definition | §2.1 block structure | Block digest `B.d` is treated as a primitive field, but every uniqueness argument silently relies on it being a function of `(B.r, B.author)`. | `BlockInv` carries `B.d = digest system B.r B.author` as a trace invariant; `digest_injective` derived. |
+| **F-12** | Low | §5 proof simplification | §5 T1, T2 | The paper's §5 proofs of T1 and T2 lean on the ImPoA / pull-protocol mechanism, but with action-priority (accept before store before round-advance, all above propose) the "eventually" claims of T1 and T2 collapse to single-step structural facts. | T1 and T2 mechanized without ImPoA reasoning; alternative proof sketches in [`paper-additions-stage2.md`](paper-additions-stage2.md). |
+| **F-13** | Low | Definitional ambiguity | §4 prose vs. Figure 8 | Paper Figure 8 emits both `block_accept` and `block_store` in a single procedure step; §4 prose treats them as separately observed at different consumers. | Mechanized as separate actions with priority ordering; T1's proof uses the action-priority argument (matches F-12). |
 
 Each entry has a stable identifier (`F-N`) so we can refer to them
 across documents.
 
 ---
 
-## F-1. Missing assumption: scheduler fairness for Lemmas 1 & 2
+## F-1. Missing assumptions: §5 silently relies on per-action scheduling and pull-channel liveness
 
 **Affected statements.** Paper §5, Lemma 1 ("after GST, all honest
-validators will enter the same round within `3Δ`") and Lemma 2
+validators will enter the same round within `3Δ`"), Lemma 2
 ("after GST, if an honest validator enters round `r` at time `t_r`
-and all honest validators have created and disseminated their round
-`r` blocks by time `t_r`, then all honest validators will be able
-to enter round `r+1` by time `t_r + 3Δ`").
+and all honest validators have created and disseminated their
+round `r` blocks by time `t_r`, then all honest validators will be
+able to enter round `r+1` by time `t_r + 3Δ`"), and theorems
+T1–T4.
 
-**Finding.** Neither lemma follows from the paper's explicit
-assumptions. The prose proofs use an implicit
-**scheduler-fairness** step — "the validator processes the block /
-advances its round / executes its local action *promptly*" — that
-is not stated anywhere.
+**Finding.** None of L1, L2, T1–T4 follows from the paper's
+explicit assumptions alone. The prose proofs use:
 
-**Counterexample at the paper's level of abstraction.** Take
-`n = 4`, `f = 1`, four honest validators, GST = 0, Δ = 10. Suppose
-post-GST the network behaves as the paper assumes (every
-honest-to-honest message delivered within Δ). However, the local
-processing schedule is asymmetric: validator `v_0` runs continuously
-and reaches round 1 by time 5, while `v_1, v_2, v_3` are not given
-CPU time during the interval `[0, 30]` and so take no local action
-during that window. At time `30 = GST + 3Δ`, `v_0` is in round 1
-and `v_1, v_2, v_3` are still in round 0 — Lemma 1 is violated.
+1. An implicit **scheduler-fairness** step — "the validator
+   processes the block / advances its round / executes its local
+   action *promptly*" — that is not stated anywhere. Without it,
+   no time bound on round entry can be derived.
+2. An implicit **pull-channel liveness** conclusion — "the
+   validator eventually pulls the missing block" — used by T2's
+   causal-availability argument and T4's round-termination
+   argument. The §4.3 pull mechanism is described, but the
+   liveness conclusion that any in-pool block reaches every
+   honest validator is left informal.
 
-**Where the prose proof hides it.** Sentences such as
+**Counterexample for (1).** Take `n = 4`, `f = 1`, four honest
+validators, GST = 0, Δ = 10. Suppose post-GST the network behaves
+as the paper assumes (every honest-to-honest message delivered
+within Δ). However, the local processing schedule is asymmetric:
+validator `v_0` runs continuously and reaches round 1 by time 5,
+while `v_1, v_2, v_3` are not given CPU time during the interval
+`[0, 30]` and so take no local action during that window. At time
+`30 = GST + 3Δ`, `v_0` is in round 1 and `v_1, v_2, v_3` are still
+in round 0 — Lemma 1 is violated.
+
+**Where the prose proof hides (1).** Sentences such as
 
 > "By Assumption 1 (latency triangle), if `v_i` is honest and sends
 > `B_i^{r-1}` to `v_j`, then `v_j` receives `B_i^{r-1}` directly
@@ -92,77 +163,81 @@ and `v_1, v_2, v_3` are still in round 0 — Lemma 1 is violated.
 
 silently equate "`v_j` *receives* the block within Δ" (true under
 Assumption 1) with "`v_j` *processes* the block within Δ" (requires
-scheduler fairness). Same equivocation in:
+scheduler fairness). The same equivocation appears in:
 
 > "they can accept these blocks via the pull protocol within `2Δ`."
 
-**Suggested fix.** State explicitly:
+**Where the prose proof hides (2).** T2's argument that an honest
+validator "eventually pulls" any unaccepted causal ancestor. The
+pull mechanism is described in §4.3, but the conclusion that the
+mechanism *always succeeds* when the block is in the pool is never
+named and never derived from atomic primitives.
 
-> **Assumption 2 (scheduler fairness).** Post-GST, whenever an
-> honest validator `v` is in a state where the protocol of §4
+**Suggested fix.** Make both ingredients explicit. The simplest
+way is to restate the §5 assumptions as the seven items of
+`BelugaWithPullFairness`. In paper-friendly language:
+
+> **Assumption 2 (per-action liveness).** Post-GST, whenever an
+> honest validator `v` is in a state where the protocol of §4.2
 > enables a local action (propose, accept, store, or advance), `v`
-> performs that action within Δ of becoming enabled.
+> performs that action within `Δ` of becoming enabled.
 
-Under this assumption, the paper's prose proofs of L1 and L2 go
-through as written. We considered weaker variants (eventual
-liveness without rate bound) but only the "within Δ" version
-recovers the tight `3Δ` bound.
+> **Assumption 3 (pull-channel liveness, §4.3).** Post-GST, every
+> block in the global pool is eventually known to every honest
+> validator — either via the §2 push channel (for honest authors)
+> or via the §4.3 pull mechanism (otherwise).
+
+These are the conclusions the paper's §5 prose actually consumes;
+making them explicit clarifies which §5 facts are *protocol*
+properties (T1–T4 with the action-priority argument) and which are
+*liveness* properties of the network model.
 
 **Detailed write-up.** See
 [paper-feedback-l1-l2-fairness.md](paper-feedback-l1-l2-fairness.md)
-for full discussion, formal counterexample trace, and discussion of
-where the prose silently relies on the assumption.
+for the (1)-half discussion, formal counterexample trace, and
+discussion of where the prose silently relies on the assumption.
 
 **Follow-up: ImPoA does not substitute for scheduler fairness.**
 A natural question is whether ImPoA (paper §4.3) — given how
 prominently it features in the §5 prose proofs — somehow replaces
 the missing fairness assumption. It does not: ImPoA is a passive
 structural property of the DAG (a block is implicitly available
-*iff* f+1 subsequent blocks reference it), and is a
+*iff* `f + 1` subsequent blocks reference it), and is a
 correctness/bandwidth mechanism for *acceptance*, not a liveness
 trigger for *round advance*. The paper's actual liveness mechanism
 is the per-round timeout `T_rd = 4Δ` (paper §4.2), which fires
 unconditionally on a validator's local clock. Combined with
 `Δ`-delivery + push protocol + ImPoA, this yields paper L1's `3Δ`
-bound. Our trace model abstracts the timeout + per-validator clock
-into the single `SchedulerFairness` axiom; deriving it from
-primitives would require modeling messages and per-validator time.
-See
+bound. See
 [paper-feedback-impoa-vs-fairness.md](paper-feedback-impoa-vs-fairness.md)
 for the full analysis.
 
 ### F-1a. Round-level corollary needed in *lockstep* form (`≥ r + 1`)
 
-When discharging Assumption 2 to a round-level fact about
-`belugaTrace`, the *catch-up* form
+When discharging the per-action liveness assumption to a
+round-level fact, the *catch-up* form
 
 > post-GST, when some honest validator reaches round `r`, every
 > honest validator reaches round `r` within `3Δ`
 
-is too weak to derive Lemma 2 (which concludes "round `r + 1` within
-`3Δ`"). The form actually needed is the **lockstep** variant
+is too weak to derive Lemma 2 (which concludes "round `r + 1`
+within `3Δ`"). The form actually needed is the **lockstep**
+variant
 
 > post-GST, when some honest validator reaches round `r`, every
 > honest validator reaches round `r + 1` within `3Δ`,
 
-which corresponds to the per-action assumption being applied through
-*one full §4 round transition* (advance + propose + accept + advance)
-rather than just enough actions to catch up. The `+ 1` captures the
-combined effect of the §4 `allProposedFor` gate and per-action
-scheduler fairness: in `3Δ` not only does everyone catch up, but the
-leader also advances.
+which corresponds to the per-action assumption being applied
+through *one full §4 round transition* (advance + propose + accept
++ advance) rather than just enough actions to catch up. The `+ 1`
+captures the combined effect of the §4 `allProposedFor` gate and
+per-action scheduler fairness: in `3Δ` not only does everyone
+catch up, but the leader also advances.
 
-**Our address.** `SchedulerFairness` in
-[`Beluga/Theorems.lean`](../BlockSynchroniser/Beluga/Theorems.lean) is
-the lockstep variant. L2 (`honest_round_advance`) is now derived
-inline from it via a sorry-free `round_intermediate_value` helper
-(intermediate-value theorem for validator rounds, by induction on
-`step_round_at_most_one`).
-
-This sub-finding was made explicit while integrating Aristotle
-project `4f618efb`: an earlier draft used the catch-up form and
-Aristotle's bundle proof exposed the gap by needing a separate
-`h_lockstep` hypothesis in addition to `SchedulerFairness`.
+**Status: ✅ Resolved.** The bundle's `actionScheduling` field is
+the lockstep-shaped primitive, and L2 (`lemma2_round_latency`) is
+derived from L1 (`lemma1_honest_round_entry`) via the round-level
+intermediate-value theorem.
 
 ### F-1b. Lemma 1's strict same-round claim requires more than the catch-up assumption
 
@@ -173,14 +248,13 @@ Paper Lemma 1's actual statement is:
 
 The phrase "the same round" is the strict (gap-0) form: at some
 post-GST moment, every honest validator is at one specific round.
-Mechanizing this against our trace model exposes that **the strict
-form is not derivable from the lockstep `SchedulerFairness`
-alone**.
+Mechanizing this against our trace model exposes that **the
+strict form is not derivable from the bundle's primitives alone**.
 
-**The obstruction.** Our trace executes one step per `step` call,
+**The obstruction.** The trace executes one step per `step` call,
 each step advancing exactly one validator's `currentRound` (or
 none, for non-`doAdvance` actions). The trace therefore has a
-**gap-1 invariant**:
+**gap-1 invariant** (`boundedRoundSpread` in the bundle):
 
 > *for every reachable state `s`, max − min of the validators'
 > `currentRound`s is at most 1.*
@@ -194,31 +268,29 @@ advances"), but gap-1 states also occur (during a round of
 advances).
 
 Therefore the strict same-round form would need either:
-1. **Atomic round transitions in the model** — `step` advances
-   *all* validators simultaneously when `allProposedFor` holds, so
-   gap stays at 0. This is a model change.
-2. **A gap-0 witness extraction** — find the *first* step in
-   `[k₀, k₀ + 3Δ]` at which all honest reach `r + 1`. At that step
-   the actor (the last laggard) just advanced from `r` to `r + 1`;
-   by the gap-1 invariant on the previous step, no validator was
-   at `r + 2`, so all are at exactly `r + 1` at the witness step.
-   This requires formalising the gap-1 invariant first
-   (~80 lines) plus the witness extraction (~50 lines).
 
-**Our address.** Weaken the bundle conjunct
-`BelugaPostGSTLiveness.honest_round_sync` (and the matching
-wrapper `lemma1_honest_round_entry`) to the **lockstep-progress
-form**:
+1. **Atomic round transitions in the model** — `step` advances
+   *all* validators simultaneously when `allProposedFor` holds,
+   so gap stays at 0. This is a model change.
+2. **A gap-0 witness extraction** — find the *first* step in
+   `[k₀, k₀ + 3Δ]` at which all honest reach `r + 1`. At that
+   step the actor (the last laggard) just advanced from `r` to
+   `r + 1`; by the gap-1 invariant on the previous step, no
+   validator was at `r + 2`, so all are at exactly `r + 1` at the
+   witness step. This requires further structural work.
+
+**Our address.** The §5 wrapper `lemma1_honest_round_entry`
+states the **lockstep-progress form**:
 
 > *given an honest validator at round `r` at some step `k₀`
 > post-GST, there exists a step `k'` within 3Δ at which **all
 > honest validators are at round ≥ r + 1**.*
 
-This is exactly the `SchedulerFairness` hypothesis's content
-surfaced as a structural property of the trace; the bundle proof
-is a one-line `h_fair` call. The deviation from the paper is that
-we conclude `≥ r + 1` rather than `= r + 1` (i.e., gap ≤ 1
-rather than gap = 0).
+This is exactly what the action-scheduling assumption surfaces as
+a structural property of the trace; the wrapper's proof is a
+one-line invocation. The deviation from the paper is that we
+conclude `≥ r + 1` rather than `= r + 1` (i.e., gap ≤ 1 rather
+than gap = 0).
 
 **Suggested fix for the paper.** Restate L1 in the
 lockstep-progress form. The strict same-round wording is
@@ -274,10 +346,44 @@ relative to the lockstep-progress form ("at round `≥ r + 1` with
 gap ≤ 1") but doesn't pull weight in any downstream argument.
 Restating L1 in the lockstep-progress form would (a) make L1
 provable from the cited assumptions, (b) match the operational
-content the paper's own proofs consume, and (c) reduce the
-risk of confusion for readers who try to use L1 in a context
-that does need simultaneity (no such context appears in the
-present paper, but the strict wording invites mis-application).
+content the paper's own proofs consume, and (c) reduce the risk
+of confusion for readers who try to use L1 in a context that does
+need simultaneity (no such context appears in the present paper,
+but the strict wording invites mis-application).
+
+### F-1c. §4.3 pull mechanism and the eventual-acceptance conclusions
+
+**Earlier state.** A previous mechanization left the §4.3 pull
+mechanism implicit and required a `NetworkBelugaCoherence` axiom
+to bridge the network model and the simpler abstraction §5 prose
+uses. The two §5-load-bearing eventual conclusions —
+`EventualCausalAcceptance` (T2) and `EventualRoundAcceptance`
+(T4) — were taken as axioms.
+
+**Status: ✅ Resolved.** The pull mechanism is now modelled
+explicitly:
+
+- `PullRequest` events on `NetworkState`, with
+  `pullRequestsInflight` and `pullRequestsInbox` queues.
+- The `doPullRequest` and `doPullResponse` actions, the
+  `pullStepOne` per-validator driver, and the `pullStep` system
+  fold.
+- The `networkStepWithPull` and `networkTraceWithPull` functions
+  layering pull on top of the §4.2 push step.
+
+The paper §4.3 + §4.2 per-action liveness primitives —
+`AcceptScheduling` (paper §4.2's accept-action liveness),
+`PullRequestDelivery` (the pull-channel `Δ`-delivery), and
+`PullResponseScheduling` (the pull-response action) — are stated
+against this trace. The consolidated guarantee `inPoolDelivery`
+(`NetworkInPoolDeliveryWithPull`) captures the §4.3 conclusion
+that every in-pool block is eventually known to every honest
+validator.
+
+`EventualCausalAcceptance` and `EventualRoundAcceptance` are now
+**derived theorems** (`network_eventualCausalAcceptance`,
+`network_eventualRoundAcceptance`); the §5 corollary needs no
+`Eventual*` axioms. The `NetworkBelugaCoherence` axiom is deleted.
 
 ---
 
@@ -300,9 +406,10 @@ Lemma 16 establishes only **consistency** of the consensus view —
 no two honest validators commit *non-Undecided* values that
 disagree. It does **not** establish that all honest validators
 have *identical* views: two honest validators may legitimately
-differ on which leader blocks they have already decided (one ahead,
-the other still `Undecided` on slots the leader has committed).
-That difference is a liveness phenomenon, not a safety one.
+differ on which leader blocks they have already decided (one
+ahead, the other still `Undecided` on slots the leader has
+committed). That difference is a liveness phenomenon, not a
+safety one.
 
 To bridge "consistent views" to "identical views" you need:
 
@@ -311,16 +418,16 @@ To bridge "consistent views" to "identical views" you need:
 > decided `d`.
 
 Decision completeness is **not** a safety property. It is the
-*liveness* claim "all honest validators eventually decide the same
-slots", which the protocol satisfies after GST + bounded delay,
-but only as a consequence of the consensus *liveness* theorems
-(Theorem 6 and the lemmas of §D.2).
+*liveness* claim "all honest validators eventually decide the
+same slots", which the protocol satisfies after GST + bounded
+delay, but only as a consequence of the consensus *liveness*
+theorems (Theorem 6 and the lemmas of §D.2).
 
 ### F-7b. "Transaction ordering respects view equality" hides a definition
 
 The paper writes as if `order(v)` is an independent observable
-that "respects view equality". In a literal model where `view` and
-`order` are introduced as separate entities, you would need a
+that "respects view equality". In a literal model where `view`
+and `order` are introduced as separate entities, you would need a
 hypothesis of the form
 
 > *if `view(v_1) = view(v_2)` (everywhere), then `order(v_1)` and
@@ -371,83 +478,15 @@ We recommend one of:
 
 2. **Keep the prefix-of-each-other formulation but make the
    liveness import explicit:** state T7 with decision completeness
-   as a named premise and cite Theorem 6 / §D.2 for its
-   discharge.
+   as a named premise and cite Theorem 6 / §D.2 for its discharge.
 
 3. **Make the order-from-view definition explicit** in §D.3 (one
-   sentence: "`order(v)` is the canonical traversal of the
-   causal history of `v`'s committed leader blocks") so that
-   F-7b becomes a non-issue.
+   sentence: "`order(v)` is the canonical traversal of the causal
+   history of `v`'s committed leader blocks") so that F-7b
+   becomes a non-issue.
 
 Most BFT papers adopt one of these stances implicitly. We suggest
 being explicit about which.
-
----
-
-## F-5. Surfaced invariants: protocol facts assumed in safety proofs
-
-**Affected statements.** Paper §D.3 (Mysticeti-Beluga safety),
-Lemma 13 (certificate persistence) and Lemma 15 (uniqueness of
-certified leader per round).
-
-**Finding.** Each proof relies on a protocol invariant the paper
-treats as obvious but doesn't formally state. Mechanizing the proofs
-forced four out, all DAG-level facts:
-
-1. **DAG admission well-formedness.** *Every block at a positive
-   round has at least `2f + 1` distinct-author parents from the
-   immediately preceding round, all themselves in the state.*
-2. **Author-round uniqueness.** *Any two blocks in the state with
-   the same `(author, round)` are equal.* Stronger than the paper's
-   "honest validators don't equivocate" — uniqueness here is total,
-   following from the protocol's *propose-op uniqueness* invariant
-   (digital signatures + at-most-one-propose-per-round behavior).
-3. **No equivocation in parents.** *For any two blocks in the state
-   that reference parents with the same `(author', round')`, the
-   referenced parents coincide.*
-4. **Authors are registered.** *Every block author corresponds to a
-   registered validator.*
-
-The proof of L13 (paper §D.3) uses item (1) twice — once at round
-`r + 2` for the quorum-intersection step, again at later rounds to
-thread the inductive argument — and items (2)–(4) for the
-quorum-intersection's "at least one honest validator referenced
-both" step. Paper L15 uses the same items (via
-`certified_unique`'s quorum-intersection chain).
-
-**Status: ✓ closed for the executable trace.** All four items
-are bundled in `Mysticeti.MysticetiSafetyInv`
-([`Mysticeti/SafetyInvariant.lean`](../BlockSynchroniser/Mysticeti/SafetyInvariant.lean)),
-and `belugaTrace_satisfies_mysticetiSafetyInv` proves the bundle
-sorry-free for `belugaTrace system k`:
-- item (1) via `belugaTrace_admissionWellFormed` (whose proof in
-  [`Beluga/AdmissionInvariant.lean`](../BlockSynchroniser/Beluga/AdmissionInvariant.lean)
-  threads a compound `TraceInv` through every `tryActFor` branch);
-- items (2) and (3) directly from `BlockInv.uniquePropose`
-  (already part of the `BlockInv → AcceptInv → CausallyClosed`
-  chain in [`Beluga/Protocol.lean`](../BlockSynchroniser/Beluga/Protocol.lean));
-- item (4) via a joint blocks-+-validator-IDs Nat induction
-  (Aristotle round `c2ca4a2e`).
-
-The belugaTrace-specialised wrappers
-`lemma13_cert_persistence_belugaTrace` and
-`lemma15_unique_cert_belugaTrace` consume the bundle, so their
-only remaining hypotheses are the genuine BFT side conditions
-(`hN`, `h_byz_bound`, `hids`).
-
-**Suggested fix for the paper.** Each of (1)–(4) is candidate
-material for a named lemma in §D.3 — they are load-bearing steps
-the prose treats as obvious. Naming them would also make L13 and
-L15 explicit about which invariants they consume, which is useful
-for follow-on protocol designs that vary the parent-selection
-rule.
-
-**Note: not in F-5.** Two facts the original entry listed —
-"view-traceback" (used in L16) and "decision completeness" (used
-in T7) — are *not* DAG invariants; they concern external
-`view : ConsensusView` / `order : TransactionOrder` parameters.
-Those are tracked under [F-7](#f-7-theorem-7s-prose-proof-slips-a-liveness-step-into-a-safety-claim)
-(safety/liveness boundary).
 
 ---
 
@@ -458,15 +497,16 @@ used throughout: any two `(2f+1)`-quorums intersect in at least
 `f + 1` validators (and hence at least one honest validator if
 `|A ∩ B| ≥ f + 1`).
 
-**Finding.** The intersection bound `|A ∩ B| ≥ f + 1` follows from
-inclusion-exclusion only when `n = 3f + 1` exactly:
+**Finding.** The intersection bound `|A ∩ B| ≥ f + 1` follows
+from inclusion-exclusion only when `n = 3f + 1` exactly:
 
 `|A ∩ B| ≥ |A| + |B| − n = (2f+1) + (2f+1) − (3f+1) = f + 1.`
 
 For `n > 3f + 1` (still satisfying `f < n/3`) the bound becomes
 `|A ∩ B| ≥ 4f + 2 − n`, which can be smaller than `f + 1`. The
 paper writes `f < n/3` but uses `2f + 1` quorums uniformly,
-implicitly fixing the quorum size rather than scaling it with `n`.
+implicitly fixing the quorum size rather than scaling it with
+`n`.
 
 **Suggested fix.** Either (a) pin `n = 3f + 1` explicitly in the
 model (matches the paper's worked examples and is unambiguous), or
@@ -480,28 +520,29 @@ paper's intent without changing protocol numbers.
 
 ## F-3. Surfaced invariants: two honest non-equivocation forms
 
-**Affected statements.** Paper §4.4 uniqueness consequence ("for any
-validator and round, at most one block can become certified");
+**Affected statements.** Paper §4.4 uniqueness consequence ("for
+any validator and round, at most one block can become certified");
 paper §D.3 L13 (certificate persistence).
 
-**Finding.** The paper states honest non-equivocation only within a
-single block ("an honest validator's block has at most one parent
-per author" or similar in-block phrasings). Two distinct *cross-block*
-forms are silently used by paper proofs, neither stated:
+**Finding.** The paper states honest non-equivocation only within
+a single block ("an honest validator's block has at most one
+parent per author" or similar in-block phrasings). Two distinct
+*cross-block* forms are silently used by paper proofs, neither
+stated:
 
 - **(a) Cross-block parent-set agreement.** Any two honest-authored
-  blocks in the state agree on parents at the same `(author, round)`
-  — i.e., if `B_h^r` and `B_h^{r'}` are both authored by the same
-  honest validator, then for any `(author', round')` they both
-  reference, they reference the *same* parent block.
+  blocks in the state agree on parents at the same `(author,
+  round)` — i.e., if `B_h^r` and `B_h^{r'}` are both authored by
+  the same honest validator, then for any `(author', round')`
+  they both reference, they reference the *same* parent block.
   Used by `certified_unique` (paper §4.4 uniqueness) in the case
   where the shared honest validator authored two distinct blocks
   each referencing one of two candidate certificates.
 
-- **(b) Block-uniqueness per (author, round).** An honest validator
-  authors *at most one* block per `(author, round)` pair — there
-  are not two distinct round-`r` blocks both authored by the same
-  honest validator.
+- **(b) Block-uniqueness per (author, round).** An honest
+  validator authors *at most one* block per `(author, round)`
+  pair — there are not two distinct round-`r` blocks both
+  authored by the same honest validator.
   Used by paper §D.3 L13's quorum-intersection step: when the
   shared honest validator from the intersection appears as the
   author of both a parent of `B'` and a referencer of `B`, those
@@ -509,12 +550,8 @@ forms are silently used by paper proofs, neither stated:
 
 **Suggested fix.** State both forms explicitly alongside the
 within-block form. Both follow from the broader principle "honest
-validators behave consistently per (author, round)", but the paper's
-prose treats them as immediate when they are not.
-
-**Resolution in our formalization.** Form (a) as `NoEquivocationInParents`
-(used by `certified_unique`); form (b) as `h_honest_unique` on L13.
-Both proved sorry-free under their respective hypotheses.
+validators behave consistently per (author, round)", but the
+paper's prose treats them as immediate when they are not.
 
 ---
 
@@ -526,10 +563,11 @@ latency `Δ` when honest reputations dominate) and Lemma 5
 validator is blamed).
 
 **Finding.** The proofs of L4 and L5 invoke Assumption 1 (latency
-triangle) implicitly, deriving the per-round `Δ` advancement bound
-from "post-GST, the slowest honest validator's round advances
-within `Δ`". This is the conclusion of Assumption 1 specialised to
-round advancement, but the proof prose treats it as immediate.
+triangle) implicitly, deriving the per-round `Δ` advancement
+bound from "post-GST, the slowest honest validator's round
+advances within `Δ`". This is the conclusion of Assumption 1
+specialised to round advancement, but the proof prose treats it
+as immediate.
 
 **Suggested fix.** Cite Assumption 1 explicitly in the proofs of
 L4 and L5, or state a derived corollary
@@ -544,110 +582,33 @@ invocation just isn't named.
 
 ---
 
-## F-8. Validator-ID assumptions silently used across multiple proofs
+## F-5. Surfaced invariants: protocol facts assumed in safety proofs
 
-**Affected statements.** Paper §D.1.2 round-robin leader schedule
-(`leader_of(r) := validators[r mod n]`) and Lemma 10 (round-robin
-pigeonhole); paper §4.2 block-digest derivation; paper §2 BFT bound
-("at most `f` Byzantine validators").
+**Affected statements.** Paper §D.3 (Mysticeti-Beluga safety),
+Lemma 13 (certificate persistence) and Lemma 15 (uniqueness of
+certified leader per round).
 
-**Finding.** Three related-but-distinct ID-bound / universe
-assumptions surface:
+**Finding.** Each proof relies on a protocol invariant the paper
+treats as obvious but doesn't formally state. Mechanizing the
+proofs forced four out, all DAG-level facts:
 
-- **(a) Contiguous IDs (stronger).** The round-robin formula
-  `r mod n` produces a numeric identifier in `{0, …, n−1}`. For
-  "the leader of round `r`" to be a registered validator, the
-  validator set must be indexed by exactly that range — IDs are
-  `0, 1, …, n−1`. Used by L10 (round-robin pigeonhole).
+1. **DAG admission well-formedness.** *Every block at a positive
+   round has at least `2f + 1` distinct-author parents from the
+   immediately preceding round, all themselves in the state.*
+2. **Author-round uniqueness.** *Any two blocks in the state
+   with the same `(author, round)` are equal.*
+3. **No equivocation in parents.** *For any two blocks in the
+   state that reference parents with the same `(author', round')`,
+   the referenced parents coincide.*
+4. **Authors are registered.** *Every block author corresponds to
+   a registered validator.*
 
-- **(b) Bounded IDs (weaker).** Block digests are uniquely identified
-  by `(round, author)`; for `digest`'s injectivity, validator IDs
-  must be bounded (e.g., `vid < n + 1`) so the encoding `r * (n+1)
-  + vid` is injective. Used by trace-invariant proofs that rely on
-  digest uniqueness (e.g., `causal_history_of_find_none`'s
-  `BlockInv` chain, where no-duplicate-digests is load-bearing).
-
-- **(c) BFT bound's universe.** The paper's "at most `f` Byzantine
-  validators" is implicitly *a statement about the registered
-  validator set* — a list of `2f + 1` arbitrary `ValidatorId`s
-  (e.g., the parent-author list of a block in state) is only
-  guaranteed to contain ≥ `f + 1` honest validators if it is
-  known to be a subset of the registered set. Without that
-  qualifier, a list of `f + 1` *unregistered* IDs trivially
-  satisfies "all entries are non-honest" (since `isHonest`
-  returns `false` for unregistered IDs), violating the bound.
-
-(a) ⇒ (b), so a single statement of (a) discharges both. (c) is
-distinct: it doesn't follow from (a)/(b) alone — it is a
-universe-of-quantification clarification on the BFT bound itself,
-saying that the "at most `f` Byzantine" claim ranges over
-*registered* validators, not over the type `ValidatorId`. The
-paper takes all three as obvious — none are named.
-
-**Suggested fix.** State explicitly that `system.validators`'s ID
-column is `{0, …, n−1}` (perhaps in §2 alongside `n` and `f`), and
-in the same paragraph qualify the BFT bound as "for any nodup
-list/subset of *registered* validators, at most `f` are Byzantine."
-Either is fine; just pin both the universe and the quantification
-range.
-
-The (c) sub-finding was surfaced when the formalization tried to
-package "at most `f` Byzantine in any author list" as a bundle
-conjunct without the registered-list qualifier; Aristotle round
-`03f5fe3f` exhibited a concrete refutation (a list of `f+1` copies
-of an unregistered ID), confirming that the qualifier is
-load-bearing rather than decorative.
-
-This is a low-severity finding compared to F-1 / F-7 — purely
-notational hygiene. Recording it for completeness.
-
----
-
-## F-11. Block-digest determinism is implicit, not stated
-
-**Affected statement.** Paper §2.1 block structure
-(`(r, d, author, parents, payload, signature)`) and every uniqueness
-argument that follows.
-
-**Finding.** The paper presents `B.d` (block digest) as a primitive
-field of the block — alongside `B.r`, `B.author`, etc. But every
-uniqueness or no-duplicates argument in the paper silently relies on
-the digest being a *function of `(B.r, B.author)`* — i.e.,
-"two blocks at the same round by the same author have the same
-digest, and conversely two blocks with the same digest agree on
-round and author." Without that, `digest` is just a free label and
-distinct blocks could share digests (or one block could have multiple
-digests across the trace).
-
-This is load-bearing for, among others:
-
-- The Mysticeti-Beluga safety chain (paper §D.3): proofs reason
-  about "the certificate set of `B`" via digest membership in
-  parent lists.
-- The cross-block honest non-equivocation step (F-3): identifying
-  "the block authored by validator `v` at round `r`" requires the
-  digest to fix the (r, author) pair.
-- The L13 quorum-intersection step: equating a parent of `B'` with
-  a referencer of `B` via the shared honest validator's digest.
-
-In implementations this comes for free: digests are cryptographic
-hashes of the block contents, which include `(r, author)`. But a
-*formal* statement of the protocol that doesn't make digests a
-function of contents is missing this load-bearing fact.
-
-**Suggested fix.** Either:
-
-1. Define `B.d` as a function of `(B.r, B.author, ...)` rather than
-   a primitive field — the cleanest restatement.
-2. State block-digest determinism as a named protocol property
-   alongside Definition 1.
-
-**Resolution in our formalization.** The trace-invariant
-`BlockInv` (in the `causal_history_of_find_none` chain) carries
-`B.d = digest system B.r B.author` as an invariant of the executable
-trace, and `digest_injective` is derived from it (under `ValidIds`
-— see F-8). So the formalization works, but only because we surfaced
-this as an invariant; the paper's statement-level treatment elides it.
+**Suggested fix for the paper.** Each of (1)–(4) is candidate
+material for a named lemma in §D.3 — they are load-bearing steps
+the prose treats as obvious. Naming them would also make L13 and
+L15 explicit about which invariants they consume, which is useful
+for follow-on protocol designs that vary the parent-selection
+rule.
 
 ---
 
@@ -666,8 +627,82 @@ versa); both are consistent if the rule is invoked at the
 right moment relative to round increment, but as written they
 read as contradictory.
 
-This is plausibly already obvious to anyone implementing the
-protocol — flagging only because it surfaced as a confusion point.
+---
+
+## F-8. Validator-ID assumptions silently used across multiple proofs
+
+**Affected statements.** Paper §D.1.2 round-robin leader schedule
+(`leader_of(r) := validators[r mod n]`) and Lemma 10 (round-robin
+pigeonhole); paper §4.2 block-digest derivation; paper §2 BFT
+bound ("at most `f` Byzantine validators").
+
+**Finding.** Three related-but-distinct ID-bound / universe
+assumptions surface:
+
+- **(a) Contiguous IDs (stronger).** The round-robin formula
+  `r mod n` produces a numeric identifier in `{0, …, n−1}`. For
+  "the leader of round `r`" to be a registered validator, the
+  validator set must be indexed by exactly that range — IDs are
+  `0, 1, …, n−1`. Used by L10.
+- **(b) Bounded IDs (weaker).** Block digests are uniquely
+  identified by `(round, author)`; for digest injectivity,
+  validator IDs must be bounded.
+- **(c) BFT bound's universe.** The paper's "at most `f`
+  Byzantine validators" is implicitly *a statement about the
+  registered validator set* — a list of `2f + 1` arbitrary
+  `ValidatorId`s is only guaranteed to contain ≥ `f + 1` honest
+  validators if it is known to be a subset of the registered set.
+
+(a) ⇒ (b), so a single statement of (a) discharges both. (c) is
+distinct: it doesn't follow from (a)/(b) alone — it is a
+universe-of-quantification clarification on the BFT bound itself,
+saying that the "at most `f` Byzantine" claim ranges over
+*registered* validators, not over the type `ValidatorId`. The
+paper takes all three as obvious — none are named.
+
+**Suggested fix.** State explicitly that `system.validators`'s ID
+column is `{0, …, n−1}` (perhaps in §2 alongside `n` and `f`),
+and in the same paragraph qualify the BFT bound as "for any nodup
+list/subset of *registered* validators, at most `f` are
+Byzantine."
+
+---
+
+## F-11. Block-digest determinism is implicit, not stated
+
+**Affected statement.** Paper §2.1 block structure
+(`(r, d, author, parents, payload, signature)`) and every
+uniqueness argument that follows.
+
+**Finding.** The paper presents `B.d` (block digest) as a
+primitive field of the block — alongside `B.r`, `B.author`, etc.
+But every uniqueness or no-duplicates argument in the paper
+silently relies on the digest being a *function of `(B.r,
+B.author)`* — i.e., "two blocks at the same round by the same
+author have the same digest, and conversely two blocks with the
+same digest agree on round and author." Without that, `digest`
+is just a free label and distinct blocks could share digests (or
+one block could have multiple digests across the trace).
+
+This is load-bearing for, among others:
+
+- The Mysticeti-Beluga safety chain (paper §D.3): proofs reason
+  about "the certificate set of `B`" via digest membership in
+  parent lists.
+- The cross-block honest non-equivocation step (F-3).
+- The L13 quorum-intersection step.
+
+In implementations this comes for free: digests are cryptographic
+hashes of the block contents, which include `(r, author)`. But a
+*formal* statement of the protocol that doesn't make digests a
+function of contents is missing this load-bearing fact.
+
+**Suggested fix.** Either:
+
+1. Define `B.d` as a function of `(B.r, B.author, ...)` rather
+   than a primitive field — the cleanest restatement.
+2. State block-digest determinism as a named protocol property
+   alongside Definition 1.
 
 ---
 
@@ -676,8 +711,8 @@ protocol — flagging only because it surfaced as a confusion point.
 The paper's §5 proofs of T1 (block availability) and T2 (causal
 availability) lean on the ImPoA / pull-protocol mechanism — "the
 parent blocks are referenced by f+1 subsequent blocks → at least
-one honest stored them → pull → eventually accept". Our mechanized
-proofs of T1 and T2 do not need ImPoA at all.
+one honest stored them → pull → eventually accept". Our
+mechanized proofs of T1 and T2 do not need ImPoA at all.
 
 The reason is structural: when accept and store actions are
 priority-ordered (accept before store before round-advance, all
@@ -702,10 +737,9 @@ ImPoA argument through the T1 and T2 proofs.
 
 **Suggested paper change.** State T1 and T2 with the simpler
 action-priority argument (rewritten proof sketches in
-[`paper-additions-stage2.md`](paper-additions-stage2.md) §2.3,
-§2.4); preserve the ImPoA discussion in §4.3 as the
-*implementation* mechanism it is, decoupled from the safety/liveness
-proofs of §5.
+[`paper-additions-stage2.md`](paper-additions-stage2.md));
+preserve the ImPoA discussion in §4.3 as the *implementation*
+mechanism it is, decoupled from the safety/liveness proofs of §5.
 
 ---
 
@@ -717,15 +751,15 @@ single procedure step. The §5 prose proofs implicitly assume this
 atomicity (e.g., T1's proof says "v_i must have stored B" as a
 direct consequence of having accepted B).
 
-If accept and store are instead taken as two distinct outputs (which
-the paper's §4 prose does, treating them as separately observed at
-different consumers — §4.4 "consensus" reads `block_accept`,
-"execution" reads `block_store`), T1's conclusion is no longer
-trivially true at the moment of acceptance: "eventually stores"
-requires at least one further protocol step.
+If accept and store are instead taken as two distinct outputs
+(which the paper's §4 prose does, treating them as separately
+observed at different consumers — §4.4 "consensus" reads
+`block_accept`, "execution" reads `block_store`), T1's conclusion
+is no longer trivially true at the moment of acceptance:
+"eventually stores" requires at least one further protocol step.
 
-**Suggested paper change.** Either (a) make the atomicity explicit
-by collapsing accept and store into a single
+**Suggested paper change.** Either (a) make the atomicity
+explicit by collapsing accept and store into a single
 `block_accept_and_store` action in Figure 8, after which T1's
 conclusion holds at the step of acceptance and T1's proof is
 one sentence; or (b) split accept and store as separate actions

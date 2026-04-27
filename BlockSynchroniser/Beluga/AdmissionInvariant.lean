@@ -64,7 +64,7 @@ private lemma hasProposedFor_append (s : BelugaState) (vid : ValidatorId) (r : R
     (h : hasProposedFor s vid r = true) :
     hasProposedFor { s with emittedOperations := s.emittedOperations ++ ops } vid r = true := by
   simp [hasProposedFor] at h ⊢
-  simp [List.any_append, h]
+  simp [h]
 
 private lemma allProposedFor_append (system : BlockSynchroniserSystem)
     (s : BelugaState) (r : Round) (ops : List ValidatorOperation)
@@ -227,7 +227,7 @@ private lemma traceInv_of_doAdvance (system : BlockSynchroniserSystem)
         have := ‹TraceInv system s›.2.2.1; aesop;
       rw [ List.nodup_iff_injective_get ] at h_val_eq;
       obtain ⟨ a, b, hab, rfl ⟩ := hp;
-      obtain ⟨ i, hi ⟩ := List.mem_iff_get.mp hab; obtain ⟨ j, hj ⟩ := List.mem_iff_get.mp hmem; simp_all +decide [ h_val_eq.eq_iff ] ;
+      obtain ⟨ i, hi ⟩ := List.mem_iff_get.mp hab; obtain ⟨ j, hj ⟩ := List.mem_iff_get.mp hmem; simp_all +decide ;
       have := @h_val_eq ⟨ i, by simp ⟩ ⟨ j, by simp ⟩ ; aesop;
     · obtain ⟨ a, b, h₁, rfl ⟩ := hp; simp_all +decide [ doAdvance ] ;
       exact allProposedFor_of_same_ops system _ _ _ rfl ( by have := ‹TraceInv system s›.2.2.2 ( a, b ) h₁; aesop )

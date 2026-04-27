@@ -14,7 +14,7 @@ Status: ✅ done · ◐ in progress · ☐ planned · ⊘ out of scope · ⏸ de
 |---|---|---|
 | §2 — Network model (`n`, `f`, `k`, `GST`, `Δ`) | [`System.lean :: BlockSynchroniserSystem`](BlockSynchroniser/System.lean#L21) | ✅ |
 | §2 — Honest / Byzantine partition | [`System.lean :: isHonest` / `isByzantine`](BlockSynchroniser/System.lean#L47) | ✅ |
-| §2.1 — Block structure (`r, d, author, parents, payload, signature`) | [`Block.lean :: Block`](BlockSynchroniser/Block.lean#L22) | ✅ (signature field omitted — see note below; digest determinism `B.d = digest system B.r B.author` carried as a trace invariant — see F-11) |
+| §2.1 — Block structure (`r, d, author, parents, payload, signature`) | [`Block.lean :: Block`](BlockSynchroniser/Block.lean#L22) | ✅ — signature field omitted (see note below); digest determinism (F-11) is carried as a side condition rather than baked into the field itself. |
 | §2.1 — Synchronizer interface (`block_propose_i`/`block_accept_i`/`block_store_i`) | [`Operations.lean :: ValidatorOperation`](BlockSynchroniser/Operations.lean#L17) | ✅ |
 | §2.1 — Causal history `causal(B)` | [`Causal.lean :: Reaches` / `causal`](BlockSynchroniser/Causal.lean#L27) | ✅ |
 | §2.1 — **Definition 1.1 — Round-Progression** | [`Properties.lean :: RoundProgression`](BlockSynchroniser/Properties.lean#L27) | ✅ |
@@ -28,33 +28,37 @@ Status: ✅ done · ◐ in progress · ☐ planned · ⊘ out of scope · ⏸ de
 | Paper | Code | Status |
 |---|---|---|
 | §4.1 — Block extensions (`weaklinks`, `watermark`, `ancestors`) | [`Beluga/BlockExt.lean :: BelugaBlock`](BlockSynchroniser/Beluga/BlockExt.lean#L31) | ✅ |
-| §4.2 — Reputation mechanism (increase / decrease rules; Figure 8 lines 23–32) | [`Beluga/Reputation.lean`](BlockSynchroniser/Beluga/Reputation.lean#L23) (`reputationIncreaseCandidates`, `updateScoreWithWatermarks`, `reputationPenalty`, `reputationThreshold`, `aboveThreshold`) | ✅ (we follow the prose `r-1` form; see finding F-6 for the prose-vs-Figure-8 off-by-one) |
-| §4.2 — Admission Control + parent selection (Figure 8 lines 14–17 + round-advancement rule (i)) | [`Beluga/AdmissionControl.lean`](BlockSynchroniser/Beluga/AdmissionControl.lean#L60) (`acParentSelection`, `canAdvanceByQuorum`) | ✅ |
-| §4.3 — ImPoA (implicit proof-of-availability) + live/bulk classification | [`Beluga/Pull.lean`](BlockSynchroniser/Beluga/Pull.lean#L30) (`implicitlyAvailable`, `isLive`, `classifyMissing`, `isAcceptableImPoA`) | ✅ strong-link only; weak-link inclusion deferred |
+| §4.2 — Reputation mechanism (increase / decrease rules; Figure 8 lines 23–32) | [`Beluga/Reputation.lean`](BlockSynchroniser/Beluga/Reputation.lean#L23) | ✅ — we follow the prose `r-1` form (finding F-6 records the prose-vs-Figure-8 off-by-one). |
+| §4.2 — Admission Control + parent selection (Figure 8 lines 14–17 + round-advancement rule (i)) | [`Beluga/AdmissionControl.lean`](BlockSynchroniser/Beluga/AdmissionControl.lean#L60) | ✅ |
+| §4.3 — ImPoA (implicit proof-of-availability) + live/bulk classification | [`Beluga/Pull.lean`](BlockSynchroniser/Beluga/Pull.lean#L30) | ✅ — strong-link only; weak-link inclusion deferred. |
 | §4 — `BelugaState`, `BelugaValidator`, `ReputationTable` | [`Beluga/State.lean`](BlockSynchroniser/Beluga/State.lean#L91) | ✅ |
-| §4 — Protocol semantics: `HonestStep` (relational) + executable `step` + `belugaTrace` | [`Beluga/Protocol.lean`](BlockSynchroniser/Beluga/Protocol.lean#L192) | ✅ Definitions + `step_refines_HonestStep` fully proved (trace-invariant chain `BlockInv` → `AcceptInv` → `CausallyClosed` discharges the previous transitive gap on `causal_history_of_find_none`). |
-| §4 — Executable demos (`#eval`, `lake exe blocksynchroniser`) | [`Beluga/Examples.lean`](BlockSynchroniser/Beluga/Examples.lean#L17) (`system4`, `run`, `reprLog`, `proposersFor`) | ✅ |
+| §4 — Protocol semantics: `HonestStep` (relational) + executable `step` + `belugaTrace` | [`Beluga/Protocol.lean`](BlockSynchroniser/Beluga/Protocol.lean#L192) | ✅ |
+| §4 — Executable demos (`#eval`, `lake exe blocksynchroniser`) | [`Beluga/Examples.lean`](BlockSynchroniser/Beluga/Examples.lean#L17) | ✅ |
 | §4.3 — Random pull complexity bound (`O(1)`) | — | ⊘ probabilistic |
-| §4.4 — Availability pattern | [`Beluga/Patterns.lean :: availabilityPattern`](BlockSynchroniser/Beluga/Patterns.lean#L38) | ✅ strong-link only |
+| §4.4 — Availability pattern | [`Beluga/Patterns.lean :: availabilityPattern`](BlockSynchroniser/Beluga/Patterns.lean#L38) | ✅ — strong-link only. |
 | §4.4 — Certificate pattern | [`Beluga/Patterns.lean :: certificatePattern`](BlockSynchroniser/Beluga/Patterns.lean#L49) | ✅ |
 | §4.4 — `available` / `certified` | [`Beluga/Patterns.lean`](BlockSynchroniser/Beluga/Patterns.lean#L54) | ✅ |
-| §4.4 — Uniqueness consequence ("for any validator and round, at most one block can become certified") | [`Beluga/Patterns.lean :: certified_unique`](BlockSynchroniser/Beluga/Patterns.lean#L152) | ✅ proved (uses BFT side conditions F-2 / F-3 form (a) — `NoEquivocationInParents`; see [`docs/mechanization-findings.md`](docs/mechanization-findings.md)). |
+| §4.4 — Uniqueness consequence ("for any validator and round, at most one block can become certified") | [`Beluga/Patterns.lean :: certified_unique`](BlockSynchroniser/Beluga/Patterns.lean#L152) | ✅ — uses the BFT scope-pinning of finding F-2 and the cross-block non-equivocation of finding F-3(a). |
 
-### §5 — Beluga's main theorems (Phase 5)
+### §5 — Beluga's main theorems
+
+The §5 layer lives in [`Beluga/Theorems.lean`](BlockSynchroniser/Beluga/Theorems.lean)
+and is stated against the network-aware trace
+`networkBelugaTraceWithPull`. The protocol layer (state, step,
+fairness derivation, named liveness primitives) lives in
+[`Beluga/Network.lean`](BlockSynchroniser/Beluga/Network.lean).
 
 | Paper | Code | Status |
 |---|---|---|
-| §5 — **Lemma 1** — after GST, all honest validators reach the same round within 3Δ | [`Beluga/Network/Theorems.lean :: network_lemma1_honest_round_entry`](BlockSynchroniser/Beluga/Network/Theorems.lean) | ✅ **proved** for `networkTrace`, weakened form (gap-1 transients; F-1b). Takes `PartiallySynchronousFairness` bundle. One-line wrapper around `schedulerFairness_holds`. |
-| §5 — **Lemma 2** — round-to-round latency ≤ 3Δ in the happy case | [`Beluga/Network/Theorems.lean :: network_lemma2_round_latency`](BlockSynchroniser/Beluga/Network/Theorems.lean) | ✅ **proved** for `networkTrace`. Takes `PartiallySynchronousFairness`. Composes L1 + `network_round_intermediate_value`. |
-| §5 — **Theorem 1** — Beluga ⊨ Block availability | [`Beluga/Network/Theorems.lean :: network_theorem1_block_availability`](BlockSynchroniser/Beluga/Network/Theorems.lean) | ✅ **proved** for `networkTrace`. Takes `PartiallySynchronousFairness`. Uses `network_find_advance_step` + `networkStep_advance_implies_stored` + `network_acceptedBlockExists_trace` + emittedOperations monotonicity. |
-| §5 — **Theorem 2** — Beluga ⊨ Causal availability | [`Beluga/Network/Theorems.lean :: network_theorem2_causal_availability`](BlockSynchroniser/Beluga/Network/Theorems.lean) | ◐ **proved under `EventualCausalAcceptance` Prop hypothesis** (paper §4.3 pull-mechanism liveness). The Eventual-axiom is being discharged in the in-progress pull-mechanization migration (Phases 10–12) — pull mechanism is now modeled explicitly in `networkStepWithPull` / `networkTraceWithPull`; Phase 11 will prove `EventualCausalAcceptance` from the bundle's `PullRequestDelivery` + `PullResponseScheduling` + `AcceptScheduling`. |
-| §5 — **Theorem 3** — Beluga ⊨ Round-Progression | [`Beluga/Network/Theorems.lean :: network_theorem3_round_progression`](BlockSynchroniser/Beluga/Network/Theorems.lean) | ✅ **proved** for `networkTrace`. Takes `PartiallySynchronousFairness`. Uses `network_all_honest_eventually_at_round` + `network_proposed_for_lt_currentRound` + `eraseDups.length ≥ toFinset.card` counting. |
-| §5 — **Theorem 4** — Beluga ⊨ Round-Termination | [`Beluga/Network/Theorems.lean :: network_theorem4_round_termination`](BlockSynchroniser/Beluga/Network/Theorems.lean) | ◐ **proved under `EventualRoundAcceptance` Prop hypothesis**. Same status as T2: Phase 10 of the pull-mechanization migration will prove `EventualRoundAcceptance` from the bundle. |
-| §5 corollary — Beluga is a block synchronizer (T1∧T2∧T3∧T4) | [`Beluga/Network/Theorems.lean :: networkTrace_isBlockSynchronizer`](BlockSynchroniser/Beluga/Network/Theorems.lean) | ◐ **proved** (modulo T2/T4's Eventual* hypotheses). Takes `PartiallySynchronousFairness` + the two Eventual axioms; conjunction of T1, T2, T3, T4. Phase 12 will eliminate the Eventual hypotheses. |
-| §5 fairness derivation — `SchedulerFairness` (lockstep all-honest-advance-in-3Δ) from `PartiallySynchronousFairness` | [`Beluga/Network/Fairness.lean :: schedulerFairness_holds`](BlockSynchroniser/Beluga/Network/Fairness.lean) | ✅ **proved**. The `networkTrace` model + its structural invariants (id preservation, validator-list nodup, `roundEntryTime ≤ currentTime`) are sorry-free. The proof body uses the bundle's `ActionScheduling` and `BoundedRoundSpread_networkTrace` (round arithmetic). |
-| §5 fairness derivation — `schedulerFairness_holds_withPull` (analog on `networkTraceWithPull`) | [`Beluga/Network/Fairness.lean :: schedulerFairness_holds_withPull`](BlockSynchroniser/Beluga/Network/Fairness.lean) | ✅ **proved**. Same proof as `schedulerFairness_holds`; trace-substituted to the with-pull trace. Phase 10/11 helper. |
-| Pull mechanism (paper §4.3) explicit modeling | [`Beluga/Network/State.lean`](BlockSynchroniser/Beluga/Network/State.lean), [`Beluga/Network/Protocol.lean`](BlockSynchroniser/Beluga/Network/Protocol.lean) | ✅ **modeled**: `PullRequest`, `pullRequestsInflight`/`pullRequestsInbox`, `doPullRequest`/`doPullResponse`, `pullStep`, `networkStepWithPull`, `networkTraceWithPull`. Three new paper-named primitives (`AcceptScheduling`, `PullRequestDelivery`, `PullResponseScheduling`) in `Beluga/Network/Fairness.lean`. |
-| `PartiallySynchronousFairness` bundle (paper assumptions on partial synchrony + honest validators acting promptly) | [`Beluga/Network/Fairness.lean :: PartiallySynchronousFairness`](BlockSynchroniser/Beluga/Network/Fairness.lean) | ✅ **defined**. Six-field record bundling `NetworkDelivery`, `ActionScheduling`, `BoundedRoundSpread_networkTrace`, `AcceptScheduling`, `PullRequestDelivery`, `PullResponseScheduling`. Single hypothesis on every §5 wrapper. |
+| §5 — **Lemma 1** — after GST, all honest validators reach the same round within 3Δ | [`Beluga/Theorems.lean :: lemma1_honest_round_entry`](BlockSynchroniser/Beluga/Theorems.lean) | ✅ — weakened to the lockstep-progress form (the strict same-round form is unprovable from the cited assumptions; finding F-1b). |
+| §5 — **Lemma 2** — round-to-round latency ≤ 3Δ in the happy case | [`Beluga/Theorems.lean :: lemma2_round_latency`](BlockSynchroniser/Beluga/Theorems.lean) | ✅ |
+| §5 — **Theorem 1** — Beluga ⊨ Block availability | [`Beluga/Theorems.lean :: network_theorem1_block_availability_withPull`](BlockSynchroniser/Beluga/Theorems.lean) | ✅ |
+| §5 — **Theorem 2** — Beluga ⊨ Causal availability | [`Beluga/Theorems.lean :: network_theorem2_causal_availability_withPull`](BlockSynchroniser/Beluga/Theorems.lean) | ✅ |
+| §5 — **Theorem 3** — Beluga ⊨ Round-Progression | [`Beluga/Theorems.lean :: network_theorem3_round_progression_withPull`](BlockSynchroniser/Beluga/Theorems.lean) | ✅ |
+| §5 — **Theorem 4** — Beluga ⊨ Round-Termination | [`Beluga/Theorems.lean :: network_theorem4_round_termination_proved`](BlockSynchroniser/Beluga/Theorems.lean) | ✅ |
+| §5 corollary — Beluga is a block synchronizer (T1∧T2∧T3∧T4) | [`Beluga/Theorems.lean :: beluga_isBlockSynchronizer`](BlockSynchroniser/Beluga/Theorems.lean) | ✅ |
+| Pull mechanism (paper §4.3) explicit modelling | [`Beluga/Network.lean`](BlockSynchroniser/Beluga/Network.lean) | ✅ |
+| Paper-stated liveness assumptions of §2 + §4.2 + §4.3 bundled (`BelugaWithPullFairness`) | [`Beluga/Theorems.lean :: BelugaWithPullFairness`](BlockSynchroniser/Beluga/Theorems.lean) | ✅ — surfaces the per-action and pull-channel liveness conclusions the paper's §5 prose uses silently (finding F-1). |
 
 ### Appendix C — Performance bounds
 
@@ -96,9 +100,7 @@ each Definition-1 property is satisfiable / falsifiable by concrete traces
 out the distinction.
 
 All four `golden_*` theorems are fully proved; the realizability
-and anti-witness lemmas are also closed. Per-proof provenance (which
-proofs were filled by Aristotle vs hand) lives in
-[docs/aristotle-attributions.md](docs/aristotle-attributions.md).
+and anti-witness lemmas are also closed.
 
 ## Refinement chain and reusable trace invariants
 
@@ -166,12 +168,10 @@ two other proofs that have no direct connection to refinement:
 
 In both cases the conjuncts of `BlockInv` were *exactly* the
 inductive vocabulary the proof needed. The carrier earned its
-keep beyond its original purpose. This is the practical payoff
-to the bundle-then-delegate pattern documented in
-[docs/blog-aristotle-integration-gotchas.md](docs/blog-aristotle-integration-gotchas.md)
-(Gotcha 21): when you invest in stating the right inductive
-invariant once, downstream proofs that need substructures of it
-are short and structural rather than re-deriving the carrier.
+keep beyond its original purpose. The practical takeaway: when
+you invest in stating the right inductive invariant once,
+downstream proofs that need substructures of it are short and
+structural rather than re-deriving the carrier.
 
 ### Implication for future work
 
@@ -226,20 +226,20 @@ preserved by `step`.
   `lemma5_round_latency_or_blamed`. This is a Lean-side decomposition
   decision, not a paper finding.
 
-- **§5 hypothesis set: `PartiallySynchronousFairness` bundle.**
-  L1, L2, T1, T2, T3, T4 take the bundle
-  `Network.PartiallySynchronousFairness system time` (six-field
-  record covering all paper-stated post-GST primitives:
-  `NetworkDelivery` §2, `ActionScheduling` §4.2,
-  `BoundedRoundSpread_networkTrace` F-1b, `AcceptScheduling` §4.2,
-  `PullRequestDelivery` §4.3, `PullResponseScheduling` §4.3).
-  T2 and T4 additionally take `EventualCausalAcceptance` /
-  `EventualRoundAcceptance` Prop hypotheses, which the in-progress
-  pull-mechanization migration (Phases 10–12) is discharging from
-  the bundle. The §4.3 pull mechanism is now modeled explicitly
-  (`networkStepWithPull` / `networkTraceWithPull` in
-  `Beluga/Network/Protocol.lean`); no two-abstraction bridge axiom
-  is needed.
+- **§5 hypothesis set: `BelugaWithPullFairness` bundle.**
+  L1, L2, T1, T2, T3, T4 (and the corollary
+  `beluga_isBlockSynchronizer`) all consume the single bundle
+  `Network.BelugaWithPullFairness system time` (seven-field record
+  covering paper §2 + §4.2 + §4.3 post-GST liveness primitives:
+  `timeMonotone`, `timeUnbounded`, `networkDelivery`
+  (`NetworkDeliveryWithPull`, paper §2 `Δ`-delivery),
+  `actionScheduling` (`ActionSchedulingWithPull`, paper §4.2
+  round-advance), `boundedRoundSpread` (paper §4.2 protocol
+  synchronization), `acceptScheduling` (paper §4.2 accept-action
+  liveness), `inPoolDelivery` (`NetworkInPoolDeliveryWithPull`,
+  paper §4.3 universal in-pool delivery — push ∪ pull)).
+  `EventualCausalAcceptance` and `EventualRoundAcceptance` are
+  derived theorems, not axioms.
 
 Real paper-side concerns (missing assumptions, scope ambiguities,
 implicit invariants) are recorded in
@@ -249,14 +249,9 @@ implicit invariants) are recorded in
 
 | | |
 |---|---|
-| Phased plan & scope decisions | [docs/formalization-plan.md](docs/formalization-plan.md) |
-| Plan: derive `SchedulerFairness` from paper primitives (network model refinement; phases A–F) | [docs/plan-derive-fairness-from-primitives.md](docs/plan-derive-fairness-from-primitives.md) |
-| Why `SchedulerFairness` is needed and ImPoA does not substitute | [docs/paper-feedback-impoa-vs-fairness.md](docs/paper-feedback-impoa-vs-fairness.md) |
 | Mechanization findings (paper-side log) | [docs/mechanization-findings.md](docs/mechanization-findings.md) |
-| Aristotle delegation workflow | [docs/aristotle-workflow.md](docs/aristotle-workflow.md) |
-| Aristotle project tracker (active / queued / completed submissions) | [docs/aristotle-projects.md](docs/aristotle-projects.md) |
-| Aristotle attribution log (which proofs Aristotle filled, for the final report) | [docs/aristotle-attributions.md](docs/aristotle-attributions.md) |
-| The "math tactical wall" — when to delegate vs hand-prove | [docs/math-tactical-wall.md](docs/math-tactical-wall.md) |
+| Why per-action liveness is needed and ImPoA does not substitute | [docs/paper-feedback-impoa-vs-fairness.md](docs/paper-feedback-impoa-vs-fairness.md) |
+| Recommended paper additions / restatements | [docs/paper-additions-stage2.md](docs/paper-additions-stage2.md) |
 | Per-stage changelog | [changelogs/](changelogs/) |
 | The paper | [docs/Block_Sync_Project.pdf](docs/Block_Sync_Project.pdf) |
 
@@ -284,8 +279,13 @@ block-sync-lean/
 │   │   ├── AdmissionControl.lean ← §4.2 parent selection
 │   │   ├── Pull.lean           ← §4.3 ImPoA + live/bulk
 │   │   ├── Protocol.lean       ← HonestStep + executable step
+│   │   ├── Network.lean        ← network-aware §4 protocol layer
+│   │   │                          (NetworkState, networkStep,
+│   │   │                          networkStepWithPull, fairness
+│   │   │                          derivation, paper liveness primitives)
 │   │   ├── Examples.lean       ← system4, run, #eval smoke tests
-│   │   └── Theorems.lean       ← Lemmas 1–2, Theorems 1–4
+│   │   └── Theorems.lean       ← §5 paper layer: BelugaWithPullFairness,
+│   │                              L1, L2, T1–T4, beluga_isBlockSynchronizer
 │   └── Mysticeti/
 │       ├── Consensus.lean      ← decision rules + leader schedule (D.1)
 │       ├── Safety.lean         ← Lemmas 10, 13–16, Theorem 7 (D.3)
