@@ -115,14 +115,66 @@ single later step in EventualRoundAcceptance's proof.
 
 The mechanization is genuinely substantive: the pull mechanism
 adds ~250 lines of model code (state extension, protocol
-definitions, preservation lemmas) and 4 new primitives (each a
-named typed Prop). Discharging the remaining proofs (iterations
-+ counting + recursion on causal depth) is conservatively
-600-1200 more lines, multi-session work.
+definitions, preservation lemmas) and **three new primitives**
+specific to pull (`AcceptScheduling`, `PullRequestDelivery`,
+`PullResponseScheduling`). Discharging the remaining proofs
+(iterations + counting + recursion on causal depth) is
+conservatively 600-1200 more lines, multi-session work.
 
-The honest position: we have replaced two ad-hoc
-`Eventual*` axioms with a precise model + four named primitives
-that each correspond to a paper assumption (paper §2 Δ-delivery,
-§4.2 honest validators run the protocol, §4.3 ImPoA pull). The
-proofs derive each `Eventual*` from the model + primitives. Each
-remaining primitive is paper-faithful; no further axioms needed.
+## Primitive count — corrected
+
+The earlier note said "four named primitives". The accurate count
+is **six paper-named primitives** in total, of which **three are
+genuinely new for the §4.3 pull mechanism**:
+
+**Pre-existing (carried over from §5 derivation):**
+1. `NetworkDelivery` (paper §2 Δ-delivery)
+2. `ActionScheduling` (paper §4.2 round-advance liveness)
+3. `BoundedRoundSpread_networkTrace` (F-1b gap-1 invariant)
+
+**New for pull mechanization (Phase 9):**
+4. `AcceptScheduling` (paper §4.2 per-action accept liveness)
+5. `PullRequestDelivery` (paper §4.3 pull-channel Δ-delivery)
+6. `PullResponseScheduling` (paper §4.3 pull-response action liveness)
+
+The `*WithPull` restatements (`NetworkDeliveryWithPull`,
+`ActionSchedulingWithPull`, `BoundedRoundSpread_networkTraceWithPull`)
+are not new paper-level assumptions — they are the same
+primitives re-pointed at `networkTraceWithPull` instead of
+`networkTrace`. If we unify the two traces (Phase 13 cleanup),
+the duplication goes away.
+
+The honest position: the two ad-hoc `Eventual*` Prop hypotheses
+in T2/T4 are now poised to be discharged from a precise model +
+six named primitives. Each primitive corresponds to a paper
+assumption (paper §2 Δ-delivery, §4.2 honest validators acting
+promptly on each action, §4.3 ImPoA pull). No further axioms
+beyond these six are needed.
+
+## Future Phase 14 — bundle primitives
+
+After Phases 10-13 close, a future Phase 14 cleanup should bundle
+the six primitives into a single record (the symmetric mirror of
+the existing conclusion-side `BelugaPostGSTLiveness` bundle):
+
+```lean
+structure PartiallySynchronousFairness
+    (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop where
+  -- §2 network model
+  networkDelivery     : NetworkDelivery system time
+  pullRequestDelivery : PullRequestDelivery system time
+  -- §4.2 protocol fairness
+  actionScheduling    : ActionScheduling system time
+  acceptScheduling    : AcceptScheduling system time
+  -- §4.3 pull mechanism
+  pullResponseScheduling : PullResponseScheduling system time
+  -- F-1b structural invariant
+  boundedRoundSpread  : BoundedRoundSpread_networkTrace system time
+```
+
+Doing this *before* Phases 10-13 would require unbundling inside
+each proof anyway; *after* those phases settle, the bundle's
+shape can be informed by actual usage rather than guessed
+up-front. Per-bundle convenience projection lemmas
+(`PartiallySynchronousFairness.implies_NetworkDelivery`, etc.)
+let callers extract individual fields cleanly.

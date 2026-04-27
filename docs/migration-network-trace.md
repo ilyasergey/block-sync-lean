@@ -45,6 +45,25 @@ Three paper-faithful primitives in `Beluga/Network/Fairness.lean`:
 - `AcceptScheduling`: honest validators with acceptable blocks
   fire `doAccept` within `Δ` post-GST.
 
+#### Total primitive count
+
+**Six paper-named primitives** discharge T2/T4 once the iteration
+proofs (Phase 10/11) are written:
+
+| # | Primitive | Paper reference | Status |
+|---|---|---|---|
+| 1 | `NetworkDelivery` | §2 Δ-delivery | Pre-existing |
+| 2 | `ActionScheduling` | §4.2 round-advance | Pre-existing |
+| 3 | `BoundedRoundSpread_networkTrace` | §4.2 + F-1b | Pre-existing |
+| 4 | `AcceptScheduling` | §4.2 accept-action | NEW (Phase 9) |
+| 5 | `PullRequestDelivery` | §4.3 pull-channel | NEW (Phase 9) |
+| 6 | `PullResponseScheduling` | §4.3 pull-response | NEW (Phase 9) |
+
+Three are genuinely new for the §4.3 pull mechanization. The
+`*WithPull` restatements that thread these through `networkTraceWithPull`
+are not new paper-level assumptions, just trace-substitutions of
+the same primitives.
+
 ### Phase 10 — Prove `EventualRoundAcceptance` (PENDING)
 
 Proof sketch:
@@ -96,6 +115,50 @@ Decide whether to keep both `networkTrace` and `networkTraceWithPull`
 or unify under the with-pull version. Update `formalization.md`
 and `mechanization-findings.md` (specifically F-1c) to reflect the
 fully-derived T2/T4. Update changelogs.
+
+### Phase 14 (FUTURE) — Bundle primitives
+
+After Phases 10–13 close, bundle the six paper-named primitives
+into a single record, mirroring the existing conclusion-side
+`BelugaPostGSTLiveness` bundle on the primitive side:
+
+```lean
+structure PartiallySynchronousFairness
+    (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop where
+  -- §2 network model
+  networkDelivery        : NetworkDelivery system time
+  pullRequestDelivery    : PullRequestDelivery system time
+  -- §4.2 protocol fairness
+  actionScheduling       : ActionScheduling system time
+  acceptScheduling       : AcceptScheduling system time
+  -- §4.3 pull mechanism
+  pullResponseScheduling : PullResponseScheduling system time
+  -- F-1b structural invariant
+  boundedRoundSpread     : BoundedRoundSpread_networkTrace system time
+```
+
+**Naming**: `PartiallySynchronousFairness` generalizes the existing
+`PartiallySynchronous` typeclass to a record carrying all
+paper-stated post-GST primitives — the single name communicates
+"all assumptions about partial synchrony + honest validators
+acting promptly".
+
+**Why future, not now**: the Phase 10/11 proofs need to access
+individual primitives in their bodies. Bundling now would just
+force unbundling inside each proof. After those proofs settle and
+we know which primitives each one actually accesses, the bundle's
+shape can be informed by usage rather than guessed up-front.
+
+**Companion projections** (also Phase 14): per-field projection
+lemmas like `PartiallySynchronousFairness.implies_NetworkDelivery`
+to let callers extract individual fields cleanly.
+
+**Alternative considered** — group by paper section
+(`NetworkChannelDelivery`, `ProtocolFairness`, plus a standalone
+`BoundedRoundSpread`): more paper-faithful structurally but more
+boilerplate and less alignment with the existing single-bundle
+pattern. We chose the single-bundle approach for symmetry with
+`BelugaPostGSTLiveness`.
 
 ---
 
