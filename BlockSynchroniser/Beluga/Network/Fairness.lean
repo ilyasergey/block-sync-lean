@@ -3634,7 +3634,7 @@ theorem network_hasAcceptedDigest_monotone_withPull
 /-- Iteration lemma: for any list `l` of honest validator IDs, there
 exists a step `k` at which `vid` has accepted the round-`r` digest of
 every member of `l`. Inductive over `l`. -/
-private lemma all_honest_in_list_eventually_accepted
+theorem all_honest_in_list_eventually_accepted
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
     (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
     (h_time_unbounded : ∀ T, ∃ k, time k ≥ T)
