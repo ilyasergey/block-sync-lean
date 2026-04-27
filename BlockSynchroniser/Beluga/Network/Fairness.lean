@@ -217,6 +217,36 @@ def AcceptScheduling (system : BlockSynchroniserSystem) (time : Nat → Nat) : P
     ∃ k', k ≤ k' ∧ time k' ≤ time k + system.Δ ∧
       hasAcceptedDigest (networkTraceWithPull system time k').base vid B.d = true
 
+/-- **`NetworkInPoolDeliveryWithPull`** — the consolidated
+push+pull delivery primitive: post-GST, every in-pool block whose
+digest the honest validator has not yet accepted is eventually
+delivered to the validator's inbox. This subsumes:
+
+- **Push** (paper §2 + §4.2): for honest-authored blocks, the
+  proposer's broadcast reaches every honest validator within `Δ`.
+- **Pull** (paper §4.3): for blocks the honest validator has not
+  received via push (e.g., Byzantine-authored), the
+  `pullCandidate`/`pullStepOne` mechanism issues a request, the
+  responder schedules a `block_propose` reply, and `deliverPending`
+  delivers it to the validator's inbox.
+
+The primitive is stated as a single liveness statement to match the
+paper's high-level §4.3 claim that "every in-pool block is eventually
+known to every honest validator post-GST." Atomic derivation from
+`PullRequestDelivery` + `PullResponseScheduling` + `NetworkDeliveryWithPull`
+is feasible but requires careful chaining of `pullStepOne`'s issue
+branch — left as a future structural derivation. -/
+def NetworkInPoolDeliveryWithPull
+    (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
+  ∀ k vid B,
+    isHonestValidator system vid = true →
+    time k ≥ system.GST →
+    B ∈ (networkTraceWithPull system time k).base.blocks →
+    hasAcceptedDigest (networkTraceWithPull system time k).base vid B.d = false →
+    ∃ k', k ≤ k' ∧
+      ValidatorOperation.block_propose B.author B B.r ∈
+        (networkTraceWithPull system time k').inbox vid
+
 /-! ## Trace structure: monotonicity + timeout firing
 
 The full derivation requires several structural lemmas about
@@ -3216,6 +3246,52 @@ theorem network_blocks_monotone_traceWithPull
     show B ∈ (networkStepWithPull system (networkTraceWithPull system time k_mid)
                 (time (k_mid + 1))).base.blocks
     exact networkStepWithPull_blocks_monotone system _ _ B ih'
+
+/-! ## Universal in-pool acceptance: combines push+pull delivery with AcceptScheduling -/
+
+/-- Universal in-pool acceptance: under the with-pull primitives,
+every honest validator eventually accepts every block in the pool
+post-GST (regardless of author honesty). Combines
+`NetworkInPoolDeliveryWithPull` + `AcceptScheduling`. This closes the
+Phase 11 gap: it's the universal in-pool acceptance hypothesis taken
+by `network_eventualCausalAcceptance_modulo_gap`. -/
+theorem network_in_pool_eventually_accepted_withPull
+    (system : BlockSynchroniserSystem) (time : Nat → Nat)
+    (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
+    (h_in_pool_delivery : NetworkInPoolDeliveryWithPull system time)
+    (h_accept : AcceptScheduling system time)
+    (k : Nat) (vid : ValidatorId) (B : Block)
+    (h_vid_honest : isHonestValidator system vid = true)
+    (h_post_gst : time k ≥ system.GST)
+    (h_in_pool : B ∈ (networkTraceWithPull system time k).base.blocks) :
+    ∃ k', k ≤ k' ∧
+      hasAcceptedDigest (networkTraceWithPull system time k').base vid B.d = true := by
+  by_cases h_already :
+      hasAcceptedDigest (networkTraceWithPull system time k).base vid B.d = true
+  · refine ⟨k, le_rfl, h_already⟩
+  · have h_not_accepted :
+        hasAcceptedDigest (networkTraceWithPull system time k).base vid B.d = false := by
+      cases h_b : hasAcceptedDigest (networkTraceWithPull system time k).base vid B.d with
+      | true => exact absurd h_b h_already
+      | false => rfl
+    obtain ⟨k_d, hk_d_le, h_in_inbox⟩ :=
+      h_in_pool_delivery k vid B h_vid_honest h_post_gst h_in_pool h_not_accepted
+    have h_in_pool_kd : B ∈ (networkTraceWithPull system time k_d).base.blocks :=
+      network_blocks_monotone_traceWithPull system time k k_d hk_d_le B h_in_pool
+    have h_post_gst_kd : time k_d ≥ system.GST :=
+      le_trans h_post_gst (h_mono _ _ hk_d_le)
+    by_cases h_acc_kd :
+        hasAcceptedDigest (networkTraceWithPull system time k_d).base vid B.d = true
+    · refine ⟨k_d, hk_d_le, h_acc_kd⟩
+    · have h_not_acc_kd :
+          hasAcceptedDigest (networkTraceWithPull system time k_d).base vid B.d = false := by
+        cases h_b : hasAcceptedDigest (networkTraceWithPull system time k_d).base vid B.d with
+        | true => exact absurd h_b h_acc_kd
+        | false => rfl
+      obtain ⟨k_a, hk_a_le, _, h_acc⟩ :=
+        network_eventually_accepts_received_withPull system time h_accept vid B B.r
+          h_vid_honest k_d h_post_gst_kd h_in_inbox h_in_pool_kd h_not_acc_kd rfl
+      refine ⟨k_a, le_trans hk_d_le hk_a_le, h_acc⟩
 
 /-- Inversion of `hasProposedFor`: extract the block from the propose op. -/
 theorem hasProposedFor_implies_propose_op (s : BelugaState)
