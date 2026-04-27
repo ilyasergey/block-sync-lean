@@ -336,6 +336,106 @@ theorem network_theorem3_round_progression
     h_eraseDups_ge_toFinset proposers_raw
   omega
 
+/-! ## §5 Theorem 2 (network-trace) — Causal Availability
+
+Under `networkTrace`'s ImPoA-aware accept rule, a validator can
+accept a block via the f+1 references path *without* directly
+accepting its parents. The strong belugaTrace invariant
+`AcceptInv.acceptedParents` therefore fails. Paper §5's prose proof
+of T2 invokes a separate liveness argument — under §4.3 ImPoA's
+pull mechanism, the validator eventually pulls and accepts every
+causally-related block.
+
+We state T2 with an explicit hypothesis `EventualCausalAcceptance`
+capturing this paper-implicit liveness step. This is the
+load-bearing axiom for T2 under ImPoA — analogous to F-1c in
+`mechanization-findings.md`. -/
+
+/-- The eventual-causal-acceptance assumption: for any honest validator
+that has accepted some digest `d` corresponding to a block `B`,
+every causal ancestor `B'` of `B` is eventually accepted by `vid`. -/
+def EventualCausalAcceptance (system : BlockSynchroniserSystem)
+    (trace : Trace BelugaState) : Prop :=
+  ∀ k vid d B, isHonestValidator system vid = true →
+    HasAccepted (trace k) vid d →
+    getBlockByDigest (trace k) d = some B →
+    ∀ B', Reaches (trace k) B B' →
+      ∃ k', k ≤ k' ∧ HasAccepted (trace k') vid B'.d
+
+/-- **Theorem 2 (paper §5).** Network-trace formulation: under the
+`EventualCausalAcceptance` axiom (paper §4.3 ImPoA + pull). -/
+theorem network_theorem2_causal_availability
+    (system : BlockSynchroniserSystem) (time : Nat → Nat)
+    (h_eventual : EventualCausalAcceptance system (networkBelugaTrace system time)) :
+    Properties.CausalAvailability system (networkBelugaTrace system time) := by
+  intro k vid d B h_honest h_acc h_get B' h_reach
+  exact h_eventual k vid d B h_honest h_acc h_get B' h_reach
+
+/-! ## §5 Theorem 4 (network-trace) — Round Termination
+
+T4 says every honest validator eventually accepts blocks from 2f+1
+distinct authors at every round. Under `belugaTrace`'s `step`,
+this follows from the accept-before-advance gate: at the advance
+step, accept is disabled (every accepted block already stored, no
+more accept candidates), so vid has accepted every round-≤-`r`
+block in the pool (specifically, 2f+1 round-`r` blocks from the
+`allProposedFor` gate).
+
+Under `networkTrace` with the timeout (paper §4.2 `T_rd = 4Δ`),
+vid may advance via timeout *without* accepting all round-`r`
+blocks. The 2f+1 acceptances would then come later, via §4.3 ImPoA
++ pull mechanism. Like T2, this requires an explicit eventual-
+acceptance hypothesis. -/
+
+/-- The eventual-round-acceptance assumption: every honest validator
+eventually accepts 2f+1 distinct authors' round-`r` blocks. Under
+the network model, this is a paper §4.3 + pull liveness claim;
+it is not derivable from the structural networkTrace properties
+alone (cf. F-1c). -/
+def EventualRoundAcceptance (system : BlockSynchroniserSystem)
+    (trace : Trace BelugaState) : Prop :=
+  ∀ round vid, isHonestValidator system vid →
+    ∃ k,
+      let ops := opsAt trace k
+      let acceptedAuthors : List ValidatorId :=
+        ops.filterMap (fun op =>
+          match op with
+          | .block_accept vid' d =>
+            if vid' = vid then authorOfDigest ops round d else none
+          | _ => none)
+        |>.eraseDups
+      acceptedAuthors.length ≥ 2 * system.f + 1
+
+/-- **Theorem 4 (paper §5).** Network-trace formulation: under the
+`EventualRoundAcceptance` axiom (paper §4.3 ImPoA + pull). -/
+theorem network_theorem4_round_termination
+    (system : BlockSynchroniserSystem) (time : Nat → Nat)
+    (h_eventual : EventualRoundAcceptance system (networkBelugaTrace system time)) :
+    Properties.RoundTermination system (networkBelugaTrace system time) := by
+  intro round vid h_honest
+  exact h_eventual round vid h_honest
+
+/-! ## §5 corollary — Beluga is a block synchronizer (network-trace) -/
+
+/-- **Corollary (paper §5).** Network-trace formulation: Beluga
+satisfies all four block-synchronizer properties. -/
+theorem networkTrace_isBlockSynchronizer
+    (system : BlockSynchroniserSystem) (time : Nat → Nat)
+    (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
+    (h_time_unbounded : ∀ T, ∃ k, time k ≥ T)
+    (h_delivery : NetworkDelivery system time)
+    (h_scheduling : ActionScheduling system time)
+    (h_spread : BoundedRoundSpread_networkTrace system time)
+    (h_eventual_causal : EventualCausalAcceptance system (networkBelugaTrace system time))
+    (h_eventual_round : EventualRoundAcceptance system (networkBelugaTrace system time)) :
+    Properties.BlockSynchronizer system (networkBelugaTrace system time) :=
+  ⟨network_theorem3_round_progression system time h_mono h_time_unbounded
+     h_delivery h_scheduling h_spread,
+   network_theorem4_round_termination system time h_eventual_round,
+   network_theorem1_block_availability system time h_mono h_time_unbounded
+     h_delivery h_scheduling h_spread,
+   network_theorem2_causal_availability system time h_eventual_causal⟩
+
 end Network
 end Beluga
 end BlockSynchroniser
