@@ -850,6 +850,43 @@ theorem network_theorem3_round_progression_withPull
     length_eraseDups_ge_card_toFinset proposers_raw
   omega
 
+/-! ## With-pull T2 (CausalAvailability) wrapper -/
+
+/-- **Theorem 2 (paper §5), with-pull.** Mirror of T2 on
+`networkTraceWithPull`. Still takes `EventualCausalAcceptance` as a
+hypothesis (Phase 11 work; cf. F-1c on the causal-acceptance side). -/
+theorem network_theorem2_causal_availability_withPull
+    (system : BlockSynchroniserSystem) (time : Nat → Nat)
+    (h_eventual : EventualCausalAcceptance system (networkBelugaTraceWithPull system time)) :
+    Properties.CausalAvailability system (networkBelugaTraceWithPull system time) := by
+  intro k vid d B h_honest h_acc h_get B' h_reach
+  exact h_eventual k vid d B h_honest h_acc h_get B' h_reach
+
+/-! ## Unified with-pull corollary: Beluga-with-pull is a block synchronizer -/
+
+/-- **Phase 12 main corollary.** Under the with-pull primitives,
+`networkBelugaTraceWithPull` satisfies all four block-synchronizer
+properties. T1, T3, T4 are derived; T2 still takes
+`EventualCausalAcceptance` (Phase 11 work). -/
+theorem networkTraceWithPull_isBlockSynchronizer
+    (system : BlockSynchroniserSystem) (time : Nat → Nat)
+    (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
+    (h_time_unbounded : ∀ T, ∃ k, time k ≥ T)
+    (h_delivery : NetworkDeliveryWithPull system time)
+    (h_scheduling : ActionSchedulingWithPull system time)
+    (h_spread : BoundedRoundSpread_networkTraceWithPull system time)
+    (h_accept : AcceptScheduling system time)
+    (h_eventual_causal :
+      EventualCausalAcceptance system (networkBelugaTraceWithPull system time)) :
+    Properties.BlockSynchronizer system (networkBelugaTraceWithPull system time) :=
+  ⟨network_theorem3_round_progression_withPull system time h_mono h_time_unbounded
+     h_delivery h_scheduling h_spread,
+   network_theorem4_round_termination_proved system time h_mono h_time_unbounded
+     h_delivery h_scheduling h_spread h_accept,
+   network_theorem1_block_availability_withPull system time h_mono h_time_unbounded
+     h_delivery h_scheduling h_spread,
+   network_theorem2_causal_availability_withPull system time h_eventual_causal⟩
+
 end Network
 end Beluga
 end BlockSynchroniser
