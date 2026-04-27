@@ -1819,6 +1819,7 @@ theorem network_hasProposedFor_monotone
     show op ∈ (networkStep system (networkTrace system time j) (time (j + 1))).base.emittedOperations
     exact networkStep_emittedOperations_monotone system _ _ op hop_mem
 
+
 /-- Trace invariant: at every step, every validator at round R has proposed
 for every r' < R. -/
 theorem network_proposed_for_lt_currentRound
@@ -2425,6 +2426,22 @@ theorem network_HasAccepted_monotone_withPull
         (time (k_mid + 1))).base.emittedOperations
     exact networkStepWithPull_emittedOperations_monotone system
       (networkTraceWithPull system time k_mid) (time (k_mid + 1)) _ ih
+
+/-- `hasProposedFor` is monotone along `networkTraceWithPull`. -/
+theorem network_hasProposedFor_monotoneWithPull
+    (system : BlockSynchroniserSystem) (time : Nat → Nat)
+    (vid : ValidatorId) (r : Round)
+    (i j : Nat) (hij : i ≤ j)
+    (h : hasProposedFor (networkTraceWithPull system time i).base vid r = true) :
+    hasProposedFor (networkTraceWithPull system time j).base vid r = true := by
+  induction' hij with j _ ih
+  · exact h
+  · unfold hasProposedFor at ih ⊢
+    rw [List.any_eq_true] at ih ⊢
+    obtain ⟨op, hop_mem, hop_match⟩ := ih
+    refine ⟨op, ?_, hop_match⟩
+    show op ∈ (networkStepWithPull system (networkTraceWithPull system time j) (time (j + 1))).base.emittedOperations
+    exact networkStepWithPull_emittedOperations_monotone system _ _ op hop_mem
 
 /-! ## Pull-mechanism liveness: every honest pushed block is eventually accepted -/
 
