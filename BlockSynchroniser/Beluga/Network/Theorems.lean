@@ -427,6 +427,71 @@ theorem networkTrace_isBlockSynchronizer
    network_theorem1_block_availability system time h_mono h_time_unbounded h_prim,
    network_theorem2_causal_availability system time h_eventual_causal⟩
 
+/-! ## Phase 10 deliverable: `EventualRoundAcceptance` as a theorem -/
+
+/-- The pull-mechanism analog of `networkBelugaTrace`. -/
+def networkBelugaTraceWithPull (system : BlockSynchroniserSystem) (time : Nat → Nat) :
+    Trace BelugaState :=
+  fun k => (networkTraceWithPull system time k).base
+
+/-- Generic structural lemma (template from `golden_roundTermination`):
+length of `eraseDups` dominates the cardinality of the toFinset. -/
+private lemma length_eraseDups_ge_card_toFinset {α : Type*} [DecidableEq α] :
+    ∀ (l : List α), List.length (List.eraseDups l) ≥ Finset.card (List.toFinset l) := by
+  intro l
+  induction' l using List.reverseRecOn with l x ih
+  · rfl
+  · simp +decide [List.eraseDups_append]
+    by_cases h : x ∈ l.toFinset <;> simp_all +decide [List.removeAll]
+    exact Nat.lt_succ_of_le ‹_›
+
+/-- Helper: under the propose-op block-shape invariant + author-bound,
+`authorOfDigest ops r (digest system r vid_p) = some vid_p` whenever
+there's a propose op for `vid_p` in `ops`. The find? returns SOME
+matching op; by the invariant + digest injectivity, that op's author
+must be `vid_p`. -/
+private lemma authorOfDigest_of_propose
+    (system : BlockSynchroniserSystem) (ops : List ValidatorOperation)
+    (vid_p : ValidatorId) (r : Round)
+    (h_v_bound : vid_p < system.n + 1)
+    (h_inv : ∀ vid B' r', ValidatorOperation.block_propose vid B' r' ∈ ops →
+              B'.author = vid ∧ B'.r = r' ∧ B'.d = digest system r' vid)
+    (h_authors_bound : ∀ vid B' r', ValidatorOperation.block_propose vid B' r' ∈ ops →
+                         vid < system.n + 1)
+    (B : Block)
+    (h_op : ValidatorOperation.block_propose vid_p B r ∈ ops) :
+    authorOfDigest ops r (digest system r vid_p) = some vid_p := by
+  unfold authorOfDigest
+  obtain ⟨_, _, h_d_eq⟩ := h_inv vid_p B r h_op
+  have h_witness_match :
+      (match ValidatorOperation.block_propose vid_p B r with
+       | .block_propose _ block r' => block.d == digest system r vid_p && r' == r
+       | _ => false) = true := by simp [h_d_eq]
+  cases h_find : ops.find? (fun op =>
+      match op with
+      | .block_propose _ block r' => block.d == digest system r vid_p && r' == r
+      | _ => false) with
+  | none =>
+    rw [List.find?_eq_none] at h_find
+    exact absurd h_witness_match (h_find _ h_op)
+  | some op_found =>
+    have h_op_found_mem : op_found ∈ ops := List.mem_of_find?_eq_some h_find
+    have h_op_found_pred := List.find?_some h_find
+    cases op_found with
+    | block_propose v_f B_f r_f =>
+      rw [Bool.and_eq_true] at h_op_found_pred
+      obtain ⟨h_d_f, _⟩ := h_op_found_pred
+      rw [beq_iff_eq] at h_d_f
+      obtain ⟨_, _, h_d_inv⟩ := h_inv v_f B_f r_f h_op_found_mem
+      have h_v_f_bound := h_authors_bound v_f B_f r_f h_op_found_mem
+      have h_d_combine : digest system r_f v_f = digest system r vid_p := by
+        rw [← h_d_inv]; exact h_d_f
+      have ⟨_, hv_eq⟩ :=
+        digest_injective system r_f r v_f vid_p h_v_f_bound h_v_bound h_d_combine
+      simp [hv_eq]
+    | block_accept _ _ => exact absurd h_op_found_pred (by simp)
+    | block_store _ _ => exact absurd h_op_found_pred (by simp)
+
 end Network
 end Beluga
 end BlockSynchroniser
