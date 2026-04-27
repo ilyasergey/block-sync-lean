@@ -1403,7 +1403,103 @@ theorem network_acceptedBlockExists_trace
       show B' ∈ s_del.base.blocks
       rw [h_del_base]; exact hB'_mem
 
+/-- Helper: validators in init state have currentRound = 0. -/
+private lemma network_getValidator_init_round_zero
+    (system : BlockSynchroniserSystem) (vid : ValidatorId) (bv : BelugaValidator)
+    (h : (BelugaState.init system).getValidator vid = some bv) :
+    bv.currentRound = 0 := by
+  unfold BelugaState.init BelugaState.getValidator at h
+  simp only [Option.map_eq_some_iff] at h
+  obtain ⟨p, h_find_some, h_eq⟩ := h
+  -- p ∈ mapped list, so p has form (vid', { reputation := init, ... default fields })
+  have h_p_mem := List.mem_of_find?_eq_some h_find_some
+  rw [List.mem_map] at h_p_mem
+  obtain ⟨q, _, h_q_eq⟩ := h_p_mem
+  -- p = (q.1, { reputation := init }); so p.2.currentRound = 0 (default).
+  rw [← h_eq, ← h_q_eq]
+
 /-! ## Phase 4: Trace-level helpers -/
+
+/-- `hasProposedFor` is monotone along `networkTrace`. -/
+theorem network_hasProposedFor_monotone
+    (system : BlockSynchroniserSystem) (time : Nat → Nat)
+    (vid : ValidatorId) (r : Round)
+    (i j : Nat) (hij : i ≤ j)
+    (h : hasProposedFor (networkTrace system time i).base vid r = true) :
+    hasProposedFor (networkTrace system time j).base vid r = true := by
+  induction' hij with j _ ih
+  · exact h
+  · unfold hasProposedFor at ih ⊢
+    rw [List.any_eq_true] at ih ⊢
+    obtain ⟨op, hop_mem, hop_match⟩ := ih
+    refine ⟨op, ?_, hop_match⟩
+    show op ∈ (networkStep system (networkTrace system time j) (time (j + 1))).base.emittedOperations
+    exact networkStep_emittedOperations_monotone system _ _ op hop_mem
+
+/-- Trace invariant: at every step, every validator at round R has proposed
+for every r' < R. -/
+theorem network_proposed_for_lt_currentRound
+    (system : BlockSynchroniserSystem) (time : Nat → Nat) :
+    ∀ k vid bv, (networkTrace system time k).base.getValidator vid = some bv →
+      ∀ r' < bv.currentRound, hasProposedFor (networkTrace system time k).base vid r' = true := by
+  intro k
+  induction k with
+  | zero =>
+    intro vid bv h_get r' h_lt
+    -- networkTrace 0 = init; init has currentRound = 0.
+    have h_get' : (BelugaState.init system).getValidator vid = some bv := h_get
+    have h_round : bv.currentRound = 0 :=
+      network_getValidator_init_round_zero system vid bv h_get'
+    rw [h_round] at h_lt
+    exact absurd h_lt (Nat.not_lt_zero _)
+  | succ k ih =>
+    intro vid bv h_get r' h_lt
+    have h_present_k : ∃ bv_prev, (networkTrace system time k).base.getValidator vid = some bv_prev := by
+      by_contra h_none
+      push_neg at h_none
+      have h_get_none : (networkTrace system time k).base.getValidator vid = none :=
+        Option.eq_none_iff_forall_ne_some.mpr h_none
+      have h_succ_none : (networkTrace system time (k+1)).base.getValidator vid = none := by
+        show (networkStep system (networkTrace system time k) (time (k+1))).base.getValidator vid = none
+        exact networkStep_preserves_none system _ _ vid h_get_none
+      rw [h_succ_none] at h_get
+      contradiction
+    obtain ⟨bv_prev, h_prev⟩ := h_present_k
+    have h_nodup_k := networkTrace_validators_nodup system time k
+    have h_get_step : (networkStep system (networkTrace system time k)
+        (time (k+1))).base.getValidator vid = some bv := h_get
+    have h_mono : bv_prev.currentRound ≤ bv.currentRound :=
+      networkStep_round_monotone system _ _ h_nodup_k vid bv_prev bv h_prev h_get_step
+    have h_at_most_one : bv.currentRound ≤ bv_prev.currentRound + 1 :=
+      networkStep_round_at_most_one system _ _ h_nodup_k vid bv_prev bv h_prev h_get_step
+    by_cases h_eq : bv.currentRound = bv_prev.currentRound
+    · rw [h_eq] at h_lt
+      have h_prop_k := ih vid bv_prev h_prev r' h_lt
+      exact network_hasProposedFor_monotone system time vid r' k (k+1) (Nat.le_succ k) h_prop_k
+    · have h_advance : bv.currentRound = bv_prev.currentRound + 1 := by
+        rcases Nat.lt_or_ge bv_prev.currentRound bv.currentRound with h_lt | h_ge
+        · -- bv_prev.cr < bv.cr; combined with h_at_most_one (bv.cr ≤ bv_prev.cr + 1)
+          have : bv.currentRound ≤ bv_prev.currentRound + 1 := h_at_most_one
+          have : bv_prev.currentRound + 1 ≤ bv.currentRound := h_lt
+          exact Nat.le_antisymm ‹bv.currentRound ≤ bv_prev.currentRound + 1› ‹_›
+        · -- bv_prev.cr ≥ bv.cr; combined with h_mono (bv_prev.cr ≤ bv.cr) gives equality
+          exact absurd (Nat.le_antisymm h_ge h_mono) h_eq
+      by_cases h_lt' : r' < bv_prev.currentRound
+      · have h_prop_k := ih vid bv_prev h_prev r' h_lt'
+        exact network_hasProposedFor_monotone system time vid r' k (k+1) (Nat.le_succ k) h_prop_k
+      · have h_eq_r : r' = bv_prev.currentRound := by
+          push_neg at h_lt'
+          -- h_lt : r' < bv.currentRound = bv_prev.currentRound + 1
+          -- h_lt' : bv_prev.currentRound ≤ r'
+          rw [h_advance] at h_lt
+          have : r' ≤ bv_prev.currentRound := Nat.le_of_lt_succ h_lt
+          exact Nat.le_antisymm this h_lt'
+        rw [h_eq_r]
+        have h_prop_k :=
+          networkStep_advance_implies_hasProposedFor system _ _ vid bv_prev bv
+            h_nodup_k h_prev h_get_step h_advance
+        exact network_hasProposedFor_monotone system time vid bv_prev.currentRound k (k+1)
+          (Nat.le_succ k) h_prop_k
 
 /-- Find the step where vid's round transitioned from r to r+1. -/
 theorem network_find_advance_step
