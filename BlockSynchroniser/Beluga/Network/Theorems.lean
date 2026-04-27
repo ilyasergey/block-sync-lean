@@ -850,6 +850,70 @@ theorem network_theorem3_round_progression_withPull
     length_eraseDups_ge_card_toFinset proposers_raw
   omega
 
+/-! ## Phase 11: `EventualCausalAcceptance` via Reaches induction
+
+The proof is structural: induction on the `Reaches` relation. The
+remaining gap (acceptance of in-pool blocks regardless of author
+honesty) is isolated as a single hypothesis `h_in_pool_accept`,
+which is the F-1c gap on the causal side: it requires formalizing
+the pull mechanism's liveness for Byzantine-authored ancestors.
+The structural derivation is fully proven. -/
+
+/-- **Phase 11 main theorem (modulo in-pool acceptance gap).**
+
+Under the with-pull primitives plus a universal in-pool acceptance
+hypothesis, `networkBelugaTraceWithPull` satisfies
+`EventualCausalAcceptance`. The hypothesis says: every honest
+validator eventually accepts every block in the pool (post-GST).
+This is provable from Phase 10 helpers for honest-authored blocks;
+the Byzantine-authored case requires deep pull-mechanism liveness
+reasoning (cf. F-1c on the causal-acceptance side). -/
+theorem network_eventualCausalAcceptance_modulo_gap
+    (system : BlockSynchroniserSystem) (time : Nat → Nat)
+    (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
+    (h_time_unbounded : ∀ T, ∃ k, time k ≥ T)
+    (h_in_pool_accept : ∀ k vid B,
+      isHonestValidator system vid = true →
+      time k ≥ system.GST →
+      B ∈ (networkTraceWithPull system time k).base.blocks →
+      ∃ k', k ≤ k' ∧
+        hasAcceptedDigest (networkTraceWithPull system time k').base vid B.d = true) :
+    EventualCausalAcceptance system (networkBelugaTraceWithPull system time) := by
+  intro k vid d B h_vid_honest_prop h_acc h_get B' h_reach
+  have h_vid_honest : isHonestValidator system vid = true := h_vid_honest_prop
+  induction h_reach with
+  | refl =>
+    -- B' = B (unified by induction). vid has accepted d, and B.d = d.
+    refine ⟨k, le_rfl, ?_⟩
+    have h_d_eq : B.d = d := by
+      unfold getBlockByDigest at h_get
+      have h_b_pred := List.find?_some h_get
+      simpa using h_b_pred
+    rw [h_d_eq]; exact h_acc
+  | step h_reach_b_m h_parent_isP =>
+    rename_i b m parent ih
+    -- IH: ∃ k', k ≤ k' ∧ HasAccepted (trace k') vid m.d.
+    obtain ⟨k_m, hk_m_le, h_acc_m⟩ := ih
+    -- parent is in pool at step k.
+    have h_parent_in_pool_k : parent ∈ (networkTraceWithPull system time k).base.blocks :=
+      h_parent_isP.2.1
+    have h_parent_in_pool_km : parent ∈ (networkTraceWithPull system time k_m).base.blocks :=
+      network_blocks_monotone_traceWithPull system time k k_m hk_m_le parent h_parent_in_pool_k
+    obtain ⟨k_extra, h_k_extra_gst⟩ := h_time_unbounded system.GST
+    let k_gst := max k_m k_extra
+    have hk_gst_ge_m : k_m ≤ k_gst := le_max_left _ _
+    have hk_gst_post_gst : time k_gst ≥ system.GST :=
+      le_trans h_k_extra_gst (h_mono _ _ (le_max_right _ _))
+    have h_parent_in_pool_kgst : parent ∈ (networkTraceWithPull system time k_gst).base.blocks :=
+      network_blocks_monotone_traceWithPull system time k_m k_gst hk_gst_ge_m parent
+        h_parent_in_pool_km
+    obtain ⟨k_acc, hk_acc_ge, h_acc_parent⟩ :=
+      h_in_pool_accept k_gst vid parent h_vid_honest hk_gst_post_gst h_parent_in_pool_kgst
+    refine ⟨k_acc, ?_, ?_⟩
+    · exact le_trans hk_m_le (le_trans hk_gst_ge_m hk_acc_ge)
+    · rw [hasAcceptedDigest_iff_HasAccepted] at h_acc_parent
+      exact h_acc_parent
+
 /-! ## With-pull T2 (CausalAvailability) wrapper -/
 
 /-- **Theorem 2 (paper §5), with-pull.** Mirror of T2 on
