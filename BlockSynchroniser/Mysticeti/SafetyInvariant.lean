@@ -37,12 +37,12 @@ open Beluga
 Bundles four facts that L13/L15 take as explicit hypotheses but that
 hold of `belugaTrace` for free:
 
-| field | corresponds to L13/L15 hypothesis |
-|---|---|
-| `admission` | `h_admission : AdmissionWellFormed system state` |
-| `uniqueByAuthorRound` | `h_honest_unique` (in fact stronger — drops the honesty hypothesis) |
-| `noEquivocation` | `h_no_eq : NoEquivocationInParents system state` |
-| `authorsValid` | `h_authors_valid` |
+| Field                 | Corresponds to L13/L15 hypothesis                                  |
+|-----------------------|--------------------------------------------------------------------|
+| `admission`           | `h_admission : AdmissionWellFormed system state`                   |
+| `uniqueByAuthorRound` | `h_honest_unique` (stronger — drops the honesty hypothesis)        |
+| `noEquivocation`      | `h_no_eq : NoEquivocationInParents system state`                   |
+| `authorsValid`        | `h_authors_valid`                                                  |
 -/
 structure MysticetiSafetyInv (system : BlockSynchroniserSystem) (s : BelugaState) :
     Prop where
@@ -156,7 +156,7 @@ lemma step_blocks_mem (system : BlockSynchroniserSystem) (s : BelugaState) (B : 
     simp_all +decide
   · cases h : List.find? (fun B => hasAcceptedDigest s a.1 B.d &&
         !hasStoredDigest s a.1 B.d) s.blocks <;> simp_all +decide
-    · split_ifs at h₂ <;> simp_all +decide [doPropose, doAccept, doStore, doAdvance]
+    · split_ifs at h₂ <;> simp_all +decide [doPropose, doAdvance]
       · grind
       · unfold updateValidator at h₂; aesop
     · split_ifs at h₂ <;> simp_all +decide [doPropose, doStore]
@@ -194,7 +194,7 @@ private lemma authorsValid_trace
       cases h : List.findSome? (fun x =>
           tryActFor system (belugaTrace system k) x.1 x.2)
           (belugaTrace system k).validators <;>
-        simp +decide [h]
+        simp +decide
       have h_step_validators :
           ∀ (s : BelugaState) (vid : ValidatorId) (bv : BelugaValidator),
             (tryActFor system (belugaTrace system k) vid bv = some s) →
@@ -214,18 +214,15 @@ private lemma authorsValid_trace
               (belugaTrace system k).blocks <;>
             simp +decide [h'] at hact ⊢
           · split_ifs at hact <;>
-              simp_all +decide [doPropose_validators_map_fst,
-                doAdvance_validators_map_fst]
+              simp_all +decide
             · exact hact ▸ doPropose_validators_map_fst _ _ _ _
             · exact hact ▸ doAdvance_validators_map_fst _ _
           · split_ifs at hact <;>
-              simp_all +decide [doPropose_validators_map_fst,
-                doStore_validators_map_fst]
+              simp_all +decide
             · exact hact ▸ doPropose_validators_map_fst _ _ _ _
             · exact hact ▸ doStore_validators_map_fst _ _ _
         · split_ifs at hact <;>
-            simp_all +decide [doPropose_validators_map_fst,
-              doAccept_validators_map_fst]
+            simp_all +decide
           · exact hact ▸ doPropose_validators_map_fst _ _ _ _
           · exact hact ▸ doAccept_validators_map_fst _ _ _
       rw [List.findSome?_eq_some_iff] at h
