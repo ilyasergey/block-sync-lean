@@ -6,7 +6,7 @@ Licensed under the Apache License, Version 2.0.
 Canonical transaction order for the Beluga trace.
 
 Closes finding F-7(b) (the order-from-view modeling artifact in
-`docs/mechanization-findings.md`) by defining the transaction order as a
+`docs/round-01/mechanization-findings.md`) by defining the transaction order as a
 concrete *function* of trace state rather than an abstract parameter. The
 order-faithfulness theorem `accepted_implies_in_belugaTransactionOrder` is then
 a *theorem* about this function, not an axiom.

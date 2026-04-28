@@ -111,7 +111,7 @@ structure MysticetiPostGSTLiveness
   -- Byzantine-count bound: in any *nodup* list of *registered*
   -- validators, at most `f` entries are Byzantine. Both qualifiers
   -- are load-bearing — finding F-8(c) in
-  -- `docs/mechanization-findings.md`. Without `Nodup` the same
+  -- `docs/round-01/mechanization-findings.md`. Without `Nodup` the same
   -- Byzantine validator can pad a list arbitrarily; without the
   -- "registered" qualifier (`∀ a ∈ authors, ∃ p ∈ system.validators,
   -- p.1 = a`) a list of f+1 unregistered IDs trivially exceeds the

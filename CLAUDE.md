@@ -7,7 +7,7 @@ repeating mistakes.
 ## What this project is
 
 A Lean 4 formalization of [*Beluga: Block Synchronization for BFT Consensus
-Protocols*](docs/Block_Sync_Project.pdf). For the project-wide overview
+Protocols*](docs/round-01/Block_Sync_Project.pdf). For the project-wide overview
 including the paper→code map, see [formalization.md](formalization.md).
 
 Lean toolchain: **`leanprover/lean4:v4.28.0`**, matching Aristotle's pinned
@@ -136,8 +136,8 @@ during integration.
 | [docs/aristotle-attributions.md](docs/aristotle-attributions.md) | Per-project attribution log (for final report) |
 | [docs/math-tactical-wall.md](docs/math-tactical-wall.md) | The wall-vs-gap concept (blog seed: conceptual) |
 | [docs/blog-aristotle-integration-gotchas.md](docs/blog-aristotle-integration-gotchas.md) | Operational gotchas integrating Aristotle output (blog seed: practical). **Append new findings here as they come up.** |
-| [docs/mechanization-findings.md](docs/mechanization-findings.md) | Paper-side log of observations the formalization surfaced (paper terminology only, for folding back into the paper). **Append new findings here when mechanization reveals a paper-relevant gap or ambiguity.** |
-| [docs/paper-feedback-l1-l2-fairness.md](docs/paper-feedback-l1-l2-fairness.md) | Deep dive on F-1 (scheduler fairness for L1/L2). |
+| [docs/round-01/mechanization-findings.md](docs/round-01/mechanization-findings.md) | Paper-side log of observations the formalization surfaced (paper terminology only, for folding back into the paper). **Append new findings here when mechanization reveals a paper-relevant gap or ambiguity.** |
+| [docs/round-01/paper-feedback-l1-l2-fairness.md](docs/round-01/paper-feedback-l1-l2-fairness.md) | Deep dive on F-1 (scheduler fairness for L1/L2). |
 | [docs/final-report-outline.md](docs/final-report-outline.md) | Report skeleton |
 | [changelogs/](changelogs/) | Per-stage timestamped changelogs |
 | [changelogs/2026-04-25-session-narrative.md](changelogs/2026-04-25-session-narrative.md) | Cross-phase decision threads |

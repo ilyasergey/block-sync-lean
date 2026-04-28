@@ -1,13 +1,13 @@
 # BlockSynchroniser
 
 A Lean 4 formalization of [*Beluga: Block Synchronization for BFT Consensus
-Protocols*](docs/Block_Sync_Project.pdf).
+Protocols*](docs/round-01/Block_Sync_Project.pdf).
 
 > 📖 **Start here: [formalization.md](formalization.md)** — overview of what we're
 > building, the repository layout, the distinction between paper theorems and
 > validation lemmas, and pointers to the deeper docs.
 >
-> 📝 **Paper feedback: [docs/mechanization-findings.md](docs/mechanization-findings.md)** —
+> 📝 **Paper feedback: [docs/round-01/mechanization-findings.md](docs/round-01/mechanization-findings.md)** —
 > running log, in paper terminology only, of issues the formalization
 > surfaced about the Beluga paper (missing assumptions, scope ambiguities,
 > implicit invariants).
@@ -51,10 +51,10 @@ then code-facing.
 
 | Document | What it is |
 |---|---|
-| [docs/mechanization-findings.md](docs/mechanization-findings.md) | Running log of paper-side observations from the formalization. Each finding (`F-1` through `F-13`) has severity, category, affected paper sections, headline issue, recommended action, and our address. Paper terminology only. |
-| [docs/paper-additions-stage1.md](docs/paper-additions-stage1.md) | Stage-1 list of recommended paper edits — items whose Lean proofs are fully closed, in the order theorems appear. |
-| [docs/paper-additions-stage2.md](docs/paper-additions-stage2.md) | Stage-2 follow-ups (paper-faithfulness commentary on §5, alternative proof sketches, recommended §4 changes). |
-| [docs/Block_Sync_Project.pdf](docs/Block_Sync_Project.pdf) | The paper itself. |
+| [docs/round-01/mechanization-findings.md](docs/round-01/mechanization-findings.md) | Running log of paper-side observations from the formalization. Each finding (`F-1` through `F-13`) has severity, category, affected paper sections, headline issue, recommended action, and our address. Paper terminology only. |
+| [docs/round-01/paper-additions-stage1.md](docs/round-01/paper-additions-stage1.md) | Stage-1 list of recommended paper edits — items whose Lean proofs are fully closed, in the order theorems appear. |
+| [docs/round-01/paper-additions-stage2.md](docs/round-01/paper-additions-stage2.md) | Stage-2 follow-ups (paper-faithfulness commentary on §5, alternative proof sketches, recommended §4 changes). |
+| [docs/round-01/Block_Sync_Project.pdf](docs/round-01/Block_Sync_Project.pdf) | The paper itself. |
 
 ### Project overview
 

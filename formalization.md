@@ -1,12 +1,12 @@
 # Formalization overview
 
 Lean 4 formalization of [*Beluga: Block Synchronization for BFT Consensus
-Protocols*](docs/Block_Sync_Project.pdf).
+Protocols*](docs/round-01/Block_Sync_Project.pdf).
 
 ## Paper → code map
 
 The single source of truth for which paper item lives where in this repo.
-Status: ✅ done · ◐ in progress · ☐ planned · ⊘ out of scope · ⏸ deferred · ⚠️ proved but with paper-faithfulness concerns flagged in [`docs/mechanization-findings.md`](docs/mechanization-findings.md).
+Status: ✅ done · ◐ in progress · ☐ planned · ⊘ out of scope · ⏸ deferred · ⚠️ proved but with paper-faithfulness concerns flagged in [`docs/round-01/mechanization-findings.md`](docs/round-01/mechanization-findings.md).
 
 ### §2 — Network model and synchronizer abstraction
 
@@ -187,7 +187,7 @@ preserved by `step`.
 
 ## Notes on paper consistency
 
-> **Paper-side findings live in [`docs/mechanization-findings.md`](docs/mechanization-findings.md)**
+> **Paper-side findings live in [`docs/round-01/mechanization-findings.md`](docs/round-01/mechanization-findings.md)**
 > (F-1 / F-1a through F-8 plus F-11: scheduler-fairness for L1/L2 in
 > its lockstep form, T7's safety/liveness boundary, surfaced protocol
 > invariants, quorum-size pinning, block-digest determinism, etc.).
@@ -242,17 +242,17 @@ preserved by `step`.
 
 Real paper-side concerns (missing assumptions, scope ambiguities,
 implicit invariants) are recorded in
-[`docs/mechanization-findings.md`](docs/mechanization-findings.md).
+[`docs/round-01/mechanization-findings.md`](docs/round-01/mechanization-findings.md).
 
 ## Where to look
 
 | | |
 |---|---|
-| Mechanization findings (paper-side log) | [docs/mechanization-findings.md](docs/mechanization-findings.md) |
-| Why per-action liveness is needed and ImPoA does not substitute | [docs/paper-feedback-impoa-vs-fairness.md](docs/paper-feedback-impoa-vs-fairness.md) |
-| Recommended paper additions / restatements | [docs/paper-additions-stage2.md](docs/paper-additions-stage2.md) |
+| Mechanization findings (paper-side log) | [docs/round-01/mechanization-findings.md](docs/round-01/mechanization-findings.md) |
+| Why per-action liveness is needed and ImPoA does not substitute | [docs/round-01/paper-feedback-impoa-vs-fairness.md](docs/round-01/paper-feedback-impoa-vs-fairness.md) |
+| Recommended paper additions / restatements | [docs/round-01/paper-additions-stage2.md](docs/round-01/paper-additions-stage2.md) |
 | Per-stage changelog | [changelogs/](changelogs/) |
-| The paper | [docs/Block_Sync_Project.pdf](docs/Block_Sync_Project.pdf) |
+| The paper | [docs/round-01/Block_Sync_Project.pdf](docs/round-01/Block_Sync_Project.pdf) |
 
 ## Repository layout
 

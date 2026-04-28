@@ -834,5 +834,5 @@ proofs read fine without it.
   may go deeper on individual findings.
 
 If a future finding warrants its own deep-dive document
-(like F-1 has), open a new `docs/paper-feedback-<topic>.md` and
+(like F-1 has), open a new `docs/round-01/paper-feedback-<topic>.md` and
 link it from the entry here.

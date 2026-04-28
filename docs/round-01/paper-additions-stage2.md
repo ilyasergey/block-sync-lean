@@ -7,7 +7,7 @@ suggestion is phrased in the notation of the paper (Sections 2,
 
 For the full state of the formalization (paper→code map, current
 proof status of every paper item) see
-[`../formalization.md`](../formalization.md).
+[`../../formalization.md`](../../formalization.md).
 For the running log of paper-side observations the formalization
 surfaced (with severities, affected sections, and recommended
 actions per finding) see

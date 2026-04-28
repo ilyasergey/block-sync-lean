@@ -1,6 +1,6 @@
 # Stage 1 — Paper-side notes from the mechanization
 
-> The companion [`formalization.md`](../formalization.md) is the
+> The companion [`formalization.md`](../../formalization.md) is the
 > paper→code map and per-item proof-status table — it shows
 > *which* paper definitions, lemmas, and theorems are mechanized
 > and *what state* each is in (✅ done · ◐ in progress · ☐ planned ·

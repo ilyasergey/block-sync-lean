@@ -236,7 +236,7 @@ theorem lemma13_cert_persistence
     (h_admission : AdmissionWellFormed system state)
     -- Standard BFT side conditions (see "Notes on paper consistency"
     -- in `formalization.md` and findings F-2, F-3 in
-    -- `docs/mechanization-findings.md`).
+    -- `docs/round-01/mechanization-findings.md`).
     (hN : system.n = 3 * system.f + 1)
     (h_authors_valid : ∀ B' ∈ SystemState.blocks state,
       ∃ pair ∈ system.validators, pair.1 = B'.author)
@@ -428,7 +428,7 @@ fuller "decide on the same set of leader blocks" claim used in the
 paper's induction. The two are bridged by **decision completeness**
 (see `h_decision_complete` on `theorem7_consensus_safety` below) —
 a liveness consequence the paper invokes silently. This is finding
-**F-7(a)** in `docs/mechanization-findings.md`.
+**F-7(a)** in `docs/round-01/mechanization-findings.md`.
 
 **Added protocol-invariant hypothesis (round 3c bridge closure):**
 - `h_view_traceback` — every non-`Undecided` honest view on a digest
@@ -486,7 +486,7 @@ Paper proof (verbatim):
 > consistently.*
 
 **Mechanization notes** (findings F-7(a), F-7(b) in
-`docs/mechanization-findings.md`):
+`docs/round-01/mechanization-findings.md`):
 
 - *F-7(a)* — the paper's "decide identical leader blocks" overstates
   Lemma 16, which only gives *consistency* (no two honest validators
