@@ -4,27 +4,18 @@ A block of amendments to **Appendix D**.
 
 ---
 
-## 1. §D.2 — preamble enumerating the facts §D.2 relies on
+## 1. §D.2 — preamble naming the additional fact
 
-Insert at the start of §D.2 (before Lemma 7) a short paragraph
-naming the assumptions and inherent facts §D.2's derivations
-consume:
+Insert at the start of §D.2 (before Lemma 7):
 
-> *The §D.2 derivations consume the §2 post-GST `Δ`-delivery
-> bound, the §4.2 protocol rules (per-action liveness for
-> `block_propose`, `block_accept`, `block_store`, and the round
-> advancement rules including the timeout `T_rd`), the §4.3 pull
-> protocol, the §D.1.1 cert-pattern equivalence (footnote 6),
-> the §D.1.2 leader-inclusion rule, the §D.3 non-equivocation
-> and digest-determinism facts (items (i) and (iv)), and the
-> following inherent fact about Beluga's pool:*
->
-> *The global block pool is parent-closed: if a block `B` is in
-> the accepted set of some honest validator, then for every
-> parent digest `d ∈ B.parents`, the corresponding block is also
-> in the accepted set of some honest validator. (Consequence of
-> §4.2 admission control: an honest validator only accepts a
-> block once its parents are present.)*
+> *Beyond the assumptions of the §5 theorems, the §D.2
+> derivations rely on one further inherent fact about Beluga: the
+> global block pool is parent-closed — if a block `B` is in the
+> accepted set of some honest validator, then for every parent
+> digest `d ∈ B.parents`, the corresponding block is also in the
+> accepted set of some honest validator. (Consequence of §4.2
+> admission control: an honest validator only accepts a block
+> once its parents are present.)*
 
 ---
 
@@ -57,6 +48,6 @@ Make the §4.4 ↔ round-`(r+2)` cert-pattern equivalence explicit:
 
 | Section | Edit |
 |---|---|
-| §D.2 (preamble) | Enumerate the facts §D.2 cites (§5, §4.2 per-action liveness, §D.1.1, §D.1.2, §D.3 (i)/(iv)) and surface the parent-closure of the global block pool. |
+| §D.2 (preamble) | Surface the parent-closure of the global block pool as the one inherent fact §D.2 needs beyond the §5 assumptions. |
 | §D.1.2 (wording fix) | State leader-inclusion as the conditional "accepted ⇒ included". |
 | §D.1.1 (footnote 6) | Make the round-`(r+1)` ↔ round-`(r+2)` cert-pattern equivalence explicit. |
