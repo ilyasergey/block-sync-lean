@@ -4,12 +4,14 @@ A block of amendments to **Appendix D**.
 
 ---
 
-## 1. §D.3 — extend the inherent-facts enumeration
+## 1. §D.2 — surface the parent-closure fact
 
-Add a fifth item to §D.3's enumeration (i)–(iv):
+Insert at the start of §D.2 (before Lemma 7) a short note
+naming the inherent fact §D.2's derivations rely on:
 
-> *(v) The global block pool is parent-closed: if a block `B` is
-> in the accepted set of some honest validator, then for every
+> *The §D.2 derivations rely on the following inherent fact about
+> Beluga: the global block pool is parent-closed — if a block `B`
+> is in the accepted set of some honest validator, then for every
 > parent digest `d ∈ B.parents`, the corresponding block is also
 > in the accepted set of some honest validator. (Consequence of
 > §4.2 admission control: an honest validator only accepts a
@@ -46,6 +48,6 @@ Make the §4.4 ↔ round-`(r+2)` cert-pattern equivalence explicit:
 
 | Section | Edit |
 |---|---|
-| §D.3 (extend item list) | Add item (v): global pool is parent-closed. |
+| §D.2 (preamble note) | Surface the parent-closure fact about the global block pool. |
 | §D.1.2 (wording fix) | State leader-inclusion as the conditional "accepted ⇒ included". |
 | §D.1.1 (footnote 6) | Make the round-`(r+1)` ↔ round-`(r+2)` cert-pattern equivalence explicit. |
