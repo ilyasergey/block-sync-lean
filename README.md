@@ -91,3 +91,9 @@ lake exe blocksynchroniser log 12
 ## License
 
 Apache License, Version 2.0 — see [LICENSE](LICENSE).
+
+## Acknowledgements
+
+The Lean proofs in this repository were produced with the help of
+Anthropic's Claude Opus 4.7 and Harmonic's
+[Aristotle](https://aristotle.harmonic.fun/).
