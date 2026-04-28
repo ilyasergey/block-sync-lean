@@ -391,40 +391,47 @@ the §4.2 rules (i), (ii), (iii) actually deliver.
 
 We refactored the bundle accordingly:
 
-- **`BelugaPartialSynchrony`** (the new weaker bundle) drops
-  `actionScheduling` and adds **`CatchUpLiveness`** — paper §4.2
-  rules (i)/(iii) in event-triggered form: *if honest `vid` is
-  at a strictly lower round than some honest `vid_lead`, then
-  `vid` catches up to `vid_lead`'s round within `4Δ`.* No
-  advancement claim is made when no leader is ahead, so the
-  `T_rd = 5Δ` rule-(ii) timeout is preserved untouched. The
-  `4Δ` decomposes as `Δ` (push delivery) + `2Δ` (push/pull/ImPoA
-  acceptance) + `Δ` (per-action scheduling for rule (i)/(iii)).
+- **`BelugaPartialSynchrony`** is the bundle Lemma 1 consumes. It
+  contains the §2 + §4.2 + §4.3 post-GST liveness primitives in
+  event-triggered form, including `CatchUpLiveness` — paper §4.2
+  rules (i)/(iii): *if honest `vid` is at a strictly lower round
+  than some honest `vid_lead`, then `vid` catches up to
+  `vid_lead`'s round within `4Δ`.* No advancement claim is made
+  when no leader is ahead. The `4Δ` decomposes as `Δ` (push
+  delivery) + `2Δ` (push/pull/ImPoA acceptance) + `Δ` (per-action
+  scheduling for rule (i)/(iii)).
 
-- **`BelugaWithPullFairness`** now `extends
-  BelugaPartialSynchrony` (Lean record inheritance) and adds
-  back `actionScheduling` as an extra field. Existing proofs of
-  the round-01 L1, L2, T1–T4 continue to consume the stronger
-  bundle without modification.
+- **`BelugaWithPullFairness`** extends `BelugaPartialSynchrony`
+  (Lean record inheritance) with **`TimeoutAdvanceWithPull`** —
+  paper §4.2 rule (ii): *the per-round timeout `T_rd = 5Δ`
+  upper-bounds time-in-round post-GST*. This is paper-stated and
+  drives unbounded round progression for the §5 theorems T1–T4.
+  The earlier over-strong `actionScheduling` ("advances within Δ
+  unconditionally") is gone.
 
-- **`lemma1_paper_round02`** is re-proved against
-  `BelugaPartialSynchrony` alone — no `actionScheduling`
-  required. The proof iterates over `system.validators`,
-  applying `catchUpLiveness` per validator at round `< r` (with
-  `vid_lead = vid_ref`, the witness honest validator at the
+- **Lemma 1** is proved against `BelugaPartialSynchrony` alone
+  (no rule-(ii) timeout needed). The proof iterates over
+  `system.validators`, applies `catchUpLiveness` per validator at
+  round `< r` with `vid_lead = vid_ref` (the witness at the
   highest round `r`), then takes the max of per-validator
   catch-up steps and uses round monotonicity to extend each
   catch-up to the common max. The `time(max k₁ k₂)` bound is
   discharged by case-splitting on `k₁ ≤ k₂`.
 
-The result: the round-02 Lemma 1 is now mechanically derivable
-from the paper-faithful weaker assumption set, mirroring the
-round-02 paper's proof structure (event-triggered advancement +
-delivery + acceptance) rather than the over-strong "advances
-within Δ" assumption the author rejected. The deeper refactor
-that would *also* demote `boundedRoundSpread` to a derived
-theorem (and lift rules (i)/(iii) into the protocol step) is
-deferred.
+- **T1–T4** consume `BelugaWithPullFairness` (which now adds the
+  paper-stated `T_rd = 5Δ` timeout instead of the over-strong
+  `actionScheduling`). The intermediate-helper time bounds widened
+  proportionally (`schedulerFairness_holds_withPull`'s 3Δ → 10Δ),
+  but the §5 theorem statements are unchanged — they only need
+  "eventually advance unboundedly", not a specific `Δ` rate.
+
+The result: every assumption in our §5 hypothesis chain is now
+paper-stated or paper-implicit. The "advances within Δ
+unconditionally" form the author rejected is gone, replaced by
+the paper-stated `T_rd = 5Δ` rule-(ii) timeout. The deeper
+refactor that would *also* demote `boundedRoundSpread` to a
+derived theorem (and lift rules (i)/(iii) into the protocol step)
+is deferred.
 
 ---
 
@@ -433,10 +440,16 @@ deferred.
 Round-02 closes 6 of the 12 substantive findings outright (F-2,
 F-5, F-6, F-7, F-8, F-11) and partially addresses 2 more (F-1b,
 F-3). Four findings remain open paper-side (F-1, F-4, F-12,
-F-13). The revised Lemma 1 is provable from our existing bundle
-in 5 lines as `lemma1_paper_round02`, since our gap-1
-`boundedRoundSpread` primitive subsumes the case analysis the
-round-02 proof performs.
+F-13). The revised Lemma 1 is mechanized as
+`lemma1_honest_round_entry` against the paper-faithful event-
+triggered bundle `BelugaPartialSynchrony`.
+
+The bundle was refactored end-to-end so that every assumption is
+paper-stated or paper-implicit. The over-strong "advances within
+`Δ` unconditionally" form the paper author rejected is gone; in
+its place the paper §4.2 rule-(ii) timeout `T_rd = 5Δ` drives
+unbounded round progression for T1–T4 (`TimeoutAdvanceWithPull`
+in `BelugaWithPullFairness extends BelugaPartialSynchrony`).
 
 The two new observations the round-02 changes surface are
 wording-level: (a) the `t + 4Δ` clause in L1 still has a

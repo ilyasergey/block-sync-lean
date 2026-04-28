@@ -27,8 +27,10 @@ abbreviations:
 
 * `NetworkDelivery` / `NetworkDeliveryWithPull` — paper §2's
   `Δ`-bounded honest-to-honest delivery.
-* `ActionScheduling` / `ActionSchedulingWithPull` — paper §4.2's
-  per-validator round-advance liveness.
+* `TimeoutAdvanceWithPull` — paper §4.2 rule (ii): the per-round
+  timeout `T_rd = 5Δ` upper-bounds time-in-round post-GST.
+* `CatchUpLiveness` — paper §4.2 rules (i)/(iii) in event-triggered
+  form: a validator behind a leader catches up within `4Δ`.
 * `BoundedRoundSpread_networkTrace*` — the gap-1 invariant
   maintained by paper §4.2's push protocol + per-round timeout.
 * `AcceptScheduling` — paper §4.2's per-action liveness for the
@@ -538,9 +540,7 @@ def NetworkDelivery (system : BlockSynchroniserSystem) (time : Nat → Nat) : Pr
 
 /-! ## Paper §2 + §4.2 primitives, with-pull variants
 
-The with-pull versions of `NetworkDelivery` and `ActionScheduling`,
-stated against `networkTraceWithPull`. Same shape as the originals
-but with the pull-aware trace. -/
+Stated against `networkTraceWithPull`. -/
 
 /-- Push-channel `Δ`-bounded delivery on `networkTraceWithPull`. -/
 def NetworkDeliveryWithPull (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
@@ -554,13 +554,21 @@ def NetworkDeliveryWithPull (system : BlockSynchroniserSystem) (time : Nat → N
       ValidatorOperation.block_propose vid_s B r ∈
         (networkTraceWithPull system time k').inbox vid_r
 
-/-- Per-validator round-advance liveness on `networkTraceWithPull`. -/
-def ActionSchedulingWithPull (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
+/-- **`TimeoutAdvanceWithPull`** — paper §4.2 rule (ii):
+> *"a validator `v_i` advances to round `r` if … (ii) it is in round
+> `r-1`, and the per-round timeout `T_rd` expires, which is set to
+> `5Δ` to ensure all honest blocks are received (Lemma 1)"*
+
+In other words: post-GST, an honest validator advances to the next
+round within `5Δ` of entering its current round, whether or not the
+quorum trigger (rule i) or the leader-sighting trigger (rule iii)
+fires earlier. The `5Δ` here is exactly the paper's `T_rd`. -/
+def TimeoutAdvanceWithPull (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
   ∀ k vid bv,
     isHonestValidator system vid = true →
     time k ≥ system.GST →
     (networkTraceWithPull system time k).base.getValidator vid = some bv →
-    ∃ k' bv', k ≤ k' ∧ time k' ≤ time k + system.Δ ∧
+    ∃ k' bv', k ≤ k' ∧ time k' ≤ time k + 5 * system.Δ ∧
       (networkTraceWithPull system time k').base.getValidator vid = some bv' ∧
       bv'.currentRound > bv.currentRound
 
@@ -592,7 +600,7 @@ schedule. The `4Δ` bound decomposes as:
 - `Δ` — per-action scheduling for the rule-(i) / rule-(iii) advancement
   step itself.
 
-This primitive replaces the over-strong `ActionSchedulingWithPull`. The
+This primitive replaces the over-strong `TimeoutAdvanceWithPull`. The
 latter asserts unconditional `Δ`-bounded round advance, which conflicts
 with the §4.2 rule-(ii) timeout `T_rd = 5Δ`: a validator with no quorum
 and no leader sighting must wait up to `5Δ`, not `Δ`. `CatchUpLiveness`
@@ -631,10 +639,10 @@ def PullRequestDelivery (system : BlockSynchroniserSystem) (time : Nat → Nat) 
     ∃ k', k ≤ k' ∧ time k' ≤ time k + system.Δ ∧
       req ∈ (networkTraceWithPull system time k').pullInbox req.responder
 
-/-- **`PullResponseScheduling`** — analog of `ActionScheduling` for
-the pull-response action: post-GST, when an honest responder has a
-pending pull request in its inbox, it processes the first request
-within `Δ` (`pullStepOne`'s respond branch fires). -/
+/-- **`PullResponseScheduling`** — pull-response per-action liveness:
+post-GST, when an honest responder has a pending pull request in
+its inbox, it processes the first request within `Δ`
+(`pullStepOne`'s respond branch fires). -/
 def PullResponseScheduling (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
   ∀ k (vid_resp : ValidatorId) (req : PullRequest),
     isHonestValidator system vid_resp = true →
@@ -2689,7 +2697,7 @@ theorem schedulerFairness_holds_withPull
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
     (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
     (_h_delivery : NetworkDeliveryWithPull system time)
-    (h_scheduling : ActionSchedulingWithPull system time)
+    (h_scheduling : TimeoutAdvanceWithPull system time)
     (h_spread : BoundedRoundSpread_networkTraceWithPull system time)
     (h_persistent : ∀ vid k, isHonestValidator system vid = true →
       ∃ bv, (networkTraceWithPull system time k).base.getValidator vid = some bv)
@@ -2698,7 +2706,7 @@ theorem schedulerFairness_holds_withPull
         (∃ vid bv, isHonestValidator system vid = true ∧
           (networkTraceWithPull system time k).base.getValidator vid = some bv ∧
           bv.currentRound = r) →
-        ∃ k', k ≤ k' ∧ time k' ≤ time k + 3 * system.Δ ∧
+        ∃ k', k ≤ k' ∧ time k' ≤ time k + 10 * system.Δ ∧
           ∀ vid, isHonestValidator system vid = true →
             ∃ bv, (networkTraceWithPull system time k').base.getValidator vid = some bv ∧
                   bv.currentRound ≥ r + 1 := by
@@ -2718,8 +2726,8 @@ theorem schedulerFairness_holds_withPull
   have h_post_gst₂ : time k₂ ≥ system.GST :=
     le_trans h_post_gst₁ (h_mono k₁ k₂ hk₂_le)
   refine ⟨k₂, le_trans hk₁_le hk₂_le, ?_, ?_⟩
-  · have h_t1 : time k₁ ≤ time k + system.Δ := hk₁_time
-    have h_t2 : time k₂ ≤ time k₁ + system.Δ := hk₂_time
+  · have h_t1 : time k₁ ≤ time k + 5 * system.Δ := hk₁_time
+    have h_t2 : time k₂ ≤ time k₁ + 5 * system.Δ := hk₂_time
     omega
   · intro vid h_vid_honest
     obtain ⟨bv_vid, h_vid_get⟩ := h_persistent vid k₂ h_vid_honest
@@ -2771,7 +2779,7 @@ theorem network_all_honest_eventually_at_roundWithPull
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
     (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
     (h_delivery : NetworkDeliveryWithPull system time)
-    (h_scheduling : ActionSchedulingWithPull system time)
+    (h_scheduling : TimeoutAdvanceWithPull system time)
     (h_spread : BoundedRoundSpread_networkTraceWithPull system time)
     (vid_w : ValidatorId) (h_w : isHonestValidator system vid_w = true)
     (k₀ : Nat) (h_gst : time k₀ ≥ system.GST) :
@@ -4139,7 +4147,7 @@ theorem network_each_honest_block_eventually_accepted_withPull
     (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
     (h_time_unbounded : ∀ T, ∃ k, time k ≥ T)
     (h_delivery : NetworkDeliveryWithPull system time)
-    (h_scheduling : ActionSchedulingWithPull system time)
+    (h_scheduling : TimeoutAdvanceWithPull system time)
     (h_spread : BoundedRoundSpread_networkTraceWithPull system time)
     (h_accept : AcceptScheduling system time)
     (r : Round) (vid : ValidatorId) (vid_p : ValidatorId)
@@ -4234,7 +4242,7 @@ theorem all_honest_in_list_eventually_accepted
     (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
     (h_time_unbounded : ∀ T, ∃ k, time k ≥ T)
     (h_delivery : NetworkDeliveryWithPull system time)
-    (h_scheduling : ActionSchedulingWithPull system time)
+    (h_scheduling : TimeoutAdvanceWithPull system time)
     (h_spread : BoundedRoundSpread_networkTraceWithPull system time)
     (h_accept : AcceptScheduling system time)
     (r : Round) (vid : ValidatorId) (h_vid_honest : isHonestValidator system vid = true) :

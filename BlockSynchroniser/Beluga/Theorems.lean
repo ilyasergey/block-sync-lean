@@ -90,18 +90,17 @@ structure BelugaPartialSynchrony
   catchUpLiveness    : CatchUpLiveness system time
 
 /-- **`BelugaWithPullFairness`** extends `BelugaPartialSynchrony`
-with the unconditional per-action round-advance assumption
-`actionScheduling`. Consumed by the §5 theorems T1–T4, which (in
-their current proofs) treat round advancement as `Δ`-scheduled
-rather than event-triggered. See [docs/round-02/](../../../docs/round-02/)
-for the discussion of why this field is stronger than what the
-paper's §4.2 protocol actually delivers (rule (ii) timeout
-`T_rd = 5Δ`). -/
+with the paper §4.2 rule-(ii) per-round timeout `T_rd = 5Δ`:
+post-GST, every honest validator advances rounds within `5Δ`,
+unconditionally (whether or not a quorum or leader sighting fires
+first). Consumed by the §5 theorems T1–T4 to drive unbounded round
+progression. -/
 structure BelugaWithPullFairness
     (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop
     extends BelugaPartialSynchrony system time where
-  /-- Post-GST, every honest validator advances rounds within `Δ`. -/
-  actionScheduling   : ActionSchedulingWithPull system time
+  /-- Paper §4.2 rule (ii): the per-round timeout `T_rd = 5Δ` —
+  post-GST, every honest validator advances rounds within `5Δ`. -/
+  timeoutAdvance     : TimeoutAdvanceWithPull system time
 
 end Network
 
@@ -1703,7 +1702,7 @@ theorem network_eventualRoundAcceptance
     (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
     (h_time_unbounded : ∀ T, ∃ k, time k ≥ T)
     (h_delivery : NetworkDeliveryWithPull system time)
-    (h_scheduling : ActionSchedulingWithPull system time)
+    (h_scheduling : TimeoutAdvanceWithPull system time)
     (h_spread : BoundedRoundSpread_networkTraceWithPull system time)
     (h_accept : AcceptScheduling system time) :
     EventualRoundAcceptance system (networkBelugaTraceWithPull system time) := by
@@ -1808,7 +1807,7 @@ theorem network_theorem4_round_termination_proved
     (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
     (h_time_unbounded : ∀ T, ∃ k, time k ≥ T)
     (h_delivery : NetworkDeliveryWithPull system time)
-    (h_scheduling : ActionSchedulingWithPull system time)
+    (h_scheduling : TimeoutAdvanceWithPull system time)
     (h_spread : BoundedRoundSpread_networkTraceWithPull system time)
     (h_accept : AcceptScheduling system time) :
     Properties.RoundTermination system (networkBelugaTraceWithPull system time) := by
@@ -1859,7 +1858,7 @@ theorem network_theorem1_block_availability_withPull
     (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
     (h_time_unbounded : ∀ T, ∃ k, time k ≥ T)
     (h_delivery : NetworkDeliveryWithPull system time)
-    (h_scheduling : ActionSchedulingWithPull system time)
+    (h_scheduling : TimeoutAdvanceWithPull system time)
     (h_spread : BoundedRoundSpread_networkTraceWithPull system time) :
     Properties.BlockAvailability system (networkBelugaTraceWithPull system time) := by
   intro k vid d h_honest h_acc
@@ -1926,7 +1925,7 @@ theorem network_theorem3_round_progression_withPull
     (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
     (h_time_unbounded : ∀ T, ∃ k, time k ≥ T)
     (h_delivery : NetworkDeliveryWithPull system time)
-    (h_scheduling : ActionSchedulingWithPull system time)
+    (h_scheduling : TimeoutAdvanceWithPull system time)
     (h_spread : BoundedRoundSpread_networkTraceWithPull system time) :
     Properties.RoundProgression system (networkBelugaTraceWithPull system time) := by
   intro round
@@ -2115,7 +2114,7 @@ theorem networkTraceWithPull_isBlockSynchronizer
     (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
     (h_time_unbounded : ∀ T, ∃ k, time k ≥ T)
     (h_delivery : NetworkDeliveryWithPull system time)
-    (h_scheduling : ActionSchedulingWithPull system time)
+    (h_scheduling : TimeoutAdvanceWithPull system time)
     (h_spread : BoundedRoundSpread_networkTraceWithPull system time)
     (h_accept : AcceptScheduling system time)
     (h_in_pool_delivery : NetworkInPoolDeliveryWithPull system time) :
@@ -2143,7 +2142,7 @@ theorem beluga_isBlockSynchronizer
     (h : BelugaWithPullFairness system time) :
     Properties.BlockSynchronizer system (networkBelugaTraceWithPull system time) :=
   networkTraceWithPull_isBlockSynchronizer system time
-    h.timeMonotone h.timeUnbounded h.networkDelivery h.actionScheduling
+    h.timeMonotone h.timeUnbounded h.networkDelivery h.timeoutAdvance
     h.boundedRoundSpread h.acceptScheduling h.inPoolDelivery
 
 end Network
