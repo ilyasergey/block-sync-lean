@@ -50,15 +50,15 @@ fairness derivation, named liveness primitives) lives in
 
 | Paper | Code | Status |
 |---|---|---|
+| §5 hypothesis bundle (event-triggered post-GST liveness) | [`Beluga/Theorems.lean :: BelugaPartialSynchrony`](BlockSynchroniser/Beluga/Theorems.lean#L68) | ✅ |
+| §5 strengthened bundle (adds the `T_rd = 5Δ` timeout) | [`Beluga/Theorems.lean :: BelugaWithPullFairness`](BlockSynchroniser/Beluga/Theorems.lean#L98) | ✅ |
+| Pull mechanism (paper §4.3) explicit modelling | [`Beluga/Network.lean`](BlockSynchroniser/Beluga/Network.lean#L92) | ✅ |
 | §5 — **Lemma 1** — round-entry within `4Δ` post-GST | [`Beluga/Theorems.lean :: lemma1_honest_round_entry`](BlockSynchroniser/Beluga/Theorems.lean#L1506) | ✅ |
 | §5 — **Theorem 1** — Beluga ⊨ Block availability | [`Beluga/Theorems.lean :: network_theorem1_block_availability_withPull`](BlockSynchroniser/Beluga/Theorems.lean#L1856) | ✅ |
 | §5 — **Theorem 2** — Beluga ⊨ Causal availability | [`Beluga/Theorems.lean :: network_theorem2_causal_availability_withPull`](BlockSynchroniser/Beluga/Theorems.lean#L2099) | ✅ |
 | §5 — **Theorem 3** — Beluga ⊨ Round-Progression | [`Beluga/Theorems.lean :: network_theorem3_round_progression_withPull`](BlockSynchroniser/Beluga/Theorems.lean#L1923) | ✅ |
 | §5 — **Theorem 4** — Beluga ⊨ Round-Termination | [`Beluga/Theorems.lean :: network_theorem4_round_termination_proved`](BlockSynchroniser/Beluga/Theorems.lean#L1805) | ✅ |
 | §5 corollary — Beluga is a block synchronizer (T1∧T2∧T3∧T4) | [`Beluga/Theorems.lean :: beluga_isBlockSynchronizer`](BlockSynchroniser/Beluga/Theorems.lean#L2140) | ✅ |
-| Pull mechanism (paper §4.3) explicit modelling | [`Beluga/Network.lean`](BlockSynchroniser/Beluga/Network.lean#L92) | ✅ |
-| §5 hypothesis bundle (event-triggered post-GST liveness) | [`Beluga/Theorems.lean :: BelugaPartialSynchrony`](BlockSynchroniser/Beluga/Theorems.lean#L68) | ✅ |
-| §5 strengthened bundle (adds the `T_rd = 5Δ` timeout) | [`Beluga/Theorems.lean :: BelugaWithPullFairness`](BlockSynchroniser/Beluga/Theorems.lean#L98) | ✅ |
 
 ### Appendix C — Performance bounds
 
