@@ -4,34 +4,7 @@ A block of amendments to **Appendix D**.
 
 ---
 
-## 1. §D.2 — preamble (new paragraph at the start of §D.2)
-
-Insert immediately before Lemma 7:
-
-> **Assumptions consumed by §D.2.** In addition to the §5
-> partial-synchrony assumption and the §4.2/4.3 protocol rules,
-> §D.2 consumes the following two per-action liveness primitives,
-> symmetric to the §4.2 accept-action liveness already named in §5:
->
-> - **(propose-action liveness).** *Post-GST, when an honest
->   validator at round `r` has not yet proposed for `r`, it does
->   so within `Δ`.*
-> - **(store-action liveness).** *Post-GST, when an honest
->   validator has accepted a block but not yet stored it, it
->   stores within `Δ`.*
->
-> Both are direct mirrors of the accept-action `Δ`-bound and
-> faithfully follow the §4.2 prose's symmetric treatment of the
-> four protocol actions (propose, accept, store, advance).
-
-The two primitives are paper-implicit; the §4.2 prose treats all
-four actions symmetrically as per-action liveness, but only three
-of the four (accept, advance via `T_rd`, and the channel itself)
-are surfaced explicitly in §5.
-
----
-
-## 2. §D.3 — extend the inherent-facts enumeration
+## 1. §D.3 — extend the inherent-facts enumeration
 
 The round-02 §D.3 enumerates four inherent facts (i)–(iv) that
 the safety lemmas L13–L15 consume:
@@ -66,7 +39,7 @@ reader is expected to perform.
 
 ---
 
-## 3. §D.1.2 — tighten the leader-inclusion wording
+## 2. §D.1.2 — tighten the leader-inclusion wording
 
 The §D.1.2 admission rule for Mysticeti-Beluga prioritises leader
 blocks among parents. Replace the priority-rule wording with the
@@ -83,7 +56,7 @@ proof actually uses.
 
 ---
 
-## 4. §D.1.1 — sharpen footnote 6
+## 3. §D.1.1 — sharpen footnote 6
 
 The §D.1.1 direct-decision rule reads the certificate pattern at
 round `r + 2`. Footnote 6 relates this to the §4.4 certificate
@@ -103,11 +76,10 @@ the direct-decision rule reads), removing a quiet equivalence step.
 
 ---
 
-## 5. Cumulative amendment summary
+## 4. Cumulative amendment summary
 
 | Section | Edit |
 |---|---|
-| §D.2 (new preamble) | Name propose-action and store-action `Δ`-bounds as §D.2-specific assumptions. |
 | §D.3 (extend item list) | Add item (v): global pool is parent-closed. |
 | §D.1.2 (wording fix) | State leader-inclusion as the conditional "accepted ⇒ included". |
 | §D.1.1 (footnote 6) | Make the round-`(r+1)` ↔ round-`(r+2)` cert-pattern equivalence explicit. |
