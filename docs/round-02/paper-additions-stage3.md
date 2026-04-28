@@ -164,6 +164,31 @@ T3's induction therefore relies on rule (ii) as the protocol's
 sole *unconditional* progress mechanism. Citing it as Item 3 of
 the §5 assumption makes this dependence explicit.
 
+A note on Item 6 and ImPoA. The proof of Lemma 1 currently invokes
+ImPoA inline — *"honest validators can accept all these honest
+latest blocks via either block fetching or imPoAs by time `t + 3Δ`"*
+— presenting ImPoA as one of two acceptance paths. But ImPoA's
+role in §4.3 is deeper than that: the pull mechanism's *soundness*
+(the guarantee that a pull for a missing block `B` reaches a
+responder that actually has `B`) rests on the same `f + 1`-
+references quorum-intersection argument. Without ImPoA, a pull
+could fail outright for a Byzantine-authored block whose proposer
+delivered it to fewer than `f + 1` honest validators. ImPoA is
+therefore the structural fact that makes the entire `push ∪ pull`
+mechanism sufficient to establish Item 6.
+
+We recommend §4.3 state this dependence in one sentence — *"The
+pull mechanism's success post-GST relies on ImPoA: when an honest
+validator issues a pull request for a block `B` not yet received,
+the `f + 1` blocks referencing `B` collectively contain at least
+one honest validator that has stored `B` and will respond"* — and
+that the proof of Lemma 1 then cite the abstract delivery
+conclusion (Item 6) rather than peeling into the mechanism. The
+ImPoA-as-acceptance-path observation moves to §4.3 where it
+belongs alongside the soundness-of-pull observation; §5's L1 proof
+becomes a clean composition of Δ-delivery + 3Δ-acceptance + rule
+(i)/(iii) advancement.
+
 Lemma 1 and Theorems 1–4 can then be stated as *"under the Beluga
 partial-synchrony assumption, …"* and the §5 prose can cite Items
 3, 5, and 6 by name rather than weaving the underlying mechanism
@@ -180,7 +205,7 @@ into each proof.
 | 3 | The per-round timeout `T_rd = 5Δ` upper-bounds time-in-round post-GST. | **Stated in §4.2 rule (ii).** Implicitly load-bearing for Theorem 3's inductive step (the only unconditional progress mechanism when rules (i)/(iii) fail to fire). | Cite by name in the §5 assumption. |
 | 4 | The rounds of any two honest validators differ by at most one in steady state. | Implicit; derivable from Lemma 1 once stated. | Note this as a corollary of Lemma 1 in the steady state, or include in the §5 assumption. |
 | 5 | When an honest validator has an acceptable in-pool block, it accepts the block within `Δ`. | Implicit in §4.2 prose. | Add as Item 5 of the §5 assumption. |
-| 6 | Every block in the global pool is eventually known to every honest validator (push or pull). | Implicit conclusion of §4.3. | Add one sentence at the end of §4.3 naming this conclusion, and add it as Item 6 of the §5 assumption. |
+| 6 | Every block in the global pool is eventually known to every honest validator (push or pull). | Implicit conclusion of §4.3. The §4.3 mechanism's correctness rests on ImPoA's `f + 1`-references property — both as the *acceptance path* invoked in L1 and as the *soundness condition* for the pull mechanism. | Add one sentence at the end of §4.3 naming this conclusion (and stating ImPoA's role as the underlying structural guarantee), and add it as Item 6 of the §5 assumption. |
 | 7 | Post-GST, when an honest validator is at a strictly lower round than some honest validator, it catches up within `4Δ`. | **Derived in the proof of Lemma 1.** Composes Items 2, 5, 6 with rules (i)/(iii). | No primitive needed; this is Lemma 1 itself. |
 
 The audit identifies two facts (Items 5 and 6) that should be
@@ -235,7 +260,7 @@ advance` so the structural argument can be cited.
 | §5 (Lemma 1) | Pin the quantifier order: *"there is a time `t' ≤ t + 4Δ` at which every honest validator is at round `≥ r`."* | **Medium** — current wording is ambiguous |
 | §4.2 (rule iii) | Pin the target round and trigger: *"observes a block of round `≥ r`; advances to `r-1`."* | **High** — current wording admits an unsound skip-ahead reading |
 | §5 (before Lemma 1) | State the partial-synchrony assumption (six items) explicitly | **Medium** — currently implicit |
-| §4.3 | One sentence naming the pull-mechanism conclusion | **Medium** — design intent currently unstated |
+| §4.3 | Name the pull-mechanism conclusion and state ImPoA's role as the underlying soundness condition (not just an acceptance path) | **Medium** — design intent currently unstated |
 | §C.2 (Lemmas 4, 5) | Cite Assumption 1 in proof bodies | **Low** — editorial |
 | §5 (Lemma 2 placement) | Note consolidation into Theorem 3, or restore | **Low** — editorial |
 | §4 / Figure 8 | Make accept/store atomicity explicit, or split with action priority | **Low** — editorial |
