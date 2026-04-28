@@ -118,17 +118,17 @@ implies a paper concern.
   our `BelugaState` is a separate data type that doesn't enforce
   this, so we surface it as an explicit hypothesis.
 
-- **Lemma 5 split (Appendix C).** The paper's Lemma 5 mixes the
-  probabilistic "expected latency" claim with the deterministic
-  "or at least one malicious validator is blamed" disjunction. We
-  formalize only the deterministic disjunct.
-
 - **§5 hypothesis bundles.** Lemma 1 consumes
   [`BelugaPartialSynchrony`](BlockSynchroniser/Beluga/Theorems.lean#L68);
   T1–T4 consume
   [`BelugaWithPullFairness`](BlockSynchroniser/Beluga/Theorems.lean#L98)
   which extends it with the `T_rd = 5Δ` timeout. Each field of each
   bundle corresponds to a paper-stated or paper-implicit primitive.
+
+- **Lemma 5 split (Appendix C).** The paper's Lemma 5 mixes the
+  probabilistic "expected latency" claim with the deterministic
+  "or at least one malicious validator is blamed" disjunction. We
+  formalize only the deterministic disjunct.
 
 - **§D.2 hypothesis bundle.** The §D.2 liveness theorems are derived
   from
