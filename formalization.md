@@ -103,9 +103,9 @@ lemmas are also closed.
 
 ## Lean-side modeling notes
 
-These flag places where the Lean encoding makes an assumption
-explicit that the paper leaves implicit, or models a paper datatype
-slightly differently. None imply a paper concern.
+Places where the Lean encoding makes a paper-implicit assumption
+explicit, or models a paper datatype slightly differently. None
+implies a paper concern.
 
 - **`signature` field on `Block` omitted** (paper §2.1). The paper's
   block carries six fields `(r, d, author, parents, payload, signature)`;
@@ -118,11 +118,10 @@ slightly differently. None imply a paper concern.
   our `BelugaState` is a separate data type that doesn't enforce
   this, so we surface it as an explicit hypothesis.
 
-- **Lemma 5 split (Appendix C).** The paper's Lemma 5 mixes
-  "expected latency" with the deterministic "or at least one
-  malicious validator is blamed" disjunction. The expected side is
-  probabilistic and out of scope; we formalize only the
-  deterministic disjunct.
+- **Lemma 5 split (Appendix C).** The paper's Lemma 5 mixes the
+  probabilistic "expected latency" claim with the deterministic
+  "or at least one malicious validator is blamed" disjunction. We
+  formalize only the deterministic disjunct.
 
 - **§5 hypothesis bundles.** Lemma 1 consumes
   [`BelugaPartialSynchrony`](BlockSynchroniser/Beluga/Theorems.lean#L68);
@@ -140,6 +139,30 @@ slightly differently. None imply a paper concern.
   timing), §2.1 + §D.3 (digest determinism), §2.1 + §4.2 (parents
   in pool), and §3 (honest non-equivocation). None is itself a §D.2
   conclusion.
+
+- **Lemma 11 existential form.** The paper's L11 universally
+  quantifies "every undecided leader is eventually decided" via the
+  §D.1.1 indirect rule. We formalize the existential corollary that
+  feeds Theorem 6 directly — at every starting round there exists a
+  future leader that direct-commits — and do not mechanize the
+  recursive indirect-rule descent.
+
+- **Transaction order as a concrete function.** Paper §D.2 / §D.3
+  treat the per-validator ordered transaction sequence abstractly.
+  We define
+  [`belugaTransactionOrderState`](BlockSynchroniser/Beluga/Order.lean#L35)
+  as the canonical traversal of a validator's `block_accept`
+  operations and prove order-faithfulness as a theorem rather than
+  taking it as an abstract parameter.
+
+- **L16 / T7 explicit hypotheses.** Paper Lemma 16's "consistent
+  decisions" claim and Theorem 7's prefix-consistency of ordered
+  sequences silently invoke decision completeness, view-traceback to
+  a directly-decided leader, and order-respects-view-equality. We
+  surface these as explicit hypotheses (`h_decision_complete`,
+  `h_view_traceback`, `h_order_from_view`); for `belugaTrace` the
+  order-from-view hypothesis is discharged by the concrete
+  transaction-order construction above.
 
 ## Repository layout
 
