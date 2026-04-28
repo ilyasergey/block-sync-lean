@@ -664,6 +664,35 @@ def AcceptScheduling (system : BlockSynchroniserSystem) (time : Nat → Nat) : P
     ∃ k', k ≤ k' ∧ time k' ≤ time k + system.Δ ∧
       hasAcceptedDigest (networkTraceWithPull system time k').base vid B.d = true
 
+/-- **`ProposeSchedulingWithPull`** — paper §4.2 per-action liveness for
+`block_propose`: post-GST, when an honest validator at round `r` has not
+yet proposed for `r`, it does so within `Δ`. Mirrors `AcceptScheduling`
+for the propose action; needed by Mysticeti §D.2 to bound the time
+between a leader entering its round and emitting its leader block. -/
+def ProposeSchedulingWithPull (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
+  ∀ k vid bv,
+    isHonestValidator system vid = true →
+    time k ≥ system.GST →
+    (networkTraceWithPull system time k).base.getValidator vid = some bv →
+    hasProposedFor (networkTraceWithPull system time k).base vid bv.currentRound = false →
+    ∃ k', k ≤ k' ∧ time k' ≤ time k + system.Δ ∧
+      ∃ B ∈ (networkTraceWithPull system time k').base.blocks,
+        B.author = vid ∧ B.r = bv.currentRound
+
+/-- **`StoreSchedulingWithPull`** — paper §4.2 per-action liveness for
+`block_store`: post-GST, when an honest validator has accepted a digest
+but not yet stored the corresponding block, it stores within `Δ`.
+Mirrors `AcceptScheduling` for the store action; needed by Mysticeti
+§D.2 to bound the time between block acceptance and store. -/
+def StoreSchedulingWithPull (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
+  ∀ k vid d,
+    isHonestValidator system vid = true →
+    time k ≥ system.GST →
+    hasAcceptedDigest (networkTraceWithPull system time k).base vid d = true →
+    hasStoredDigest (networkTraceWithPull system time k).base vid d = false →
+    ∃ k', k ≤ k' ∧ time k' ≤ time k + system.Δ ∧
+      hasStoredDigest (networkTraceWithPull system time k').base vid d = true
+
 /-- **`NetworkInPoolDeliveryWithPull`** — the consolidated
 push+pull delivery primitive: post-GST, every in-pool block whose
 digest the honest validator has not yet accepted is eventually
