@@ -10,7 +10,9 @@ partial-synchrony assumptions (Sections 2, 4.2, 4.3) into the
 `BelugaWithPullFairness` bundle and proves, against the network-aware
 trace `networkTraceWithPull`, the §5 lemmas
 
-* L1 — round entry within `3Δ` (`lemma1_honest_round_entry`)
+* L1 — round entry within `3Δ` (`lemma1_honest_round_entry`,
+  paper round-01 statement) and within `4Δ` (`lemma1_paper_round02`,
+  paper round-02 statement)
 * L2 — round-to-round latency `≤ 3Δ` (`lemma2_round_latency`)
 
 and the §5 theorems
@@ -1385,6 +1387,48 @@ theorem lemma2_round_latency
   have htime_kc : time kc ≤ time k + 3 * system.Δ :=
     le_trans (h.timeMonotone kc k' hkc_hi) hk'time
   exact ⟨kc, hkc_lo, htime_kc, bvc, hbvc, hrnd_eq⟩
+
+/-! ## §5 Lemma 1 — paper round-02 statement
+
+The revised paper (round-02) restates Lemma 1 as: *"After GST, if
+round `r` is the highest round that honest validators are in at some
+time `t`, then all honest validators will enter round `r` by `t + 4Δ`."*
+
+This is strictly weaker than `lemma1_honest_round_entry` above under
+the §4.2 protocol-synchronization assumption (`boundedRoundSpread`,
+gap ≤ 1): with that invariant, every honest validator is already at
+round `≥ r-1` whenever some honest validator is at round `r`, so the
+"slow-set catch-up" case (`V_slow ≠ ∅` in the paper proof) is empty
+and the existing 3Δ bound from `lemma1_honest_round_entry` already
+delivers `≥ r+1` lockstep — which entails the round-02 statement
+verbatim. -/
+
+/-- **Lemma 1 (paper §5, round-02 revision).** If `r` is the highest
+round any honest validator is in at step `k₀` post-GST, then within
+`4Δ` every honest validator is at round `≥ r`. -/
+theorem lemma1_paper_round02
+    {system : BlockSynchroniserSystem} {time : Nat → Nat}
+    (h : BelugaWithPullFairness system time) :
+    ∀ (r : Round) (k₀ : Nat),
+      time k₀ ≥ system.GST →
+      (∃ vid_ref bv_ref,
+        isHonestValidator system vid_ref = true ∧
+        (networkTraceWithPull system time k₀).base.getValidator vid_ref = some bv_ref ∧
+        bv_ref.currentRound = r) →
+      ∃ k', k₀ ≤ k' ∧ time k' ≤ time k₀ + 4 * system.Δ ∧
+        ∀ vid, isHonestValidator system vid = true →
+          ∃ bv, (networkTraceWithPull system time k').base.getValidator vid = some bv ∧
+                bv.currentRound ≥ r := by
+  intro r k₀ h_post_gst ⟨vid_ref, bv_ref, h_honest, h_bv_ref, h_round⟩
+  obtain ⟨k', hk'le, hk'time, hk'all⟩ :=
+    lemma1_honest_round_entry h vid_ref r k₀ h_honest h_post_gst ⟨bv_ref, h_bv_ref, h_round⟩
+  refine ⟨k', hk'le, ?_, ?_⟩
+  · calc time k' ≤ time k₀ + 3 * system.Δ := hk'time
+      _ ≤ time k₀ + 4 * system.Δ := by
+        apply Nat.add_le_add_left; omega
+  · intro vid h_vid_honest
+    obtain ⟨bv, h_bv, h_rnd⟩ := hk'all vid h_vid_honest
+    exact ⟨bv, h_bv, Nat.le_of_lt (Nat.lt_of_lt_of_le (Nat.lt_succ_self r) h_rnd)⟩
 
 /-! ## §5 eventual-acceptance predicates
 
