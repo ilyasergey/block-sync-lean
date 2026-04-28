@@ -4,14 +4,22 @@ A block of amendments to **Appendix D**.
 
 ---
 
-## 1. §D.2 — surface the parent-closure fact
+## 1. §D.2 — preamble enumerating the facts §D.2 relies on
 
-Insert at the start of §D.2 (before Lemma 7) a short note
-naming the inherent fact §D.2's derivations rely on:
+Insert at the start of §D.2 (before Lemma 7) a short paragraph
+naming the assumptions and inherent facts §D.2's derivations
+consume:
 
-> *The §D.2 derivations rely on the following inherent fact about
-> Beluga: the global block pool is parent-closed — if a block `B`
-> is in the accepted set of some honest validator, then for every
+> *The §D.2 derivations consume the §5 partial-synchrony
+> assumption, the §4.2 per-action liveness for `block_propose`
+> and `block_store` (the symmetric counterparts of the §5
+> accept-action `Δ`-bound), the §D.1.1 cert-pattern equivalence
+> (footnote 6), the §D.1.2 leader-inclusion rule, the §D.3
+> non-equivocation and digest-determinism facts (items (i) and
+> (iv)), and the following inherent fact about Beluga's pool:*
+>
+> *The global block pool is parent-closed: if a block `B` is in
+> the accepted set of some honest validator, then for every
 > parent digest `d ∈ B.parents`, the corresponding block is also
 > in the accepted set of some honest validator. (Consequence of
 > §4.2 admission control: an honest validator only accepts a
@@ -48,6 +56,6 @@ Make the §4.4 ↔ round-`(r+2)` cert-pattern equivalence explicit:
 
 | Section | Edit |
 |---|---|
-| §D.2 (preamble note) | Surface the parent-closure fact about the global block pool. |
+| §D.2 (preamble) | Enumerate the facts §D.2 cites (§5, §4.2 per-action liveness, §D.1.1, §D.1.2, §D.3 (i)/(iv)) and surface the parent-closure of the global block pool. |
 | §D.1.2 (wording fix) | State leader-inclusion as the conditional "accepted ⇒ included". |
 | §D.1.1 (footnote 6) | Make the round-`(r+1)` ↔ round-`(r+2)` cert-pattern equivalence explicit. |
