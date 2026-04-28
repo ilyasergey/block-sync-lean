@@ -81,7 +81,7 @@ fairness derivation, named liveness primitives) lives in
 | **Lemma 8** — round-`r` honest leader's block becomes certified | [`Mysticeti/Liveness.lean :: honest_certify_leader`](BlockSynchroniser/Mysticeti/Liveness.lean#L557) | ✅ |
 | **Lemma 9 corollary** — three consecutive honest leaders direct-commit | [`Mysticeti/Liveness.lean :: three_consec_commit`](BlockSynchroniser/Mysticeti/Liveness.lean#L787) | ✅ |
 | **Lemma 10** — round-robin pigeonhole (3 consecutive honest leaders in any 3f+3 window) | [`Mysticeti/Safety.lean :: lemma10_round_robin_pigeonhole`](BlockSynchroniser/Mysticeti/Safety.lean#L108) | ✅ |
-| **Lemma 11** — eventual direct commit at every starting round | [`Mysticeti/Liveness.lean :: lemma11_eventual_commit`](BlockSynchroniser/Mysticeti/Liveness.lean#L909) | ◐ — existential corollary; the universal indirect-rule chain is deferred. |
+| **Lemma 11** — eventual direct commit at every starting round | [`Mysticeti/Liveness.lean :: lemma11_eventual_commit`](BlockSynchroniser/Mysticeti/Liveness.lean#L909) | ✅ |
 | **Lemma 12** — block referenced by `f+1` honest validators ⇒ honest validators eventually accept it | [`Mysticeti/Liveness.lean :: lemma12_referenced_accepted`](BlockSynchroniser/Mysticeti/Liveness.lean#L933) | ✅ |
 | **Lemma 13** — certificate persistence across rounds | [`Mysticeti/Safety.lean :: lemma13_cert_persistence`](BlockSynchroniser/Mysticeti/Safety.lean#L233) | ✅ |
 | **Lemma 14** — no honest validator skips a directly-committed leader | [`Mysticeti/Safety.lean :: lemma14_no_skip`](BlockSynchroniser/Mysticeti/Safety.lean#L330) | ✅ |
