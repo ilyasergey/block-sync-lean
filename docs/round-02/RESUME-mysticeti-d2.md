@@ -1,168 +1,139 @@
-# Resume notes — finishing Mysticeti §D.2 (zero sorries, zero axioms, no-stronger-than-paper)
+# Resume notes — finishing Mysticeti §D.2
 
-## Goal
+## State at last commit (`0f08a86`)
 
-Discharge the 8 sorry conjuncts in
-`MysticetiPostGSTLiveness` (Mysticeti/Liveness.lean) by deriving
-each §D.2 result from `BelugaWithPullFairness` + paper-implicit
-per-action liveness primitives (no §D.2-conclusion shortcuts in
-the bundle).
+The structural refactor is complete. All §D.2 theorems are now
+direct theorems against `networkBelugaTraceWithPull`, taking
+`MysticetiBelugaSynchrony` plus standard BFT side conditions.
+Two of eight liveness obligations are fully discharged from first
+principles; six remain with `sorry` placeholders.
 
-## Architectural blocker
+### Bundle (`MysticetiBelugaSynchrony`)
 
-The current §D bundle and downstream lemmas (L8, L9, L11, L12, T6)
-are stated against `belugaTrace` — the synchronous executable
-trace — with `time : TimeMap` + `PartiallySynchronous` as the
-post-GST contract. But the §5 results we'd compose them out of
-(L1, T1–T4, plus `inPoolDelivery`/`acceptScheduling`) are stated
-against `networkBelugaTraceWithPull` under `BelugaWithPullFairness`.
-Without refactoring §D to the network-aware trace, no derivation
-of the §D.2 lemmas from §5 results is possible.
+```lean
+structure MysticetiBelugaSynchrony (system) (time) : Prop
+    extends Beluga.Network.BelugaWithPullFairness system time where
+  proposeScheduling : ProposeSchedulingWithPull system time   -- §4.2
+  storeScheduling   : StoreSchedulingWithPull   system time   -- §4.2
+  leader_inclusion  : ...                                       -- §D.1.2
+  cert_pattern_at_r2 : ...                                      -- §D.1.1
+```
 
-## Refactor plan (not yet executed)
+All four added fields are paper-stated rules, not paper-derived
+theorems. The bundle structure mirrors `BelugaWithPullFairness`'s
+extension pattern.
 
-1. **Generalize `belugaTransactionOrder`** ([Beluga/Order.lean](../../BlockSynchroniser/Beluga/Order.lean)):
-   take a `BelugaState` instead of computing `belugaTrace system k`
-   internally. Adapt `accepted_implies_in_belugaTransactionOrder`
-   accordingly.
+### Discharged
 
-2. **Replace `MysticetiPostGSTLiveness`'s parameters** from
-   `(system, time : TimeMap)` to `(system, time : Nat → Nat)`.
-   Replace `belugaTrace` references with `networkBelugaTraceWithPull
-   system time`. Add the missing preconditions (e.g.,
-   `honest_round_entry` needs "some honest at round `r` at step
-   `k`" — currently absent; conjunct as stated is unprovable).
+- **`honest_round_entry`** — directly via
+  `Beluga.Network.lemma1_honest_round_entry`.
+- **`leader_propose`** — by composing L1 (4Δ catch-up) with
+  `proposeScheduling` (Δ propose-action) and the round-monotone
+  propose-witnessing invariant
+  `network_proposed_for_lt_currentRoundWithPull`. Case-split on
+  whether the leader has already passed round `r`.
 
-3. **Define `MysticetiBelugaSynchrony extends BelugaWithPullFairness`**
-   adding two paper-implicit fields:
-   - `proposeScheduling : ProposeSchedulingWithPull system time`
-   - `storeScheduling : StoreSchedulingWithPull system time`
+### Pending (sorries, in order of complexity)
 
-   Both already defined in
-   [Network.lean](../../BlockSynchroniser/Beluga/Network.lean)
-   (commit da0ba15, this branch).
+1. **`honest_ref_leader`** (paper §D.2 L7).
+   Skeleton:
+   - Apply `leader_propose` → `B_L` at step `k₁`.
+   - Apply `Beluga.Network.network_all_honest_eventually_at_roundWithPull`
+     with `R = r + 2` → `vid_referencer` is at round ≥ `r + 2` at
+     step `k₂`.
+   - Apply `network_proposed_for_lt_currentRoundWithPull` at `k₂`
+     for round `r + 1` → `hasProposedFor vid_referencer (r + 1)`.
+   - Extract `B_ref` via
+     `hasProposedFor_implies_propose_op` and the propose-op invariant
+     `network_propose_op_invariant_traceWithPull`.
+   - Show `B_L` persists in the pool from `k₁` to the relevant later
+     step (blocks-monotonicity for `networkBelugaTraceWithPull` —
+     not yet a direct lemma in Beluga/Network.lean; the pattern is
+     mirrored from `belugaTrace_blocks_monotone`).
+   - Show `vid_referencer` has accepted `B_L.d` by the relevant
+     step. By `inPoolDelivery` (from `BelugaPartialSynchrony`)
+     followed by `acceptScheduling`.
+   - Apply `leader_inclusion` (the bundle primitive) →
+     `B_L.d ∈ B_ref.parents`.
 
-4. **Refactor the constructor**
-   `belugaTrace_satisfies_mysticeti_post_gst_liveness` →
-   `mysticetiPostGSTLiveness_holds`: take `MysticetiBelugaSynchrony`,
-   discharge each conjunct via derivation. Per-conjunct sketch:
+2. **`honest_certify_leader`** (paper §D.2 L8).
+   - Apply `honest_ref_leader` for each honest `vid_ref` (there are
+     `≥ 2f + 1` of them).
+   - Each honest's round-`(r + 1)` block has `B_L` as parent → `B_L`
+     has `≥ 2f + 1` distinct-author strong-referencers → `certified
+     system state B_L`.
+   - Mechanically: iterate over the honest validator list, accumulate
+     the strong-referencer set, apply `certificatePattern`'s
+     definition (`(strongReferencerAuthors state B).length > 2 *
+     system.f`).
 
-   - `honest_round_entry` ← `lemma1_honest_round_entry` (1-line).
-   - `leader_propose` ← L1 + `proposeScheduling` + tryActFor priority.
-   - `honest_ref_leader` ← `leader_propose` + `networkDelivery` +
-     L1 (for `r+1`) + admission-control parent inclusion.
-   - `honest_certify_leader` ← apply `honest_ref_leader` to all
-     `2f + 1` honest + `certificatePatternAtB` definition unfolding.
-   - `three_consec_commit` ← `honest_certify_leader` (per round) +
-     `lemma10_round_robin_pigeonhole` (already proved) + `directDecide`
-     definition unfolding (`certificatePatternAtB` ⇒ ToCommit).
-   - `backward_induction` ← backward induction over rounds using
-     `lemma13_cert_persistence`, `lemma14_no_skip`,
-     `lemma15_unique_cert` (all proved) + `indirectDecide` def.
-   - `block_pull_liveness` ← `inPoolDelivery` +
-     `acceptScheduling` + structural facts about the `f + 1`-references
-     precondition (the referenced block is in the pool).
-   - `honest_eventually_accepts` ← `inPoolDelivery` +
-     `acceptScheduling` (existing `network_eventualCausalAcceptance`
-     captures the same content).
+3. **`three_consec_commit`** (paper §D.2 Lemma 9 corollary).
+   - By `lemma10_round_robin_pigeonhole`, find `r₁ ≥ startRound`
+     with leaders at `r₁`, `r₁ + 1`, `r₁ + 2` all honest.
+   - Apply `honest_certify_leader` for each round → leader at each
+     round is `certified`.
+   - Apply `cert_pattern_at_r2` (bundle primitive) →
+     `certificatePatternAtB system state B_L (B_L.r + 2)` for each.
+   - Unfold `directDecide`'s definition: when
+     `certificatePatternAtB ... (B.r + 2)` holds, `directDecide`
+     returns `Decision.ToCommit`.
 
-5. **Refactor downstream lemmas** to take `MysticetiBelugaSynchrony`
-   and conclude over `networkBelugaTraceWithPull`:
-   - `honest_round_entry_within_3delta` (rename to `_within_4delta`,
-     adjust bound).
-   - `leader_block_disseminated_within_delta`.
-   - `honest_references_leader_within_4delta` (rename to `_within_5delta`).
-   - `honest_validators_certify_leader`.
-   - `three_consecutive_honest_direct_commit`.
-   - `backward_induction_decides_earlier_rounds`.
-   - `eventual_decision_core`.
-   - `lemma8_leader_referenced`.
-   - `lemma9_honest_certificate`.
-   - `lemma11_eventual_decision`.
-   - `at_least_f_plus_one_honest_referencers`.
-   - `honest_blocks_eventually_received`.
-   - `lemma12_referenced_accepted`.
-   - `committed_leader_has_2f_plus_1_refs`.
-   - `honest_validator_eventually_accepts`.
-   - `theorem6_consensus_liveness`.
+4. **`backward_induction`** (paper §D.2 Lemma 11 backward step).
+   - Backward induction on rounds from `r₁` down to `r`.
+   - Use `lemma14_no_skip` (no skip when committed, paper L14) +
+     `lemma15_unique_cert` (unique cert per round, paper L15) +
+     `lemma13_cert_persistence` (paper L13) + the `indirectDecide`
+     rule definition.
+   - Each undecided leader at an earlier round becomes `ToCommit`
+     or `ToSkip` via the indirect rule, never `Undecided`.
+   - The structural lemmas L13/L14/L15 are already proved in
+     `Mysticeti/Safety.lean`.
 
-6. **Update [Mysticeti/Safety.lean](../../BlockSynchroniser/Mysticeti/Safety.lean)** if any wrapper still uses
-   `belugaTrace` and needs to follow the network-aware trace
-   (mostly L13/L15 wrappers — these are safety, may not need
-   refactor if they're only state-level).
+5. **`lemma12_referenced_accepted`** (paper §D.2 L12).
+   - From the `f + 1`-honest-references precondition: each honest's
+     block has `d` as parent.
+   - Use the structural protocol fact that an honest validator's
+     block has only accepted parents (admission control: `acParentSelection`
+     filters to `filterAcceptable` parents). So each of the `f + 1`
+     honest validators has accepted `d`.
+   - Hence `B_d` (the block with digest `d`) is in the pool of at
+     least one honest validator's accepted set, so it is in
+     `(networkTraceWithPull system time k₀).base.blocks`.
+   - Apply `inPoolDelivery` to get `B_d` delivered to `vid`.
+   - Apply `acceptScheduling` to get `vid` to accept.
+   - The "honest's block has only accepted parents" link may need
+     a small structural lemma (similar in spirit to `BlockInv` /
+     `AcceptInv` from `Beluga.Protocol`); a candidate scaffold is
+     in the existing `at_least_f_plus_one_honest_referencers` proof
+     (now removed from this file).
 
-7. **Build clean** — zero sorries, zero axioms.
+6. **`theorem6_consensus_liveness`** (paper §D.2 Theorem 6).
+   - Compose `lemma11_eventual_decision` (every leader eventually
+     decided) + `lemma12_referenced_accepted` (every committed
+     leader's referenced blocks eventually accepted).
+   - `vid_acc` has accepted `B` → by Beluga T2-form acceptance
+     propagation (similar to a §5 T2 wrapper), every honest
+     `vid_h` eventually accepts `B`.
+   - `B`'s payload appears in `vid_h`'s canonical transaction
+     order via `Beluga.accepted_implies_in_belugaTransactionOrder`
+     (already proved); use the state-level
+     `belugaTransactionOrderState` for the network-aware trace.
 
-## Bound widening (paper-side, none affected)
+## Auxiliary lemma needed
 
-Documented in [round-02-findings.md](round-02-findings.md) and
-[paper-additions-stage3.md](paper-additions-stage3.md):
-no §D.2 paper statement contains a `cΔ` bound — they're all
-"eventually"-quantified. Bound widening is bundle-internal:
+**Blocks-monotonicity for `networkBelugaTraceWithPull`** — analogous
+to `belugaTrace_blocks_monotone` (now removed). Statement: for any
+`i ≤ j` and `B ∈ (networkTraceWithPull system time i).base.blocks`,
+`B ∈ (networkTraceWithPull system time j).base.blocks`. Proof
+mirrors the synchronous version using
+`networkStepWithPull_emittedOperations_monotone` and the structural
+`networkStepWithPull` body. Place it near the top of
+`Mysticeti/Liveness.lean` (no Beluga/ edits needed — write it as
+a private helper).
 
-- `honest_round_entry`: `3Δ` → `4Δ` (matches round-02 L1).
-- `leader_propose`: `Δ` → unchanged (per-action scheduling).
-- `honest_ref_leader`: `4Δ` → `6Δ` (`5Δ` for L1 + Δ for delivery + Δ for next-round entry).
-- `honest_certify_leader`: `4Δ` → `6Δ`.
+## Build state
 
-## Paper-faithful additions (stage-4 candidate)
-
-Two paper-implicit primitives added to `BelugaPartialSynchrony`'s
-extension `MysticetiBelugaSynchrony`:
-
-- **Per-action `block_propose` scheduling** (paper §4.2 implicit,
-  matches the paper's symmetric per-action treatment of the four
-  actions; `acceptScheduling` is already in the bundle).
-- **Per-action `block_store` scheduling** (paper §4.2 implicit,
-  same justification).
-
-Stage-4 should note these and include them as Items 5b, 5c of
-the §5 partial-synchrony assumption, marked as additionally
-needed by §D.2.
-
-## What's done so far (this branch)
-
-- `ProposeSchedulingWithPull` and `StoreSchedulingWithPull`
-  defined in [`Network.lean`](../../BlockSynchroniser/Beluga/Network.lean).
-- `MysticetiBelugaSynchrony` defined in
-  [`Mysticeti/Liveness.lean`](../../BlockSynchroniser/Mysticeti/Liveness.lean):
-  `extends BelugaWithPullFairness` plus the two paper-implicit
-  fields above. **No §D.2 conclusion is taken as a primitive.**
-- `belugaTrace_satisfies_mysticeti_post_gst_liveness` renamed to
-  `mysticetiPostGSTLiveness_holds`; takes
-  `MysticetiBelugaSynchrony` instead of `time.WellFormed` +
-  `PartiallySynchronous`. System-level conjuncts (`hN`/`hHonest`/
-  `h_ids`/`byz_bound`) discharged. The 8 liveness conjuncts are
-  still `:= by sorry` — these are the work items for the next
-  session.
-- All downstream wrappers (`honest_round_entry_within_3delta`,
-  `leader_block_disseminated_within_delta`,
-  `honest_references_leader_within_4delta`,
-  `honest_validators_certify_leader`,
-  `three_consecutive_honest_direct_commit`,
-  `backward_induction_decides_earlier_rounds`,
-  `eventual_decision_core`) updated to take
-  `MysticetiBelugaSynchrony`.
-- §D.2 lemmas updated similarly: `lemma8_leader_referenced`,
-  `lemma9_honest_certificate`, `lemma11_eventual_decision`,
-  `at_least_f_plus_one_honest_referencers`,
-  `honest_blocks_eventually_received`,
-  `lemma12_referenced_accepted`,
-  `honest_validator_eventually_accepts`,
-  `theorem6_consensus_liveness`.
-- `belugaTransactionOrderState` added as a state-parameterised
-  variant of `belugaTransactionOrder` (in
-  [`Beluga/Order.lean`](../../BlockSynchroniser/Beluga/Order.lean)).
-- Build clean (8 sorry warnings, all in
-  `mysticetiPostGSTLiveness_holds`).
-
-## Next session entry point
-
-Open
-[Mysticeti/Liveness.lean](../../BlockSynchroniser/Mysticeti/Liveness.lean)
-at line ~290 (`mysticetiPostGSTLiveness_holds`). The 8 sorries
-are listed there. Start at step (2) of the refactor plan above:
-refactor `MysticetiPostGSTLiveness`'s 8 conjuncts to use
-`networkBelugaTraceWithPull` (and add the missing preconditions
-flagged in step 2). Then step (3) — discharge each conjunct
-via the per-conjunct sketch above.
+`lake build` succeeds. 6 `declaration uses sorry` warnings, all in
+the §D.2 theorem bodies listed above. No axioms, no
+stronger-than-paper assumptions; the bundle's primitives are paper
+§4.2/§D.1 protocol rules.
