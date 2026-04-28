@@ -147,10 +147,27 @@ half of §4.2; 6 is the design intent of §4.3, currently only
 sketched. Naming them brings the §5 hypothesis chain in line with
 what the proofs actually need.
 
+A note on Item 3 specifically. Rule (ii) is mentioned in §4.2 but
+never cited in §5. It pulls weight nonetheless: the inductive
+argument inside the proof of Theorem 3 — *"By induction on the
+round, for any future round `r' > r`, at least `2f + 1` validators
+will create and disseminate their round-`r'` blocks"* — silently
+assumes the protocol makes forward progress at every round. In the
+happy case, once `2f + 1` honest validators reach round `r`,
+their round-`r` blocks form the next-round quorum and rule (i)
+fires. But under the adversary, an honest validator can be stuck
+with only `2f` round-`r-1` blocks accepted (the Byzantine
+validators delaying just one block); rule (i) does not fire, rule
+(iii) does not fire either, and the only mechanism that forces
+the validator out of round `r-1` is rule (ii)'s `T_rd` timeout.
+T3's induction therefore relies on rule (ii) as the protocol's
+sole *unconditional* progress mechanism. Citing it as Item 3 of
+the §5 assumption makes this dependence explicit.
+
 Lemma 1 and Theorems 1–4 can then be stated as *"under the Beluga
-partial-synchrony assumption, …"* and the §5 prose can cite Items 5
-and 6 by name rather than weaving the underlying mechanism into
-each proof.
+partial-synchrony assumption, …"* and the §5 prose can cite Items
+3, 5, and 6 by name rather than weaving the underlying mechanism
+into each proof.
 
 ---
 
@@ -160,7 +177,7 @@ each proof.
 |---|---|---|---|
 | 1 | Wall clock advances monotonically and is unbounded. | Implicit in §2 timing semantics. | Subsume under the §5 assumption above. |
 | 2 | Post-GST, every push message between honest validators is delivered within `Δ`. | **Stated in §2.** | No change. |
-| 3 | The per-round timeout `T_rd = 5Δ` upper-bounds time-in-round post-GST. | **Stated in §4.2 rule (ii).** | Cite by name in the §5 assumption. |
+| 3 | The per-round timeout `T_rd = 5Δ` upper-bounds time-in-round post-GST. | **Stated in §4.2 rule (ii).** Implicitly load-bearing for Theorem 3's inductive step (the only unconditional progress mechanism when rules (i)/(iii) fail to fire). | Cite by name in the §5 assumption. |
 | 4 | The rounds of any two honest validators differ by at most one in steady state. | Implicit; derivable from Lemma 1 once stated. | Note this as a corollary of Lemma 1 in the steady state, or include in the §5 assumption. |
 | 5 | When an honest validator has an acceptable in-pool block, it accepts the block within `Δ`. | Implicit in §4.2 prose. | Add as Item 5 of the §5 assumption. |
 | 6 | Every block in the global pool is eventually known to every honest validator (push or pull). | Implicit conclusion of §4.3. | Add one sentence at the end of §4.3 naming this conclusion, and add it as Item 6 of the §5 assumption. |
