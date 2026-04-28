@@ -8,7 +8,7 @@ prose is in paper terms; nothing references repository internals.
 ## 1. Contribution line (after current item (3))
 
 (4) We provide a complete machine-checked formalisation of Beluga
-in Lean 4 [`\cite{DBLP:conf/cade/Moura021}`], covering all
+in Lean 4 [`\cite{Moura021}`], covering all
 non-probabilistic results of the paper — the four block-synchronizer
 properties (Definition 1), the §5 main theorems (T1–T4), the
 deterministic Appendix C lemmas (L3, L4, L5), and the
@@ -23,7 +23,7 @@ Insert as the last paragraph of §5 (immediately after the proof of
 Theorem 4):
 
 All results in this section have been formalised and machine-checked
-in Lean 4 [`\cite{DBLP:conf/cade/Moura021}`]; the proof artefacts are
+in Lean 4 [`\cite{Moura021}`]; the proof artefacts are
 available with the accompanying material.
 
 ## 3. Acknowledgement line
@@ -32,7 +32,8 @@ Insert into the Acknowledgements section (replacing or augmenting the
 existing acknowledgement):
 
 The Lean 4 formalisation accompanying this paper was developed with
-the assistance of automated proof-assistance systems.
+the assistance of Anthropic's Claude Opus 4.7 and Harmonic's
+Aristotle [`\cite{aristotle}`].
 
 ## 4. Standalone appendix — Lean formalisation
 
@@ -45,7 +46,7 @@ terms only.
 
 We provide a complete machine-checked formalisation of the
 non-probabilistic results in this paper, developed in Lean 4
-[`\cite{DBLP:conf/cade/Moura021}`]. This appendix records what is
+[`\cite{Moura021}`]. This appendix records what is
 formalised, what is not, and the small number of places where the
 formalisation pins down a paper-implicit choice.
 
@@ -127,7 +128,7 @@ implicit; neither weakens or strengthens any paper claim.
 ## BibTeX
 
 ```bibtex
-@inproceedings{DBLP:conf/cade/Moura021,
+@inproceedings{Moura021,
   author       = {Leonardo de Moura and
                   Sebastian Ullrich},
   editor       = {Andr{\'{e}} Platzer and
@@ -140,5 +141,39 @@ implicit; neither weakens or strengthens any paper claim.
   year         = {2021},
   url          = {https://doi.org/10.1007/978-3-030-79876-5\_37},
   doi          = {10.1007/978-3-030-79876-5\_37},
+}
+```
+
+```bibtex
+@article{aristotle,
+  author       = {Tudor Achim and
+                  Alex Best and
+                  Alberto Bietti and
+                  Kevin Der and
+                  Math{\"{\i}}s F{\'{e}}d{\'{e}}rico and
+                  Sergei Gukov and
+                  Daniel Halpern{-}Leistner and
+                  Kirsten Henningsgard and
+                  Yury Kudryashov and
+                  Alexander Meiburg and
+                  Martin Michelsen and
+                  Riley Patterson and
+                  Eric Rodriguez and
+                  Laura Scharff and
+                  Vikram Shanker and
+                  Vladmir Sicca and
+                  Hari Sowrirajan and
+                  Aidan Swope and
+                  Matyas Tamas and
+                  Vlad Tenev and
+                  Jonathan Thomm and
+                  Harold Williams and
+                  Lawrence Wu},
+  title        = {Aristotle: IMO-level Automated Theorem Proving},
+  journal      = {CoRR},
+  volume       = {abs/2510.01346},
+  year         = {2025},
+  url          = {https://doi.org/10.48550/arXiv.2510.01346},
+  doi          = {10.48550/ARXIV.2510.01346},
 }
 ```
