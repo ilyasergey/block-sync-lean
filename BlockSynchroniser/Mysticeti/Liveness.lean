@@ -69,54 +69,23 @@ private lemma belugaTrace_blocks_monotone
       unfold doPropose doAccept doStore doAdvance at h₂; aesop
     exact fun n hn h => h_step_preserves_blocks _ _ h
 
-/-! ## The Mysticeti-Beluga §D.2 post-GST liveness bundle
+/-! ## §D.2 post-GST liveness bundle
 
-The §D.2 lemmas (L7–L12, T6) require post-GST liveness facts about
-`belugaTrace` that are not derivable from `step` alone. They are
-the consequences of paper §4.2 + §4.3 + §D.1 protocol mechanics
-under partial synchrony.
+The §D.2 lemmas (L7–L12, T6) consume two paper-implicit per-action
+liveness primitives on top of the §5 bundle: the §4.2
+`block_propose` and `block_store` per-action `Δ`-bounds (the §4.2
+prose's symmetric per-action treatment of the four protocol
+actions, where `acceptScheduling` is already in
+`BelugaPartialSynchrony` and `timeoutAdvance` covers `advance`).
+We bundle these as `MysticetiBelugaSynchrony`, extending
+`BelugaWithPullFairness`. -/
 
-Following [`Beluga/Theorems.lean`](../Beluga/Theorems.lean)'s
-pattern (where `BelugaPartialSynchrony`/`BelugaWithPullFairness`
-package paper-faithful liveness primitives — including
-`inPoolDelivery` which is itself a paper §4.3 *conclusion* taken
-as a primitive at the §5 abstraction level), we package the §D.2
-liveness primitives in a standalone bundle
-`MysticetiBelugaSynchrony` (paper-implicit content of §D.2
-post-GST behaviour), and derive `MysticetiPostGSTLiveness` (which
-also includes the system-level side conditions `hN`/`hHonest`/
-`h_ids`/`byz_bound`) from it.
+/-- **`MysticetiBelugaSynchrony`** — extends
+`BelugaWithPullFairness` with two paper §4.2 per-action liveness
+primitives:
 
-Each field of `MysticetiBelugaSynchrony` corresponds to a paper
-§D.2 lemma conclusion or a per-action liveness assumption from
-§4.2; treating them as primitives is the §D-layer analogue of
-treating `inPoolDelivery` as a §5-layer primitive — a recognized
-abstraction-level decision documented in
-[`docs/round-02/`](../../../docs/round-02/). Future work to
-refactor §D against `networkBelugaTraceWithPull` would derive
-these from `BelugaWithPullFairness` + the propose/store
-scheduling primitives in [`Beluga/Network.lean`](../Beluga/Network.lean).
--/
-
-/-- **`MysticetiBelugaSynchrony`** — paper-faithful liveness bundle
-for §D.2.
-
-Extends `BelugaWithPullFairness` (the §5 paper-faithful liveness
-bundle, see `Beluga/Theorems.lean`) with two paper-implicit
-per-action liveness primitives the §D.2 proofs additionally
-consume:
-
-- `proposeScheduling` — paper §4.2 per-action liveness for
-  `block_propose` (the §4.2 prose's symmetric per-action treatment;
-  `acceptScheduling` is already in `BelugaPartialSynchrony`).
-- `storeScheduling`   — paper §4.2 per-action liveness for
-  `block_store` (same reasoning).
-
-The §D.2 lemmas (Lemmas 7–12, Theorem 6) are *derived* from this
-bundle plus the existing safety lemmas (L13–L16,
-`lemma10_round_robin_pigeonhole`) and the Mysticeti consensus rule
-definitions (`directDecide`, `indirectDecide`). No §D.2 conclusion
-is taken as a primitive. -/
+- `proposeScheduling` — `block_propose` action liveness;
+- `storeScheduling`   — `block_store`   action liveness. -/
 structure MysticetiBelugaSynchrony
     (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop
     extends Beluga.Network.BelugaWithPullFairness system time where
@@ -137,20 +106,20 @@ Aristotle may add fields when proving the bundle's existence theorem,
 provided the additions are also preserved by `step`. -/
 structure MysticetiPostGSTLiveness
     (system : BlockSynchroniserSystem) (time : TimeMap) : Prop where
-  -- Standard BFT side conditions (paper §2 + finding F-2, F-8(a)).
+  -- Standard BFT side conditions (paper §2): `n = 3f + 1`,
+  -- exactly `2f + 1` honest validators, contiguous validator IDs
+  -- `{v_0, …, v_{n-1}}`.
   hN : system.n = 3 * system.f + 1
   hHonest : (system.validators.filter (fun p => p.2 = true)).length
               = 2 * system.f + 1
   h_ids : ∀ i < system.n, ∃ pair ∈ system.validators, pair.1 = i
-  -- Byzantine-count bound: in any *nodup* list of *registered*
-  -- validators, at most `f` entries are Byzantine. Both qualifiers
-  -- are load-bearing — finding F-8(c) in
-  -- `docs/round-01/mechanization-findings.md`. Without `Nodup` the same
-  -- Byzantine validator can pad a list arbitrarily; without the
-  -- "registered" qualifier (`∀ a ∈ authors, ∃ p ∈ system.validators,
-  -- p.1 = a`) a list of f+1 unregistered IDs trivially exceeds the
-  -- bound, since `isHonestValidator` returns `false` for unregistered
-  -- IDs.
+  -- Byzantine-count bound: in any nodup list of registered validator
+  -- IDs, at most `f` entries are Byzantine. Both qualifiers are
+  -- load-bearing: without `Nodup` the same Byzantine validator can
+  -- pad a list arbitrarily; without the "registered" qualifier
+  -- (`∀ a ∈ authors, ∃ p ∈ system.validators, p.1 = a`) a list of
+  -- f+1 unregistered IDs trivially exceeds the bound, since
+  -- `isHonestValidator` returns `false` for unregistered IDs.
   byz_bound :
     ∀ authors : List ValidatorId,
       authors.Nodup →
@@ -272,21 +241,16 @@ private lemma byz_bound_of_system_constraints
     rw [ h_non_honest_count, BlockSynchroniserSystem.validatorCountCorrect ];
   grind +locals
 
-/-- The §D.2 post-GST liveness invariant, derived from
-`MysticetiBelugaSynchrony` (a paper-faithful liveness bundle:
-`BelugaWithPullFairness` + per-action propose/store scheduling)
-plus the standard BFT side conditions.
-
-The system-level conjuncts (`hN`, `hHonest`, `h_ids`, `byz_bound`)
-are derived sorry-free. The remaining 8 liveness conjuncts have
-intermediate `sorry` placeholders: they hold against
-`networkBelugaTraceWithPull` and are derivable from `h_sync` (see
-[`docs/round-02/RESUME-mysticeti-d2.md`](../../../docs/round-02/RESUME-mysticeti-d2.md)
-for the full per-conjunct derivation plan), but the bundle's
-conjuncts are currently stated against `belugaTrace`. Bridging
-the synchronous trace to the network-aware trace, or refactoring
-the bundle to use `networkBelugaTraceWithPull`, is the next phase
-of this work. -/
+/-- The §D.2 post-GST liveness invariant, packaged for the synchronous
+`belugaTrace`. The system-level conjuncts (`hN`, `hHonest`, `h_ids`,
+`byz_bound`) are derived from the system constraints and
+`MysticetiBelugaSynchrony`'s parent (`BelugaWithPullFairness`); the
+8 liveness conjuncts (paper §D.2 Lemma 1, Lemma 7, Lemma 8, Lemma
+9 corollary, Lemma 11 backward step, Lemma 12, plus the §4.2
+propose action and §5 T2 cross-validator acceptance) currently
+require a structural bridge from the network-aware
+`networkBelugaTraceWithPull` (where `BelugaWithPullFairness`
+applies) to the synchronous `belugaTrace`. -/
 theorem mysticetiPostGSTLiveness_holds
     (system : BlockSynchroniserSystem)
     (time : TimeMap)
@@ -309,10 +273,10 @@ theorem mysticetiPostGSTLiveness_holds
   block_pull_liveness := by sorry
   honest_eventually_accepts := by sorry
 
--- F-7(b) closed: the "TransactionOrder ↔ HasAccepted" link is now a
--- *theorem* (`Beluga.accepted_implies_in_belugaTransactionOrder` in
+-- The "TransactionOrder ↔ HasAccepted" link is the theorem
+-- `Beluga.accepted_implies_in_belugaTransactionOrder` (in
 -- `Beluga/Order.lean`) about the canonical function
--- `Beluga.belugaTransactionOrder`, not an axiom.
+-- `Beluga.belugaTransactionOrder`.
 
 /-- After GST, honest validators enter the same round within `3Δ` (paper
 Lemma 1 applied to Beluga). -/
@@ -772,10 +736,9 @@ lemma honest_validator_eventually_accepts
     ∃ k' ≥ k, HasAccepted (belugaTrace system k') vid_h B.d := by
   exact (mysticetiPostGSTLiveness_holds system time h_sync hN hHonest h_ids).honest_eventually_accepts vid_acc vid_h B k h_acc_honest h_h_honest h_gst h_accepted
 
--- The previous `accepted_implies_in_order` helper was a thin wrapper
--- around `accepted_implies_in_order_axiom`; both are now superseded
--- by `Beluga.accepted_implies_in_belugaTransactionOrder` (F-7(b)
--- closed; see `Beluga/Order.lean`).
+-- The "accepted ⇒ in transaction order" link is the theorem
+-- `Beluga.accepted_implies_in_belugaTransactionOrder` (see
+-- `Beluga/Order.lean`).
 
 /--
 **Theorem 6 (paper Appendix D.2) — Mysticeti-Beluga consensus liveness.**
@@ -821,7 +784,7 @@ theorem theorem6_consensus_liveness
   have h_B_in' : B ∈ (belugaTrace system k').blocks :=
     belugaTrace_blocks_monotone system k k' hk_ge B h_B_in
   -- Step 3: B's payload appears in vid_h's canonical transaction order
-  -- via the order-faithfulness theorem (closes F-7(b)).
+  -- via the order-faithfulness theorem.
   exact ⟨k', accepted_implies_in_belugaTransactionOrder
     system hids vid_h B tx h_tx k' h_B_in' h_acc'⟩
 
