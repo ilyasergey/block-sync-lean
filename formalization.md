@@ -77,16 +77,17 @@ fairness derivation, named liveness primitives) lives in
 | D.1.1 — Direct / indirect decision rules | [`Mysticeti/Consensus.lean :: directDecide` / `indirectDecideStep`](BlockSynchroniser/Mysticeti/Consensus.lean#L100) | ✅ |
 | D.1.1 — Skip pattern / certificate pattern (at next round) | [`Mysticeti/Consensus.lean :: skipPattern` / `certificatePatternAt`](BlockSynchroniser/Mysticeti/Consensus.lean#L44) | ✅ |
 | D.1.2 — Round-robin leader schedule | [`Mysticeti/Consensus.lean :: leaderOf` / `isLeaderBlock`](BlockSynchroniser/Mysticeti/Consensus.lean#L27) | ✅ |
-| **Lemma 8** — leader block referenced next round (after GST) | [`Mysticeti/Liveness.lean :: lemma8_leader_referenced`](BlockSynchroniser/Mysticeti/Liveness.lean#L357) | ◐ — top-level composition closed; gated on the §D.2 liveness primitive `honest_ref_leader`. |
-| **Lemma 9** — honest validators create certificate for honest leader | [`Mysticeti/Liveness.lean :: lemma9_honest_certificate`](BlockSynchroniser/Mysticeti/Liveness.lean#L417) | ◐ — top-level closed; gated on the §D.2 primitive `honest_certify_leader`. |
+| **Lemma 7** — round-`r` honest leader's block is referenced by every honest round-`(r+1)` block | [`Mysticeti/Liveness.lean :: honest_ref_leader`](BlockSynchroniser/Mysticeti/Liveness.lean#L368) | ✅ — derived from `MysticetiBelugaSynchrony` (paper §5 + §4.2 + §D.1.2 admission rule). |
+| **Lemma 8** — round-`r` honest leader's block becomes certified | [`Mysticeti/Liveness.lean :: honest_certify_leader`](BlockSynchroniser/Mysticeti/Liveness.lean#L557) | ✅ — iterates over `2f+1` honest validators via `honest_refs_for_validator_list`, closes via Finset cardinality on the strong-referencer set. |
+| **Lemma 9 corollary** — three consecutive honest leaders direct-commit | [`Mysticeti/Liveness.lean :: three_consec_commit`](BlockSynchroniser/Mysticeti/Liveness.lean#L787) | ✅ — `lemma10_round_robin_pigeonhole` + `direct_commit_for_honest_leader` ×3 + `certificatePatternAtB_monotone` + `honest_block_uniqueness` (collapses universal-over-`B_L` to canonical leader block). |
 | **Lemma 10** — round-robin pigeonhole (3 consecutive honest leaders in any 3f+3 window) | [`Mysticeti/Safety.lean :: lemma10_round_robin_pigeonhole`](BlockSynchroniser/Mysticeti/Safety.lean#L108) | ✅ — relies on the contiguous validator-IDs assumption (`{v_0, …, v_{n-1}}`). |
-| **Lemma 11** — undecided leader block eventually decided | [`Mysticeti/Liveness.lean :: lemma11_eventual_decision`](BlockSynchroniser/Mysticeti/Liveness.lean#L519) | ◐ — top-level closed; gated on the §D.2 primitives `three_consec_commit` + `backward_induction`. |
-| **Lemma 12** — block referenced by 2f+1 ⇒ honest validators output `block_accept` | [`Mysticeti/Liveness.lean :: lemma12_referenced_accepted`](BlockSynchroniser/Mysticeti/Liveness.lean#L657) | ◐ — top-level closed; gated on the §D.2 primitive `block_pull_liveness`. |
+| **Lemma 11** (existential form) — eventual direct commit at every starting round | [`Mysticeti/Liveness.lean :: lemma11_eventual_commit`](BlockSynchroniser/Mysticeti/Liveness.lean#L909) | ✅ — existential corollary: post-GST, some leader at round ≥ `startRound` is direct-committed. The paper's full universal §D.2 L11 (chained indirect-rule decision for *every* prior leader) requires `indirectDecideStep`-level recursion, which is deferred — but is not load-bearing for Theorem 6 (T6 closes via §5 in-pool delivery + §4.2 accept-action liveness). |
+| **Lemma 12** — block referenced by `f+1` honest validators ⇒ honest validators eventually accept it | [`Mysticeti/Liveness.lean :: lemma12_referenced_accepted`](BlockSynchroniser/Mysticeti/Liveness.lean#L933) | ✅ — composes `parent_blocks_in_pool` + `network_in_pool_eventually_accepted_withPull`. |
 | **Lemma 13** — certificate persistence across rounds | [`Mysticeti/Safety.lean :: lemma13_cert_persistence`](BlockSynchroniser/Mysticeti/Safety.lean#L233) | ✅ — the four DAG-level invariants (admission well-formedness, author-round uniqueness, no-equivocation in parents, authors-are-registered) are derived as theorems for `belugaTrace`. |
 | **Lemma 14** — no honest validator skips a directly-committed leader | [`Mysticeti/Safety.lean :: lemma14_no_skip`](BlockSynchroniser/Mysticeti/Safety.lean#L332) | ✅ |
 | **Lemma 15** — at most one certified leader per round | [`Mysticeti/Safety.lean :: lemma15_unique_cert`](BlockSynchroniser/Mysticeti/Safety.lean#L372) | ✅ |
 | **Lemma 16** — consistent leader-status decision across honest validators | [`Mysticeti/Safety.lean :: lemma16_consistent_status`](BlockSynchroniser/Mysticeti/Safety.lean#L440) | ✅ — takes a view-traceback hypothesis. |
-| **Theorem 6** — Mysticeti-Beluga consensus liveness | [`Mysticeti/Liveness.lean :: theorem6_consensus_liveness`](BlockSynchroniser/Mysticeti/Liveness.lean#L765) | ◐ — top-level closed; gated on 8 of the §D.2 deep liveness primitives. |
+| **Theorem 6** — Mysticeti-Beluga consensus liveness | [`Mysticeti/Liveness.lean :: theorem6_consensus_liveness`](BlockSynchroniser/Mysticeti/Liveness.lean#L977) | ✅ — every accepted block's transactions appear in every honest validator's canonical transaction order. Composed from `network_in_pool_eventually_accepted_withPull` + `block_unique_by_digest` + `belugaTransactionOrderState`. |
 | **Theorem 7** — Mysticeti-Beluga consensus safety | [`Mysticeti/Safety.lean :: theorem7_consensus_safety`](BlockSynchroniser/Mysticeti/Safety.lean#L511) | ✅ — paper §D.3 restates T7 as prefix-consistency of ordered transaction sequences; mechanized verbatim. |
 | Mysticeti safety invariants for `belugaTrace` | [`Mysticeti/SafetyInvariant.lean :: belugaTrace_satisfies_mysticetiSafetyInv`](BlockSynchroniser/Mysticeti/SafetyInvariant.lean#L249) | ✅ — discharges the four DAG-invariant hypotheses of L13/L15 (admission well-formedness, author-round uniqueness, no-equivocation in parents, authors-are-registered). |
 
@@ -239,6 +240,28 @@ mechanization-related reasons.
   `EventualCausalAcceptance` and `EventualRoundAcceptance` are
   derived theorems, not axioms.
 
+- **§D.2 hypothesis bundle: `MysticetiBelugaSynchrony`.** The §D.2
+  liveness theorems (L7, L8, L9 corollary, L11 existential, L12, T6)
+  are derived from
+  [`Mysticeti/Liveness.lean :: MysticetiBelugaSynchrony`](BlockSynchroniser/Mysticeti/Liveness.lean#L54),
+  which extends `BelugaWithPullFairness` with seven paper-stated
+  primitives. None is itself a §D.2 conclusion:
+  - `proposeScheduling` / `storeScheduling` — paper §4.2 per-action
+    liveness for `propose` and `store` (the symmetric mirrors of the
+    existing §5 `acceptScheduling`; documented as paper amendment
+    items 5b/5c in [docs/round-02/paper-additions-stage4.md](docs/round-02/paper-additions-stage4.md)).
+  - `leader_inclusion` — paper §D.1.2 admission rule (Mysticeti-Beluga's
+    leader-priority parent selection).
+  - `cert_pattern_at_r2` — paper §D.1.1 footnote 6 (the §4.4
+    certificate pattern is the same predicate `directDecide` reads at
+    round `r + 2`).
+  - `block_unique_by_digest` — paper §2.1 + §D.3 item (iv)
+    (cryptographic digest determinism).
+  - `parent_blocks_in_pool` — paper §2.1 + §4.2 (admission control
+    rejects orphan parents).
+  - `honest_block_uniqueness` — paper §3 honest-validator behavior
+    (no equivocation).
+
 ## Where to look
 
 | | |
@@ -286,7 +309,9 @@ block-sync-lean/
 │   └── Mysticeti/
 │       ├── Consensus.lean      ← decision rules + leader schedule (D.1)
 │       ├── Safety.lean         ← Lemmas 10, 13–16, Theorem 7 (D.3)
-│       └── Liveness.lean       ← Lemmas 8, 9, 11, 12, Theorem 6 (D.2)
+│       └── Liveness.lean       ← MysticetiBelugaSynchrony bundle +
+│                                  Lemmas 7, 8, 9-corollary, 11-existential,
+│                                  12, Theorem 6 (D.2)
 ├── Main.lean                   ← drives the executable Beluga trace
 ├── lakefile.lean
 └── lean-toolchain              ← v4.28.0
