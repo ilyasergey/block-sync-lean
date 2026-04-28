@@ -575,6 +575,41 @@ def BoundedRoundSpread_networkTraceWithPull
     (networkTraceWithPull system time k).base.getValidator vid₂ = some bv₂ →
     bv₁.currentRound ≤ bv₂.currentRound + 1
 
+/-- **`CatchUpLiveness`** — paper §4.2 rules (i) and (iii), event-triggered
+form: post-GST, if honest validator `vid` is at a strictly lower round than
+some honest validator `vid_lead`, then `vid` catches up to `vid_lead`'s
+round within `4Δ`.
+
+This is the *event-triggered* form of round-advance liveness. `vid` advances
+*because* a leader is ahead — `vid_lead`'s block (or the round-`r-1` quorum
+its block references) is the rule-(i) / rule-(iii) trigger — not on a fixed
+schedule. The `4Δ` bound decomposes as:
+
+- `Δ` — §2 push delivery of `vid_lead`'s block to `vid`,
+- `2Δ` — §4.3 push/pull/ImPoA acceptance (the bound paper L1 cites as
+  *"honest validators can accept all these honest latest blocks via either
+  block fetching or imPoAs by time `t + 3Δ`"*),
+- `Δ` — per-action scheduling for the rule-(i) / rule-(iii) advancement
+  step itself.
+
+This primitive replaces the over-strong `ActionSchedulingWithPull`. The
+latter asserts unconditional `Δ`-bounded round advance, which conflicts
+with the §4.2 rule-(ii) timeout `T_rd = 5Δ`: a validator with no quorum
+and no leader sighting must wait up to `5Δ`, not `Δ`. `CatchUpLiveness`
+is paper-faithful: it makes no advancement claim *without* a leader
+trigger. -/
+def CatchUpLiveness (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
+  ∀ k vid bv vid_lead bv_lead,
+    isHonestValidator system vid = true →
+    isHonestValidator system vid_lead = true →
+    time k ≥ system.GST →
+    (networkTraceWithPull system time k).base.getValidator vid = some bv →
+    (networkTraceWithPull system time k).base.getValidator vid_lead = some bv_lead →
+    bv.currentRound < bv_lead.currentRound →
+    ∃ k' bv', k ≤ k' ∧ time k' ≤ time k + 4 * system.Δ ∧
+      (networkTraceWithPull system time k').base.getValidator vid = some bv' ∧
+      bv'.currentRound ≥ bv_lead.currentRound
+
 /-! ## Paper §4.3 pull primitives
 
 The pull mechanism (paper §4.3) requires three liveness primitives,

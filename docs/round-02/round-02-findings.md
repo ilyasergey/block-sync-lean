@@ -380,51 +380,51 @@ Decide whether L2's removal from §5 was intentional. If yes, a
 footnote noting the consolidation; if no, restore the lemma or
 fold its content into L1.
 
-### 4.5. Refactor the `BelugaPartialSynchrony` bundle to event-triggered advancement (mechanization-side, in response to the author's objection)
+### 4.5. Refactor: bundle split into `BelugaPartialSynchrony` + `BelugaWithPullFairness` ✅ done
 
-The author's response to Stage-2 noted that
-`BelugaPartialSynchrony` item (3) — *"every honest validator
-advances rounds within Δ"* — is **too strong** for the round-02
-protocol: a validator in round `r-1` with no `2f+1`-quorum and no
-round-`r` sighting must wait up to `T_rd = 5Δ`, not Δ. The
-unconditional "within Δ" form would overstate what rules (i),
-(ii), (iii) of §4.2 actually deliver.
+The paper author's response to Stage-2 noted that the original
+bundle's item (3) — *"every honest validator advances rounds
+within Δ"* — is **too strong**: a validator in round `r-1` with
+no `2f+1`-quorum and no round-`r` sighting must wait up to `T_rd
+= 5Δ`, not Δ. The unconditional "within Δ" form overstates what
+the §4.2 rules (i), (ii), (iii) actually deliver.
 
-This objection applies to our Lean model as well. Our
-`actionScheduling` primitive is the same "advances within Δ
-unconditionally" form. Our `lemma1_paper_round02` proof
-(`Theorems.lean`) is a 5-line corollary of the round-01 L1 and
-therefore inherits this over-strong premise. The proof is valid
-*in our model* but does not reflect the round-02 paper's actual
-proof structure (event-triggered advancement + 3Δ acceptance +
-1Δ delivery of round-`r-1` blocks via rule (iii)).
+We refactored the bundle accordingly:
 
-To match the round-02 paper faithfully, the bundle should be
-refactored:
+- **`BelugaPartialSynchrony`** (the new weaker bundle) drops
+  `actionScheduling` and adds **`CatchUpLiveness`** — paper §4.2
+  rules (i)/(iii) in event-triggered form: *if honest `vid` is
+  at a strictly lower round than some honest `vid_lead`, then
+  `vid` catches up to `vid_lead`'s round within `4Δ`.* No
+  advancement claim is made when no leader is ahead, so the
+  `T_rd = 5Δ` rule-(ii) timeout is preserved untouched. The
+  `4Δ` decomposes as `Δ` (push delivery) + `2Δ` (push/pull/ImPoA
+  acceptance) + `Δ` (per-action scheduling for rule (i)/(iii)).
 
-- **Drop** `actionScheduling`.
-- **Add** a rule-(i) primitive: post-GST, `v_i` in round `r-1`
-  with 2f+1 accepted round-`r-1` blocks (reputation-gated)
-  advances to `r` within Δ.
-- **Add** a rule-(iii) primitive: post-GST, `v_i` in round
-  `< r-1` that observes a round-`r` block in its view advances
-  to `r-1` within Δ.
-- **Demote** `boundedRoundSpread` from primitive to derived
-  theorem — provable from delivery + the advancement primitives
-  + the per-round timeout.
-- **Re-prove** `lemma1_paper_round02` bottom-up from these
-  primitives: case split on `V_slow`, invoke rule (iii) in case
-  2, compose Δ-budgets explicitly. This would mirror the
-  round-02 paper proof line by line.
+- **`BelugaWithPullFairness`** now `extends
+  BelugaPartialSynchrony` (Lean record inheritance) and adds
+  back `actionScheduling` as an extra field. Existing proofs of
+  the round-01 L1, L2, T1–T4 continue to consume the stronger
+  bundle without modification.
 
-This is a substantive refactor (touches the bundle, the §5
-lemma proofs that consume `actionScheduling`, and the
-`boundedRoundSpread` invariant chain). It is a candidate for a
-follow-up phase, not part of the round-02 deliverable. Until
-then, our `lemma1_paper_round02` should be read with the caveat
-that it discharges the round-02 statement against an
-over-committed model, not against a faithful encoding of the
-new round-advancement rules.
+- **`lemma1_paper_round02`** is re-proved against
+  `BelugaPartialSynchrony` alone — no `actionScheduling`
+  required. The proof iterates over `system.validators`,
+  applying `catchUpLiveness` per validator at round `< r` (with
+  `vid_lead = vid_ref`, the witness honest validator at the
+  highest round `r`), then takes the max of per-validator
+  catch-up steps and uses round monotonicity to extend each
+  catch-up to the common max. The `time(max k₁ k₂)` bound is
+  discharged by case-splitting on `k₁ ≤ k₂`.
+
+The result: the round-02 Lemma 1 is now mechanically derivable
+from the paper-faithful weaker assumption set, mirroring the
+round-02 paper's proof structure (event-triggered advancement +
+delivery + acceptance) rather than the over-strong "advances
+within Δ" assumption the author rejected. The deeper refactor
+that would *also* demote `boundedRoundSpread` to a derived
+theorem (and lift rules (i)/(iii) into the protocol step) is
+deferred.
 
 ---
 

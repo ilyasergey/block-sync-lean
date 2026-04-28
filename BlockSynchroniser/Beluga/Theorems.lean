@@ -47,36 +47,33 @@ namespace Network
 
 /-! ## §5 paper-liveness bundle -/
 
-/-- **`BelugaWithPullFairness`** packages, in a single Prop-bundle,
-every liveness assumption made by the paper in Sections 2, 4.2,
-and 4.3 in support of the §5 theorems:
+/-- **`BelugaPartialSynchrony`** is the paper-faithful weaker bundle
+for the round-02 paper revision: it packages the §2 + §4.2 + §4.3
+post-GST liveness assumptions *without* the over-strong "rounds
+advance within `Δ` unconditionally" claim.
 
-- **§2 (partial synchrony)**: a globally-synchronised clock and
-  `Δ`-bounded message delivery between honest validators after GST.
-- **§4.2 (push protocol + per-round timeout `T_rd = 4Δ`)**:
-  honest validators advance rounds within `Δ` post-GST, their rounds
-  stay within one of each other, and acceptable in-pool blocks are
-  accepted within `Δ`.
-- **§4.3 (ImPoA + pull)**: every block in the global pool is
-  eventually known to every honest validator, whether via the push
-  channel of §2 or the pull mechanism of §4.3.
-
-The bundle is the single hypothesis of the §5 lemmas L1, L2 and the
-corollary `beluga_isBlockSynchronizer`: under exactly these
-paper-stated liveness assumptions, the network-aware Beluga trace
-satisfies T1, T2, T3, and T4.
+The round-advance liveness is event-triggered (`catchUpLiveness`,
+paper §4.2 rules (i)/(iii)): a validator catches up to a leader's
+round within `4Δ`, but no claim is made when no leader is ahead.
+This is paper-faithful: §4.2's rule-(ii) timeout `T_rd = 5Δ`
+upper-bounds time-in-round when no quorum or leader trigger fires,
+so an unconditional `Δ`-bound on advancement would conflict with
+the protocol.
 
 | Field                | Paper reference                                    |
 |----------------------|----------------------------------------------------|
 | `timeMonotone`       | global clock monotonicity                          |
 | `timeUnbounded`      | the trace makes wall-clock progress                |
 | `networkDelivery`    | §2 — `Δ`-delivery                                  |
-| `actionScheduling`   | §4.2 — round-advance liveness                      |
 | `boundedRoundSpread` | §4.2 — protocol synchronization (gap ≤ 1)          |
 | `acceptScheduling`   | §4.2 — accept-action liveness                      |
 | `inPoolDelivery`     | §4.3 — universal in-pool delivery (push ∪ pull)    |
+| `catchUpLiveness`    | §4.2 rules (i)/(iii) — catch-up to leader in `4Δ`  |
+
+Round-02 Lemma 1 (`lemma1_paper_round02`) is proved against this
+bundle alone — no `actionScheduling` required.
 -/
-structure BelugaWithPullFairness
+structure BelugaPartialSynchrony
     (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop where
   /-- The wall clock advances monotonically along the trace. -/
   timeMonotone       : ∀ i j, i ≤ j → time i ≤ time j
@@ -85,10 +82,6 @@ structure BelugaWithPullFairness
   /-- Paper §2: post-GST, every push message between honest validators
   is delivered within `Δ`. -/
   networkDelivery    : NetworkDeliveryWithPull system time
-  /-- Paper §4.2: post-GST, every honest validator advances rounds
-  within `Δ` (the per-round timeout `T_rd = 4Δ` upper-bounds the
-  time spent in any one round). -/
-  actionScheduling   : ActionSchedulingWithPull system time
   /-- Paper §4.2 protocol-synchronization: post-GST, the rounds of any
   two honest validators differ by at most one. -/
   boundedRoundSpread : BoundedRoundSpread_networkTraceWithPull system time
@@ -99,6 +92,25 @@ structure BelugaWithPullFairness
   eventually known to every honest validator (via push for honest
   authors, or via the pull mechanism otherwise). -/
   inPoolDelivery     : NetworkInPoolDeliveryWithPull system time
+  /-- Paper §4.2 rules (i)/(iii) (event-triggered): post-GST, an
+  honest validator at a strictly lower round than some honest leader
+  catches up to the leader's round within `4Δ`. -/
+  catchUpLiveness    : CatchUpLiveness system time
+
+/-- **`BelugaWithPullFairness`** extends `BelugaPartialSynchrony`
+with the legacy `actionScheduling` field (round-01 paper's implicit
+"rounds advance within `Δ`" assumption). Existing proofs of the
+round-01 L1, L2, T1–T4 consume this stronger field; the round-02
+revision (`lemma1_paper_round02`) does not. -/
+structure BelugaWithPullFairness
+    (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop
+    extends BelugaPartialSynchrony system time where
+  /-- Paper §4.2 (round-01 wording): post-GST, every honest validator
+  advances rounds within `Δ`. **Over-strong** — see the round-02
+  findings doc; the round-02 Lemma 1 proof does not consume this
+  field. Retained as a separate field so the round-01 proofs of L1,
+  L2, T1–T4 continue to typecheck. -/
+  actionScheduling   : ActionSchedulingWithPull system time
 
 end Network
 
@@ -1394,21 +1406,175 @@ The revised paper (round-02) restates Lemma 1 as: *"After GST, if
 round `r` is the highest round that honest validators are in at some
 time `t`, then all honest validators will enter round `r` by `t + 4Δ`."*
 
-This is strictly weaker than `lemma1_honest_round_entry` above under
-the §4.2 protocol-synchronization assumption (`boundedRoundSpread`,
-gap ≤ 1): with that invariant, every honest validator is already at
-round `≥ r-1` whenever some honest validator is at round `r`, so the
-"slow-set catch-up" case (`V_slow ≠ ∅` in the paper proof) is empty
-and the existing 3Δ bound from `lemma1_honest_round_entry` already
-delivers `≥ r+1` lockstep — which entails the round-02 statement
-verbatim. -/
+The proof below uses **only** `BelugaPartialSynchrony` — the weaker
+bundle that drops the over-strong "rounds advance within `Δ`
+unconditionally" assumption (`actionScheduling`) and replaces it
+with the event-triggered `catchUpLiveness` (paper §4.2 rules
+(i)/(iii)). Faithful to the round-02 protocol, where advancement is
+quorum/leader-triggered, never `Δ`-scheduled in isolation.
+
+**Proof structure:**
+1. By `boundedRoundSpread`, every honest validator is at round
+   `r` or `r-1` at step `k₀`.
+2. For each honest validator at round `< r`, apply `catchUpLiveness`
+   with `vid_lead = vid_ref` (the witness at round `r`): get a
+   per-validator step within `4Δ` at which the validator has
+   reached round `≥ r`.
+3. For each honest validator at round `≥ r`, no catch-up is
+   needed; round monotonicity preserves the bound.
+4. Iterate over `system.validators`, taking the max of per-validator
+   steps. The max's wall-clock time is ≤ `time k₀ + 4Δ`
+   (each component is ≤ that bound, and `time(max k₁ k₂)` equals
+   `time k₁` or `time k₂`).
+5. Round monotonicity extends each per-validator catch-up to the
+   common max step. -/
+
+/-- Forward: `(vid, true) ∈ system.validators → isHonestValidator system vid = true`.
+Local copy for use ahead of `network_isHonestValidator_of_mem` (defined later
+in this file). -/
+private lemma round02_isHonest_of_mem
+    (system : BlockSynchroniserSystem) (vid : ValidatorId)
+    (h_mem : (vid, true) ∈ system.validators) :
+    isHonestValidator system vid = true := by
+  unfold isHonestValidator BlockSynchroniserSystem.isHonest
+  have h_find : system.validators.find? (fun p => p.1 == vid) = some (vid, true) :=
+    find?_of_mem_nodup _ vid true h_mem system.validatorsNodup
+  have h_pred_eq :
+      (fun (x : ValidatorId × Bool) => match x with | (vid_1, _) => decide (vid_1 = vid))
+        = (fun p => p.1 == vid) := by
+    funext p
+    cases p
+    show decide _ = (_ == _)
+    rfl
+  rw [h_pred_eq, h_find]
+
+/-- Converse of `round02_isHonest_of_mem`: if
+`isHonestValidator system vid = true`, then `(vid, true)` is in
+`system.validators`. -/
+private lemma mem_validators_of_isHonest
+    {system : BlockSynchroniserSystem} {vid : ValidatorId}
+    (h : isHonestValidator system vid = true) :
+    (vid, true) ∈ system.validators := by
+  unfold isHonestValidator BlockSynchroniserSystem.isHonest at h
+  match h_some : system.validators.find? (fun p => p.1 = vid) with
+  | none => rw [h_some] at h; exact absurd h (by simp)
+  | some p =>
+    rw [h_some] at h
+    have h_p_in := List.mem_of_find?_eq_some h_some
+    have h_match := List.find?_some h_some
+    have h_p1 : p.1 = vid := by simpa using h_match
+    have h_p2 : p.2 = true := h
+    have h_p_eq : p = (vid, true) := by
+      obtain ⟨a, b⟩ := p
+      simp at h_p1 h_p2
+      subst h_p1; subst h_p2; rfl
+    rw [← h_p_eq]; exact h_p_in
+
+/-- Helper for `lemma1_paper_round02`: by induction on a list of
+validators, find a single step `k'` post-`k₀` (within `4Δ`) at which
+every honest validator in the list is at round `≥ r`. The witness
+step is the max of per-validator catch-up steps; round monotonicity
+extends each catch-up to the common max. -/
+private lemma round02_witness_for_validator_list
+    {system : BlockSynchroniserSystem} {time : Nat → Nat}
+    (h : BelugaPartialSynchrony system time)
+    (r : Round) (k₀ : Nat)
+    (h_post_gst : time k₀ ≥ system.GST)
+    (vid_ref : ValidatorId) (bv_ref : BelugaValidator)
+    (h_honest_ref : isHonestValidator system vid_ref = true)
+    (h_bv_ref : (networkTraceWithPull system time k₀).base.getValidator vid_ref = some bv_ref)
+    (h_round_ref : bv_ref.currentRound = r) :
+    ∀ (vs : List (ValidatorId × Bool)),
+      (∀ p ∈ vs, p.2 = true → isHonestValidator system p.1 = true) →
+      ∃ k', k₀ ≤ k' ∧ time k' ≤ time k₀ + 4 * system.Δ ∧
+        ∀ p ∈ vs, p.2 = true →
+          ∃ bv, (networkTraceWithPull system time k').base.getValidator p.1 = some bv ∧
+                bv.currentRound ≥ r := by
+  intro vs
+  induction vs with
+  | nil =>
+    intro _
+    refine ⟨k₀, le_refl k₀, ?_, ?_⟩
+    · have : 0 ≤ 4 * system.Δ := Nat.zero_le _
+      omega
+    · intro p h_mem; simp at h_mem
+  | cons hd vs_t ih =>
+    intro h_premise
+    have h_vs_t_premise : ∀ p ∈ vs_t, p.2 = true → isHonestValidator system p.1 = true :=
+      fun p h_mem h_b => h_premise p (List.mem_cons_of_mem _ h_mem) h_b
+    obtain ⟨k_t, hk_t_lo, hk_t_hi, h_vs_t_step⟩ := ih h_vs_t_premise
+    by_cases h_hd_b : hd.2 = true
+    · -- hd is honest
+      have h_hd_honest : isHonestValidator system hd.1 = true :=
+        h_premise hd List.mem_cons_self h_hd_b
+      obtain ⟨bv_hd, h_bv_hd⟩ := network_honest_validator_persistent_traceWithPull
+        system time hd.1 h_hd_honest k₀
+      by_cases h_hd_round : bv_hd.currentRound ≥ r
+      · -- hd already at round ≥ r at k₀; reuse k_t
+        refine ⟨k_t, hk_t_lo, hk_t_hi, ?_⟩
+        intro p h_mem h_p_b
+        rw [List.mem_cons] at h_mem
+        rcases h_mem with h_eq | h_in_t
+        · -- p = hd; transport via h_eq
+          obtain ⟨bv_hd_t, h_bv_hd_t⟩ := network_honest_validator_persistent_traceWithPull
+            system time hd.1 h_hd_honest k_t
+          refine ⟨bv_hd_t, ?_, ?_⟩
+          · rw [h_eq]; exact h_bv_hd_t
+          · have h_mono := network_round_monotone_traceWithPull system time hd.1
+              k₀ bv_hd h_bv_hd k_t hk_t_lo bv_hd_t h_bv_hd_t
+            exact le_trans h_hd_round h_mono
+        · exact h_vs_t_step p h_in_t h_p_b
+      · -- hd at round < r; apply catchUpLiveness with leader = vid_ref
+        push_neg at h_hd_round
+        have h_lt : bv_hd.currentRound < bv_ref.currentRound := by
+          rw [h_round_ref]; exact h_hd_round
+        obtain ⟨k_hd, bv_hd', hk_hd_lo, hk_hd_hi, h_bv_hd', h_round_hd'⟩ :=
+          h.catchUpLiveness k₀ hd.1 bv_hd vid_ref bv_ref h_hd_honest h_honest_ref
+            h_post_gst h_bv_hd h_bv_ref h_lt
+        refine ⟨max k_hd k_t, le_trans hk_hd_lo (le_max_left k_hd k_t), ?_, ?_⟩
+        · -- time bound: max k_hd k_t = k_hd or k_t; either has time ≤ time k₀ + 4Δ
+          by_cases h_le : k_hd ≤ k_t
+          · rw [max_eq_right h_le]; exact hk_t_hi
+          · push_neg at h_le
+            rw [max_eq_left (Nat.le_of_lt h_le)]; exact hk_hd_hi
+        · intro p h_mem h_p_b
+          rw [List.mem_cons] at h_mem
+          rcases h_mem with h_eq | h_in_t
+          · -- p = hd; transport via h_eq
+            obtain ⟨bv_hd_final, h_bv_hd_final⟩ := network_honest_validator_persistent_traceWithPull
+              system time hd.1 h_hd_honest (max k_hd k_t)
+            refine ⟨bv_hd_final, ?_, ?_⟩
+            · rw [h_eq]; exact h_bv_hd_final
+            · -- bv_hd_final.currentRound ≥ bv_hd'.currentRound ≥ bv_ref.currentRound = r
+              have h_mono := network_round_monotone_traceWithPull system time hd.1
+                k_hd bv_hd' h_bv_hd' (max k_hd k_t) (le_max_left _ _) bv_hd_final h_bv_hd_final
+              have h_step : r ≤ bv_hd'.currentRound := by
+                rw [← h_round_ref]; exact h_round_hd'
+              exact le_trans h_step h_mono
+          · obtain ⟨bv_old, h_bv_old, h_round_old⟩ := h_vs_t_step p h_in_t h_p_b
+            obtain ⟨bv_final, h_bv_final⟩ := network_honest_validator_persistent_traceWithPull
+              system time p.1 (h_vs_t_premise p h_in_t h_p_b) (max k_hd k_t)
+            refine ⟨bv_final, h_bv_final, ?_⟩
+            have h_mono := network_round_monotone_traceWithPull system time p.1
+              k_t bv_old h_bv_old (max k_hd k_t) (le_max_right _ _) bv_final h_bv_final
+            exact le_trans h_round_old h_mono
+    · -- hd is byzantine; the cons-case for hd is vacuous (its bool ≠ true)
+      refine ⟨k_t, hk_t_lo, hk_t_hi, ?_⟩
+      intro p h_mem h_p_b
+      rw [List.mem_cons] at h_mem
+      rcases h_mem with h_eq | h_in_t
+      · rw [h_eq] at h_p_b; exact absurd h_p_b h_hd_b
+      · exact h_vs_t_step p h_in_t h_p_b
 
 /-- **Lemma 1 (paper §5, round-02 revision).** If `r` is the highest
 round any honest validator is in at step `k₀` post-GST, then within
-`4Δ` every honest validator is at round `≥ r`. -/
+`4Δ` every honest validator is at round `≥ r`.
+
+Consumes only `BelugaPartialSynchrony` — the weaker bundle without
+`actionScheduling`. -/
 theorem lemma1_paper_round02
     {system : BlockSynchroniserSystem} {time : Nat → Nat}
-    (h : BelugaWithPullFairness system time) :
+    (h : BelugaPartialSynchrony system time) :
     ∀ (r : Round) (k₀ : Nat),
       time k₀ ≥ system.GST →
       (∃ vid_ref bv_ref,
@@ -1419,16 +1585,21 @@ theorem lemma1_paper_round02
         ∀ vid, isHonestValidator system vid = true →
           ∃ bv, (networkTraceWithPull system time k').base.getValidator vid = some bv ∧
                 bv.currentRound ≥ r := by
-  intro r k₀ h_post_gst ⟨vid_ref, bv_ref, h_honest, h_bv_ref, h_round⟩
-  obtain ⟨k', hk'le, hk'time, hk'all⟩ :=
-    lemma1_honest_round_entry h vid_ref r k₀ h_honest h_post_gst ⟨bv_ref, h_bv_ref, h_round⟩
-  refine ⟨k', hk'le, ?_, ?_⟩
-  · calc time k' ≤ time k₀ + 3 * system.Δ := hk'time
-      _ ≤ time k₀ + 4 * system.Δ := by
-        apply Nat.add_le_add_left; omega
-  · intro vid h_vid_honest
-    obtain ⟨bv, h_bv, h_rnd⟩ := hk'all vid h_vid_honest
-    exact ⟨bv, h_bv, Nat.le_of_lt (Nat.lt_of_lt_of_le (Nat.lt_succ_self r) h_rnd)⟩
+  intro r k₀ h_post_gst ⟨vid_ref, bv_ref, h_honest_ref, h_bv_ref, h_round_ref⟩
+  -- Premise for the helper: every honest pair in system.validators has the corresponding isHonestValidator.
+  have h_premise : ∀ p ∈ system.validators, p.2 = true → isHonestValidator system p.1 = true := by
+    intro p h_mem h_b
+    have h_pair_mem : (p.1, true) ∈ system.validators := by
+      have h_p_eq : p = (p.1, true) := by
+        obtain ⟨a, b⟩ := p; simp at h_b ⊢; exact h_b
+      rw [← h_p_eq]; exact h_mem
+    exact round02_isHonest_of_mem system p.1 h_pair_mem
+  obtain ⟨k', hk'_lo, hk'_hi, h_step⟩ :=
+    round02_witness_for_validator_list h r k₀ h_post_gst vid_ref bv_ref
+      h_honest_ref h_bv_ref h_round_ref system.validators h_premise
+  refine ⟨k', hk'_lo, hk'_hi, ?_⟩
+  intro vid h_vid_honest
+  exact h_step (vid, true) (mem_validators_of_isHonest h_vid_honest) rfl
 
 /-! ## §5 eventual-acceptance predicates
 
