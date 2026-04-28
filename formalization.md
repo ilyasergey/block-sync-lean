@@ -50,15 +50,15 @@ fairness derivation, named liveness primitives) lives in
 
 | Paper | Code | Status |
 |---|---|---|
-| §5 — **Lemma 1** — after GST, all honest validators reach the same round within 3Δ | [`Beluga/Theorems.lean :: lemma1_honest_round_entry`](BlockSynchroniser/Beluga/Theorems.lean#L1340) | ✅ — weakened to the lockstep-progress form (the strict same-round form is unprovable from the cited assumptions; finding F-1b). |
-| §5 — **Lemma 2** — round-to-round latency ≤ 3Δ in the happy case | [`Beluga/Theorems.lean :: lemma2_round_latency`](BlockSynchroniser/Beluga/Theorems.lean#L1366) | ✅ |
-| §5 — **Theorem 1** — Beluga ⊨ Block availability | [`Beluga/Theorems.lean :: network_theorem1_block_availability_withPull`](BlockSynchroniser/Beluga/Theorems.lean#L1710) | ✅ |
-| §5 — **Theorem 2** — Beluga ⊨ Causal availability | [`Beluga/Theorems.lean :: network_theorem2_causal_availability_withPull`](BlockSynchroniser/Beluga/Theorems.lean#L1953) | ✅ |
-| §5 — **Theorem 3** — Beluga ⊨ Round-Progression | [`Beluga/Theorems.lean :: network_theorem3_round_progression_withPull`](BlockSynchroniser/Beluga/Theorems.lean#L1777) | ✅ |
-| §5 — **Theorem 4** — Beluga ⊨ Round-Termination | [`Beluga/Theorems.lean :: network_theorem4_round_termination_proved`](BlockSynchroniser/Beluga/Theorems.lean#L1659) | ✅ |
-| §5 corollary — Beluga is a block synchronizer (T1∧T2∧T3∧T4) | [`Beluga/Theorems.lean :: beluga_isBlockSynchronizer`](BlockSynchroniser/Beluga/Theorems.lean#L1994) | ✅ |
+| §5 — **Lemma 1** — after GST, if `r` is the highest round any honest validator is in at time `t`, every honest validator is at round `≥ r` by some step within `4Δ` | [`Beluga/Theorems.lean :: lemma1_honest_round_entry`](BlockSynchroniser/Beluga/Theorems.lean#L1507) | ✅ — proved against `BelugaPartialSynchrony` (the paper-faithful event-triggered bundle) without `actionScheduling`. |
+| §5 — **Theorem 1** — Beluga ⊨ Block availability | [`Beluga/Theorems.lean :: network_theorem1_block_availability_withPull`](BlockSynchroniser/Beluga/Theorems.lean#L1857) | ✅ |
+| §5 — **Theorem 2** — Beluga ⊨ Causal availability | [`Beluga/Theorems.lean :: network_theorem2_causal_availability_withPull`](BlockSynchroniser/Beluga/Theorems.lean#L2100) | ✅ |
+| §5 — **Theorem 3** — Beluga ⊨ Round-Progression | [`Beluga/Theorems.lean :: network_theorem3_round_progression_withPull`](BlockSynchroniser/Beluga/Theorems.lean#L1924) | ✅ |
+| §5 — **Theorem 4** — Beluga ⊨ Round-Termination | [`Beluga/Theorems.lean :: network_theorem4_round_termination_proved`](BlockSynchroniser/Beluga/Theorems.lean#L1806) | ✅ |
+| §5 corollary — Beluga is a block synchronizer (T1∧T2∧T3∧T4) | [`Beluga/Theorems.lean :: beluga_isBlockSynchronizer`](BlockSynchroniser/Beluga/Theorems.lean#L2141) | ✅ |
 | Pull mechanism (paper §4.3) explicit modelling | [`Beluga/Network.lean`](BlockSynchroniser/Beluga/Network.lean#L90) | ✅ |
-| Paper-stated liveness assumptions of §2 + §4.2 + §4.3 bundled (`BelugaWithPullFairness`) | [`Beluga/Theorems.lean :: BelugaWithPullFairness`](BlockSynchroniser/Beluga/Theorems.lean#L77) | ✅ — surfaces the per-action and pull-channel liveness conclusions the paper's §5 prose uses silently (finding F-1). |
+| Paper-stated liveness assumptions of §2 + §4.2 + §4.3, event-triggered form (`BelugaPartialSynchrony`) | [`Beluga/Theorems.lean :: BelugaPartialSynchrony`](BlockSynchroniser/Beluga/Theorems.lean#L68) | ✅ — packages clock, push delivery, in-pool delivery, accept-action liveness, gap-1 protocol synchronization, and the §4.2 rule (i)/(iii) catch-up primitive. |
+| Strengthened bundle for the §5 theorems (`BelugaWithPullFairness extends BelugaPartialSynchrony`) | [`Beluga/Theorems.lean :: BelugaWithPullFairness`](BlockSynchroniser/Beluga/Theorems.lean#L100) | ✅ — adds the unconditional per-action round-advance assumption `actionScheduling`. T1–T4 currently consume this stronger form (a recommended round-3 paper edit; see [`docs/round-02/paper-additions-stage3.md`](docs/round-02/paper-additions-stage3.md)). |
 
 ### Appendix C — Performance bounds
 
@@ -225,34 +225,45 @@ preserved by `step`.
   `lemma5_round_latency_or_blamed`. This is a Lean-side decomposition
   decision, not a paper finding.
 
-- **§5 hypothesis set: `BelugaWithPullFairness` bundle.**
-  L1, L2, T1, T2, T3, T4 (and the corollary
-  `beluga_isBlockSynchronizer`) all consume the single bundle
-  `Network.BelugaWithPullFairness system time` (seven-field record
-  covering paper §2 + §4.2 + §4.3 post-GST liveness primitives:
-  `timeMonotone`, `timeUnbounded`, `networkDelivery`
-  (`NetworkDeliveryWithPull`, paper §2 `Δ`-delivery),
-  `actionScheduling` (`ActionSchedulingWithPull`, paper §4.2
-  round-advance), `boundedRoundSpread` (paper §4.2 protocol
-  synchronization), `acceptScheduling` (paper §4.2 accept-action
-  liveness), `inPoolDelivery` (`NetworkInPoolDeliveryWithPull`,
-  paper §4.3 universal in-pool delivery — push ∪ pull)).
-  `EventualCausalAcceptance` and `EventualRoundAcceptance` are
-  derived theorems, not axioms.
+- **§5 hypothesis sets: `BelugaPartialSynchrony` and `BelugaWithPullFairness`.**
+  Lemma 1 consumes the weaker `Network.BelugaPartialSynchrony system time`
+  bundle (seven-field record packaging the paper's §2 + §4.2 + §4.3
+  post-GST liveness in event-triggered form: `timeMonotone`,
+  `timeUnbounded`, `networkDelivery` (`NetworkDeliveryWithPull`,
+  paper §2 `Δ`-delivery), `boundedRoundSpread` (paper §4.2
+  protocol synchronization, gap ≤ 1), `acceptScheduling` (paper
+  §4.2 accept-action liveness), `inPoolDelivery`
+  (`NetworkInPoolDeliveryWithPull`, paper §4.3 universal in-pool
+  delivery — push ∪ pull), `catchUpLiveness` (paper §4.2 rules
+  (i)/(iii) catch-up to a leader within `4Δ`)).
+
+  `BelugaWithPullFairness` extends `BelugaPartialSynchrony` with
+  the unconditional per-action round-advance assumption
+  `actionScheduling` (`ActionSchedulingWithPull`). T1–T4 currently
+  consume this stronger form; the recommended paper edit (round-3,
+  see [`docs/round-02/paper-additions-stage3.md`](docs/round-02/paper-additions-stage3.md))
+  is to drop this assumption and route the §5 theorems through
+  `BelugaPartialSynchrony` only. `EventualCausalAcceptance` and
+  `EventualRoundAcceptance` are derived theorems, not axioms.
 
 Real paper-side concerns (missing assumptions, scope ambiguities,
 implicit invariants) are recorded in
-[`docs/round-01/mechanization-findings.md`](docs/round-01/mechanization-findings.md).
+[`docs/round-01/mechanization-findings.md`](docs/round-01/mechanization-findings.md)
+(round 1) and [`docs/round-02/round-02-findings.md`](docs/round-02/round-02-findings.md)
+(round 2).
 
 ## Where to look
 
 | | |
 |---|---|
-| Mechanization findings (paper-side log) | [docs/round-01/mechanization-findings.md](docs/round-01/mechanization-findings.md) |
+| Mechanization findings, round 1 | [docs/round-01/mechanization-findings.md](docs/round-01/mechanization-findings.md) |
+| Mechanization findings, round 2 | [docs/round-02/round-02-findings.md](docs/round-02/round-02-findings.md) |
 | Why per-action liveness is needed and ImPoA does not substitute | [docs/round-01/paper-feedback-impoa-vs-fairness.md](docs/round-01/paper-feedback-impoa-vs-fairness.md) |
-| Recommended paper additions / restatements | [docs/round-01/paper-additions-stage2.md](docs/round-01/paper-additions-stage2.md) |
+| Recommended paper additions, round 1 (Stage 1 + Stage 2) | [docs/round-01/paper-additions-stage1.md](docs/round-01/paper-additions-stage1.md), [docs/round-01/paper-additions-stage2.md](docs/round-01/paper-additions-stage2.md) |
+| Recommended paper additions, round 2 (Stage 3) | [docs/round-02/paper-additions-stage3.md](docs/round-02/paper-additions-stage3.md) |
 | Per-stage changelog | [changelogs/](changelogs/) |
-| The paper | [docs/round-01/Block_Sync_Project.pdf](docs/round-01/Block_Sync_Project.pdf) |
+| The original paper (round 1) | [docs/round-01/Block_Sync_Project.pdf](docs/round-01/Block_Sync_Project.pdf) |
+| The revised paper (round 2) | [docs/round-02/Block_Sync_Project2.pdf](docs/round-02/Block_Sync_Project2.pdf) |
 
 ## Repository layout
 

@@ -10,10 +10,7 @@ partial-synchrony assumptions (Sections 2, 4.2, 4.3) into the
 `BelugaWithPullFairness` bundle and proves, against the network-aware
 trace `networkTraceWithPull`, the §5 lemmas
 
-* L1 — round entry within `3Δ` (`lemma1_honest_round_entry`,
-  paper round-01 statement) and within `4Δ` (`lemma1_paper_round02`,
-  paper round-02 statement)
-* L2 — round-to-round latency `≤ 3Δ` (`lemma2_round_latency`)
+* L1 — round entry within `4Δ` (`lemma1_honest_round_entry`)
 
 and the §5 theorems
 
@@ -47,18 +44,13 @@ namespace Network
 
 /-! ## §5 paper-liveness bundle -/
 
-/-- **`BelugaPartialSynchrony`** is the paper-faithful weaker bundle
-for the round-02 paper revision: it packages the §2 + §4.2 + §4.3
-post-GST liveness assumptions *without* the over-strong "rounds
-advance within `Δ` unconditionally" claim.
-
-The round-advance liveness is event-triggered (`catchUpLiveness`,
-paper §4.2 rules (i)/(iii)): a validator catches up to a leader's
-round within `4Δ`, but no claim is made when no leader is ahead.
-This is paper-faithful: §4.2's rule-(ii) timeout `T_rd = 5Δ`
-upper-bounds time-in-round when no quorum or leader trigger fires,
-so an unconditional `Δ`-bound on advancement would conflict with
-the protocol.
+/-- **`BelugaPartialSynchrony`** packages the paper's §2 + §4.2 +
+§4.3 post-GST liveness assumptions in event-triggered form. The
+round-advance liveness (`catchUpLiveness`, paper §4.2 rules
+(i)/(iii)): a validator catches up to a leader's round within `4Δ`,
+but no claim is made when no leader is ahead — consistent with
+§4.2 rule-(ii)'s timeout `T_rd = 5Δ` upper-bounding time-in-round
+in the absence of a quorum or leader trigger.
 
 | Field                | Paper reference                                    |
 |----------------------|----------------------------------------------------|
@@ -70,8 +62,8 @@ the protocol.
 | `inPoolDelivery`     | §4.3 — universal in-pool delivery (push ∪ pull)    |
 | `catchUpLiveness`    | §4.2 rules (i)/(iii) — catch-up to leader in `4Δ`  |
 
-Round-02 Lemma 1 (`lemma1_paper_round02`) is proved against this
-bundle alone — no `actionScheduling` required.
+Paper §5 Lemma 1 (`lemma1_honest_round_entry`) is proved against
+this bundle alone.
 -/
 structure BelugaPartialSynchrony
     (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop where
@@ -98,18 +90,17 @@ structure BelugaPartialSynchrony
   catchUpLiveness    : CatchUpLiveness system time
 
 /-- **`BelugaWithPullFairness`** extends `BelugaPartialSynchrony`
-with the legacy `actionScheduling` field (round-01 paper's implicit
-"rounds advance within `Δ`" assumption). Existing proofs of the
-round-01 L1, L2, T1–T4 consume this stronger field; the round-02
-revision (`lemma1_paper_round02`) does not. -/
+with the unconditional per-action round-advance assumption
+`actionScheduling`. Consumed by the §5 theorems T1–T4, which (in
+their current proofs) treat round advancement as `Δ`-scheduled
+rather than event-triggered. See [docs/round-02/](../../../docs/round-02/)
+for the discussion of why this field is stronger than what the
+paper's §4.2 protocol actually delivers (rule (ii) timeout
+`T_rd = 5Δ`). -/
 structure BelugaWithPullFairness
     (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop
     extends BelugaPartialSynchrony system time where
-  /-- Paper §4.2 (round-01 wording): post-GST, every honest validator
-  advances rounds within `Δ`. **Over-strong** — see the round-02
-  findings doc; the round-02 Lemma 1 proof does not consume this
-  field. Retained as a separate field so the round-01 proofs of L1,
-  L2, T1–T4 continue to typecheck. -/
+  /-- Post-GST, every honest validator advances rounds within `Δ`. -/
   actionScheduling   : ActionSchedulingWithPull system time
 
 end Network
@@ -1344,74 +1335,18 @@ end Theorems
 
 namespace Network
 
-/-! ## §5 Lemma 1 — round entry within `3Δ`
+/-! ## §5 Lemma 1 — round entry within `4Δ`
 
-After GST, given an honest validator at round `r`, every honest
-validator reaches round at least `r + 1` within `3Δ`. Direct
-consequence of the fairness derivation. -/
+Paper §5 Lemma 1: *"After GST, if round `r` is the highest round
+that honest validators are in at some time `t`, then all honest
+validators will enter round `r` by `t + 4Δ`."*
 
-/-- **Lemma 1 (paper §5).** -/
-theorem lemma1_honest_round_entry
-    {system : BlockSynchroniserSystem} {time : Nat → Nat}
-    (h : BelugaWithPullFairness system time) :
-    ∀ vid_ref r k₀, isHonestValidator system vid_ref = true →
-      time k₀ ≥ system.GST →
-      (∃ bv_ref, (networkTraceWithPull system time k₀).base.getValidator vid_ref = some bv_ref ∧
-        bv_ref.currentRound = r) →
-      ∃ k', k₀ ≤ k' ∧ time k' ≤ time k₀ + 3 * system.Δ ∧
-        ∀ vid, isHonestValidator system vid = true →
-          ∃ bv, (networkTraceWithPull system time k').base.getValidator vid = some bv ∧
-                bv.currentRound ≥ r + 1 := by
-  intro vid_ref r k₀ h_honest h_post_gst ⟨bv_ref, h_bv_ref, h_round⟩
-  have h_persistent : ∀ vid k, isHonestValidator system vid = true →
-      ∃ bv, (networkTraceWithPull system time k).base.getValidator vid = some bv :=
-    fun vid k h => network_honest_validator_persistent_traceWithPull system time vid h k
-  exact schedulerFairness_holds_withPull system time h.timeMonotone
-    h.networkDelivery h.actionScheduling h.boundedRoundSpread h_persistent
-    k₀ r h_post_gst ⟨vid_ref, bv_ref, h_honest, h_bv_ref, h_round⟩
-
-/-! ## §5 Lemma 2 — round-to-round latency `≤ 3Δ`
-
-After GST, an honest validator at round `r` is at round exactly
-`r + 1` by some step within `3Δ`. Combines L1 with the round-IVT
-to land at exactly `r + 1`. -/
-
-/-- **Lemma 2 (paper §5).** -/
-theorem lemma2_round_latency
-    {system : BlockSynchroniserSystem} {time : Nat → Nat}
-    (h : BelugaWithPullFairness system time) :
-    ∀ vid r k,
-      isHonestValidator system vid = true →
-      time k ≥ system.GST →
-      (∃ bv, (networkTraceWithPull system time k).base.getValidator vid = some bv ∧
-        bv.currentRound = r) →
-      ∃ k' ≥ k, time k' ≤ time k + 3 * system.Δ ∧
-        ∃ bv, (networkTraceWithPull system time k').base.getValidator vid = some bv ∧
-              bv.currentRound = r + 1 := by
-  intro vid r k h_honest h_post_gst ⟨bv, h_bv, h_round⟩
-  obtain ⟨k', hk'le, hk'time, hk'all⟩ :=
-    lemma1_honest_round_entry h vid r k h_honest h_post_gst ⟨bv, h_bv, h_round⟩
-  obtain ⟨bv', hbv', hbv'rnd⟩ := hk'all vid h_honest
-  have hle_r : bv.currentRound ≤ r + 1 := by rw [h_round]; exact Nat.le_succ r
-  obtain ⟨kc, hkc_lo, hkc_hi, bvc, hbvc, hrnd_eq⟩ :=
-    network_round_intermediate_valueWithPull system time vid k k' (r + 1) hk'le bv bv' h_bv hbv'
-      hle_r hbv'rnd
-  have htime_kc : time kc ≤ time k + 3 * system.Δ :=
-    le_trans (h.timeMonotone kc k' hkc_hi) hk'time
-  exact ⟨kc, hkc_lo, htime_kc, bvc, hbvc, hrnd_eq⟩
-
-/-! ## §5 Lemma 1 — paper round-02 statement
-
-The revised paper (round-02) restates Lemma 1 as: *"After GST, if
-round `r` is the highest round that honest validators are in at some
-time `t`, then all honest validators will enter round `r` by `t + 4Δ`."*
-
-The proof below uses **only** `BelugaPartialSynchrony` — the weaker
-bundle that drops the over-strong "rounds advance within `Δ`
-unconditionally" assumption (`actionScheduling`) and replaces it
-with the event-triggered `catchUpLiveness` (paper §4.2 rules
-(i)/(iii)). Faithful to the round-02 protocol, where advancement is
-quorum/leader-triggered, never `Δ`-scheduled in isolation.
+The proof consumes only `BelugaPartialSynchrony` — the
+paper-faithful weaker bundle whose advancement primitive
+(`catchUpLiveness`) is event-triggered, matching the §4.2 rules
+(i)/(iii). It does *not* consume the over-strong
+`actionScheduling` ("rounds advance within `Δ` unconditionally"),
+which would conflict with §4.2 rule-(ii)'s timeout `T_rd = 5Δ`.
 
 **Proof structure:**
 1. By `boundedRoundSpread`, every honest validator is at round
@@ -1432,7 +1367,7 @@ quorum/leader-triggered, never `Δ`-scheduled in isolation.
 /-- Forward: `(vid, true) ∈ system.validators → isHonestValidator system vid = true`.
 Local copy for use ahead of `network_isHonestValidator_of_mem` (defined later
 in this file). -/
-private lemma round02_isHonest_of_mem
+private lemma isHonest_of_mem_local
     (system : BlockSynchroniserSystem) (vid : ValidatorId)
     (h_mem : (vid, true) ∈ system.validators) :
     isHonestValidator system vid = true := by
@@ -1448,7 +1383,7 @@ private lemma round02_isHonest_of_mem
     rfl
   rw [h_pred_eq, h_find]
 
-/-- Converse of `round02_isHonest_of_mem`: if
+/-- Converse of `isHonest_of_mem_local`: if
 `isHonestValidator system vid = true`, then `(vid, true)` is in
 `system.validators`. -/
 private lemma mem_validators_of_isHonest
@@ -1470,12 +1405,12 @@ private lemma mem_validators_of_isHonest
       subst h_p1; subst h_p2; rfl
     rw [← h_p_eq]; exact h_p_in
 
-/-- Helper for `lemma1_paper_round02`: by induction on a list of
+/-- Helper for `lemma1_honest_round_entry`: by induction on a list of
 validators, find a single step `k'` post-`k₀` (within `4Δ`) at which
 every honest validator in the list is at round `≥ r`. The witness
 step is the max of per-validator catch-up steps; round monotonicity
 extends each catch-up to the common max. -/
-private lemma round02_witness_for_validator_list
+private lemma lemma1_witness_for_validator_list
     {system : BlockSynchroniserSystem} {time : Nat → Nat}
     (h : BelugaPartialSynchrony system time)
     (r : Round) (k₀ : Nat)
@@ -1566,13 +1501,10 @@ private lemma round02_witness_for_validator_list
       · rw [h_eq] at h_p_b; exact absurd h_p_b h_hd_b
       · exact h_vs_t_step p h_in_t h_p_b
 
-/-- **Lemma 1 (paper §5, round-02 revision).** If `r` is the highest
-round any honest validator is in at step `k₀` post-GST, then within
-`4Δ` every honest validator is at round `≥ r`.
-
-Consumes only `BelugaPartialSynchrony` — the weaker bundle without
-`actionScheduling`. -/
-theorem lemma1_paper_round02
+/-- **Lemma 1 (paper §5).** If `r` is the highest round any honest
+validator is in at step `k₀` post-GST, then within `4Δ` every honest
+validator is at round `≥ r`. Consumes only `BelugaPartialSynchrony`. -/
+theorem lemma1_honest_round_entry
     {system : BlockSynchroniserSystem} {time : Nat → Nat}
     (h : BelugaPartialSynchrony system time) :
     ∀ (r : Round) (k₀ : Nat),
@@ -1593,9 +1525,9 @@ theorem lemma1_paper_round02
       have h_p_eq : p = (p.1, true) := by
         obtain ⟨a, b⟩ := p; simp at h_b ⊢; exact h_b
       rw [← h_p_eq]; exact h_mem
-    exact round02_isHonest_of_mem system p.1 h_pair_mem
+    exact isHonest_of_mem_local system p.1 h_pair_mem
   obtain ⟨k', hk'_lo, hk'_hi, h_step⟩ :=
-    round02_witness_for_validator_list h r k₀ h_post_gst vid_ref bv_ref
+    lemma1_witness_for_validator_list h r k₀ h_post_gst vid_ref bv_ref
       h_honest_ref h_bv_ref h_round_ref system.validators h_premise
   refine ⟨k', hk'_lo, hk'_hi, ?_⟩
   intro vid h_vid_honest

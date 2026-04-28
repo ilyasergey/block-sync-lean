@@ -56,6 +56,7 @@ then code-facing.
 | [docs/round-01/paper-additions-stage2.md](docs/round-01/paper-additions-stage2.md) | Stage-2 follow-ups (paper-faithfulness commentary on §5, alternative proof sketches, recommended §4 changes). |
 | [docs/round-01/Block_Sync_Project.pdf](docs/round-01/Block_Sync_Project.pdf) | The original paper (round 1). |
 | [docs/round-02/round-02-findings.md](docs/round-02/round-02-findings.md) | Round-02 audit: status of each `F-1`–`F-13` finding against the revised paper, plus new observations introduced by the round-02 Lemma-1 / `T_rd` revisions. |
+| [docs/round-02/paper-additions-stage3.md](docs/round-02/paper-additions-stage3.md) | Stage-3 paper-additions: concrete edits recommended for the next paper revision, in plain English. |
 | [docs/round-02/Block_Sync_Project2.pdf](docs/round-02/Block_Sync_Project2.pdf) | The revised paper (round 2). |
 
 ### Project overview
