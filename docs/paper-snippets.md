@@ -124,7 +124,7 @@ implicit; neither weakens or strengthens any paper claim.
 
 ```bibtex
 @inproceedings{Moura021,
-  author       = {Leonardo de Moura and
+  author       = {Leonardo {de Moura} and
                   Sebastian Ullrich},
   editor       = {Andr{\'{e}} Platzer and
                   Geoff Sutcliffe},
@@ -164,7 +164,7 @@ implicit; neither weakens or strengthens any paper claim.
                   Jonathan Thomm and
                   Harold Williams and
                   Lawrence Wu},
-  title        = {Aristotle: IMO-level Automated Theorem Proving},
+  title        = {{Aristotle: IMO-level Automated Theorem Proving}},
   journal      = {CoRR},
   volume       = {abs/2510.01346},
   year         = {2025},
