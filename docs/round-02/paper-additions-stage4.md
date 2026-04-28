@@ -1,7 +1,6 @@
 # Suggested edits to the Beluga manuscript — Stage 4
 
-A self-contained block of amendments confined to **Appendix D**.
-Sections 4 and 5 are untouched.
+A block of amendments to **Appendix D**.
 
 ---
 
@@ -100,13 +99,11 @@ pattern. Tighten the footnote to make the equivalence explicit:
 
 This pins down the conversion from "B is certified" (the §4.4
 predicate) to "the round-`(B.r + 2)` cert pattern holds" (what
-`directDecide` reads), removing a quiet equivalence step.
+the direct-decision rule reads), removing a quiet equivalence step.
 
 ---
 
 ## 5. Cumulative amendment summary
-
-All four edits sit inside Appendix D:
 
 | Section | Edit |
 |---|---|
@@ -114,5 +111,3 @@ All four edits sit inside Appendix D:
 | §D.3 (extend item list) | Add item (v): global pool is parent-closed. |
 | §D.1.2 (wording fix) | State leader-inclusion as the conditional "accepted ⇒ included". |
 | §D.1.1 (footnote 6) | Make the round-`(r+1)` ↔ round-`(r+2)` cert-pattern equivalence explicit. |
-
-Sections 4 and 5 are untouched.
