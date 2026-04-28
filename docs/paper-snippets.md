@@ -8,14 +8,9 @@ prose is in paper terms; nothing references repository internals.
 ## 1. Contribution line (after current item (3))
 
 (4) We provide a complete machine-checked formalisation of Beluga
-in Lean 4 [`\cite{Moura021}`], covering all
-non-probabilistic results of the paper — the four block-synchronizer
-properties (Definition 1), the §5 main theorems (T1–T4), the
-deterministic Appendix C lemmas (L3, L4, L5), and the
-Mysticeti-Beluga liveness and safety theorems (T6, T7) along with
-their supporting lemmas — discharged from paper-stated assumptions
-with no axioms beyond Lean's standard library. The accompanying
-material includes the proof artefacts and a paper-to-code map.
+in Lean 4 [`\cite{Moura021}`], covering all non-probabilistic
+results of the paper, discharged from paper-stated assumptions with
+no axioms beyond Lean's standard library.
 
 ## 2. End-of-§5 line
 
