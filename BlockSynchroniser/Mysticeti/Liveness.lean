@@ -353,15 +353,69 @@ theorem theorem6_consensus_liveness
     {system : BlockSynchroniserSystem} {time : Nat → Nat}
     (h_sync : MysticetiBelugaSynchrony system time)
     (hids : ValidIds system)
-    (vid_acc : ValidatorId) (h_acc_honest : isHonestValidator system vid_acc = true)
+    (vid_acc : ValidatorId) (_h_acc_honest : isHonestValidator system vid_acc = true)
     (k : ℕ) (h_gst : time k ≥ system.GST)
     (B : Block) (h_B_in : B ∈ (Beluga.Network.networkTraceWithPull system time k).base.blocks)
-    (h_accepted : HasAccepted (Beluga.Network.networkTraceWithPull system time k).base vid_acc B.d)
+    (_h_accepted : HasAccepted (Beluga.Network.networkTraceWithPull system time k).base vid_acc B.d)
     (tx : Transaction) (h_tx : tx ∈ B.payload)
     (vid_h : ValidatorId) (h_vid_h_honest : isHonestValidator system vid_h = true) :
     ∃ k', tx ∈ belugaTransactionOrderState
       (Beluga.Network.networkTraceWithPull system time k').base vid_h := by
-  sorry
+  -- Step 1: by universal in-pool acceptance, vid_h eventually accepts B.d.
+  obtain ⟨k', hk'_le, h_acc_bool⟩ :=
+    Beluga.Network.network_in_pool_eventually_accepted_withPull
+      system time h_sync.timeMonotone h_sync.inPoolDelivery h_sync.acceptScheduling
+      k vid_h B h_vid_h_honest h_gst h_B_in
+  refine ⟨k', ?_⟩
+  -- Step 2: convert hasAcceptedDigest (Bool) to HasAccepted (Prop).
+  have h_acc :
+      HasAccepted (Beluga.Network.networkTraceWithPull system time k').base vid_h B.d := by
+    rw [← Beluga.Network.hasAcceptedDigest_iff_HasAccepted]; exact h_acc_bool
+  -- Step 3: B persists in the pool from k to k' by blocks-monotonicity.
+  have h_B_in' :
+      B ∈ (Beluga.Network.networkTraceWithPull system time k').base.blocks :=
+    Beluga.Network.network_blocks_monotone_traceWithPull system time k k' hk'_le B h_B_in
+  -- Step 4: the block_accept op for B.d is in emittedOperations at k'.
+  have h_op_mem : ValidatorOperation.block_accept vid_h B.d ∈
+      (Beluga.Network.networkTraceWithPull system time k').base.emittedOperations := h_acc
+  -- Step 5: getBlockByDigest at k' returns some block B' with B'.d = B.d.
+  -- Walk the order's flatMap: the block_accept op fires the branch.
+  unfold belugaTransactionOrderState
+  rw [List.mem_flatMap]
+  refine ⟨.block_accept vid_h B.d, h_op_mem, ?_⟩
+  -- Determine getBlockByDigest's output and show tx is in its payload.
+  rcases h_some : getBlockByDigest
+      (Beluga.Network.networkTraceWithPull system time k').base B.d with _ | B'
+  · -- find? = none contradicts B ∈ blocks with B.d = B.d.
+    exfalso
+    unfold getBlockByDigest at h_some
+    have h_no_match :
+        ∀ b ∈ (Beluga.Network.networkTraceWithPull system time k').base.blocks,
+          ¬ decide (b.d = B.d) = true := List.find?_eq_none.mp h_some
+    have := h_no_match B h_B_in'
+    simp at this
+  · -- find? = some B'. The predicate at B' holds, so B'.d = B.d.
+    -- B' has same payload as B (block uniqueness by digest in this trace).
+    have h_mem : B' ∈ (Beluga.Network.networkTraceWithPull system time k').base.blocks := by
+      unfold getBlockByDigest at h_some
+      exact List.mem_of_find?_eq_some h_some
+    have h_B'_d : B'.d = B.d := by
+      unfold getBlockByDigest at h_some
+      have := List.find?_some h_some
+      simpa using this
+    -- Show tx ∈ B'.payload by showing B' = B (digest determines block).
+    -- We use the BlockInv-style invariant carried by `ValidIds` + the digest
+    -- being a function of (round, author). Both B and B' share digest B.d.
+    have h_inv := Mysticeti.belugaTrace_satisfies_mysticetiSafetyInv system hids
+    -- The Mysticeti safety invariant `MysticetiSafetyInv` holds for
+    -- `belugaTrace`; we need the analogous fact for `networkTraceWithPull`,
+    -- which is not directly available. Bridge via the canonical-digest
+    -- invariant of the network propose-op chain.
+    sorry
+    -- (The bridge lemma "block uniqueness by digest in
+    -- networkBelugaTraceWithPull" is the missing piece; once added in
+    -- Beluga/Network.lean (analogous to `block_unique_by_digest_in_trace`
+    -- for `belugaTrace` in `Beluga/Order.lean`), B' = B and tx ∈ B'.payload.)
 
 end Liveness
 end Mysticeti
