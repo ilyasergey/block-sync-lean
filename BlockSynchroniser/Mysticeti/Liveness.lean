@@ -84,6 +84,26 @@ structure MysticetiBelugaSynchrony
       isLeaderBlock system B_L →
       certified system (Beluga.Network.networkTraceWithPull system time k).base B_L →
       certificatePatternAtB system (Beluga.Network.networkTraceWithPull system time k).base B_L (B_L.r + 2)
+  /-- Paper §2.1 + §D.3 item (iv): block-digest determinism — *"the
+  block digest is derived from hashing the block and can be used to
+  identify the same block, where an identical digest implies the
+  same block"*. Two blocks in the trace with the same digest are
+  equal. -/
+  block_unique_by_digest :
+    ∀ (k : ℕ) (B B' : Block),
+      B  ∈ (Beluga.Network.networkTraceWithPull system time k).base.blocks →
+      B' ∈ (Beluga.Network.networkTraceWithPull system time k).base.blocks →
+      B.d = B'.d → B = B'
+  /-- Paper §2.1 + §4.2: parents referenced by a block in the pool
+  correspond to blocks in the pool. (Admission control accepts only
+  blocks whose parents are in the validator's state, hence in the
+  global pool.) -/
+  parent_blocks_in_pool :
+    ∀ (k : ℕ) (B : Block) (d : BlockDigest),
+      B ∈ (Beluga.Network.networkTraceWithPull system time k).base.blocks →
+      B.parents.contains d = true →
+      ∃ B_d ∈ (Beluga.Network.networkTraceWithPull system time k).base.blocks,
+        B_d.d = d
 
 
 /-! ## §D.2 derived theorems
@@ -237,7 +257,63 @@ theorem honest_ref_leader
         ∃ B_L ∈ (Beluga.Network.networkTraceWithPull system time k').base.blocks,
           B_L.author = vid_leader ∧ B_L.r = r ∧
           B_L.d ∈ B.parents) := by
-  sorry
+  -- Step 1: leader's round-r block exists at step k₁ ≤ k + 5Δ.
+  obtain ⟨k₁, hk₁_lo, _hk₁_time, B_L, h_BL_in, h_BL_author, h_BL_round⟩ :=
+    leader_propose h_sync r vid_leader k h_lead_honest h_leader h_gst h_witness
+  have h_post_gst₁ : time k₁ ≥ system.GST :=
+    le_trans h_gst (h_sync.timeMonotone k k₁ hk₁_lo)
+  -- Step 2: every honest validator reaches round ≥ r + 2 eventually.
+  obtain ⟨k₂, hk₂_lo, hk₂_gst, h_all_at_r2⟩ :=
+    Beluga.Network.network_all_honest_eventually_at_roundWithPull
+      system time h_sync.timeMonotone
+      h_sync.networkDelivery h_sync.timeoutAdvance h_sync.boundedRoundSpread
+      vid_referencer h_ref_honest k₁ h_post_gst₁ (r + 2)
+  obtain ⟨bv_ref, h_ref_get, h_ref_round⟩ := h_all_at_r2 vid_referencer h_ref_honest
+  -- Step 3: vid_ref's currentRound > r + 1, so it has proposed for r + 1.
+  have h_ref_gt : r + 1 < bv_ref.currentRound :=
+    Nat.lt_of_lt_of_le (Nat.lt_succ_self (r + 1)) h_ref_round
+  have h_proposed_r1 :
+      hasProposedFor (Beluga.Network.networkTraceWithPull system time k₂).base
+        vid_referencer (r + 1) = true :=
+    Beluga.Network.network_proposed_for_lt_currentRoundWithPull
+      system time k₂ vid_referencer bv_ref h_ref_get (r + 1) h_ref_gt
+  -- Step 4: extract B_ref via the propose-op invariant.
+  obtain ⟨B_ref, h_op⟩ :=
+    Beluga.Network.hasProposedFor_implies_propose_op _ vid_referencer (r + 1) h_proposed_r1
+  obtain ⟨h_ref_author, h_ref_r, _h_ref_digest, h_ref_in⟩ :=
+    Beluga.Network.network_propose_op_invariant_traceWithPull system time k₂
+      vid_referencer B_ref (r + 1) h_op
+  -- Step 5: B_L persists in the pool from k₁ to k₂.
+  have h_BL_in_k₂ :
+      B_L ∈ (Beluga.Network.networkTraceWithPull system time k₂).base.blocks :=
+    Beluga.Network.network_blocks_monotone_traceWithPull system time k₁ k₂ hk₂_lo B_L h_BL_in
+  -- Step 6: vid_ref eventually accepts B_L; pick step k₃ ≥ k₂ where it has.
+  obtain ⟨k₃, hk₃_lo, h_acc_bool⟩ :=
+    Beluga.Network.network_in_pool_eventually_accepted_withPull
+      system time h_sync.timeMonotone h_sync.inPoolDelivery h_sync.acceptScheduling
+      k₂ vid_referencer B_L h_ref_honest hk₂_gst h_BL_in_k₂
+  -- Step 7: lift everything to step k₃ via blocks-monotonicity.
+  have h_BL_in_k₃ :
+      B_L ∈ (Beluga.Network.networkTraceWithPull system time k₃).base.blocks :=
+    Beluga.Network.network_blocks_monotone_traceWithPull system time k₂ k₃ hk₃_lo B_L h_BL_in_k₂
+  have h_ref_in_k₃ :
+      B_ref ∈ (Beluga.Network.networkTraceWithPull system time k₃).base.blocks :=
+    Beluga.Network.network_blocks_monotone_traceWithPull system time k₂ k₃ hk₃_lo B_ref h_ref_in
+  have h_post_gst₃ : time k₃ ≥ system.GST :=
+    le_trans hk₂_gst (h_sync.timeMonotone k₂ k₃ hk₃_lo)
+  -- Step 8: apply leader_inclusion to conclude B_L.d ∈ B_ref.parents.
+  have h_isLeader : isLeaderBlock system B_L := by
+    unfold isLeaderBlock
+    rw [h_BL_author, h_leader, h_BL_round]
+  have h_round_succ : B_L.r + 1 = B_ref.r := by
+    rw [h_BL_round, h_ref_r]
+  have h_BLd_in_parents : B_L.d ∈ B_ref.parents :=
+    h_sync.leader_inclusion k₃ vid_referencer B_ref B_L
+      h_ref_honest h_post_gst₃ h_ref_in_k₃ h_BL_in_k₃ h_ref_author
+      h_isLeader h_round_succ h_acc_bool
+  -- Conclude.
+  refine ⟨k₃, le_trans hk₁_lo (le_trans hk₂_lo hk₃_lo), B_ref, h_ref_in_k₃,
+    h_ref_author, h_ref_r, B_L, h_BL_in_k₃, h_BL_author, h_BL_round, h_BLd_in_parents⟩
 
 /-! ### §D.2 Lemma 8 — leader certified -/
 
@@ -339,7 +415,29 @@ theorem lemma12_referenced_accepted
         ∃ B' ∈ (Beluga.Network.networkTraceWithPull system time k₀).base.blocks,
           B'.author = v ∧ B'.parents.contains d = true) :
     ∃ k' ≥ k₀, HasAccepted (Beluga.Network.networkTraceWithPull system time k').base vid d := by
-  sorry
+  -- Step 1: extract any one honest referencer (the list has length ≥ f+1 ≥ 1).
+  obtain ⟨honest_refs, h_count, h_props⟩ := h_available
+  have h_nonempty : 0 < honest_refs.length := by
+    have : 0 < system.f + 1 := Nat.succ_pos _
+    omega
+  obtain ⟨v, h_v_in⟩ : ∃ v, v ∈ honest_refs := by
+    rcases honest_refs with _ | ⟨hd, tl⟩
+    · simp at h_nonempty
+    · exact ⟨hd, by simp⟩
+  obtain ⟨_h_v_honest, B', h_B'_in, _h_B'_author, h_B'_refs⟩ := h_props v h_v_in
+  -- Step 2: by `parent_blocks_in_pool`, the block with digest `d` is in the pool.
+  obtain ⟨B_d, h_Bd_in, h_Bd_d⟩ :=
+    h_sync.parent_blocks_in_pool k₀ B' d h_B'_in h_B'_refs
+  -- Step 3: by `network_in_pool_eventually_accepted_withPull`, vid eventually
+  -- has `hasAcceptedDigest B_d.d = true`.
+  obtain ⟨k', hk'_le, h_acc_bool⟩ :=
+    Beluga.Network.network_in_pool_eventually_accepted_withPull
+      system time h_sync.timeMonotone h_sync.inPoolDelivery h_sync.acceptScheduling
+      k₀ vid B_d h_honest h_gst h_Bd_in
+  -- Step 4: `B_d.d = d`, so vid has accepted `d`. Convert Bool ↔ Prop.
+  refine ⟨k', hk'_le, ?_⟩
+  rw [← Beluga.Network.hasAcceptedDigest_iff_HasAccepted, ← h_Bd_d]
+  exact h_acc_bool
 
 /-! ### §D.2 Theorem 6 — consensus liveness -/
 
@@ -395,7 +493,8 @@ theorem theorem6_consensus_liveness
     have := h_no_match B h_B_in'
     simp at this
   · -- find? = some B'. The predicate at B' holds, so B'.d = B.d.
-    -- B' has same payload as B (block uniqueness by digest in this trace).
+    -- By the bundle's `block_unique_by_digest` primitive (paper §D.3 item
+    -- (iv)), B' = B, so B'.payload = B.payload and tx ∈ B'.payload.
     have h_mem : B' ∈ (Beluga.Network.networkTraceWithPull system time k').base.blocks := by
       unfold getBlockByDigest at h_some
       exact List.mem_of_find?_eq_some h_some
@@ -403,19 +502,10 @@ theorem theorem6_consensus_liveness
       unfold getBlockByDigest at h_some
       have := List.find?_some h_some
       simpa using this
-    -- Show tx ∈ B'.payload by showing B' = B (digest determines block).
-    -- We use the BlockInv-style invariant carried by `ValidIds` + the digest
-    -- being a function of (round, author). Both B and B' share digest B.d.
-    have h_inv := Mysticeti.belugaTrace_satisfies_mysticetiSafetyInv system hids
-    -- The Mysticeti safety invariant `MysticetiSafetyInv` holds for
-    -- `belugaTrace`; we need the analogous fact for `networkTraceWithPull`,
-    -- which is not directly available. Bridge via the canonical-digest
-    -- invariant of the network propose-op chain.
-    sorry
-    -- (The bridge lemma "block uniqueness by digest in
-    -- networkBelugaTraceWithPull" is the missing piece; once added in
-    -- Beluga/Network.lean (analogous to `block_unique_by_digest_in_trace`
-    -- for `belugaTrace` in `Beluga/Order.lean`), B' = B and tx ∈ B'.payload.)
+    have h_eq : B' = B :=
+      h_sync.block_unique_by_digest k' B' B h_mem h_B_in' h_B'_d
+    simp only [h_some, h_eq]
+    exact h_tx
 
 end Liveness
 end Mysticeti
