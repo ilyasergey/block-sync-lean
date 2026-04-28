@@ -141,6 +141,45 @@ slightly differently. None imply a paper concern.
   in pool), and §3 (honest non-equivocation). None is itself a §D.2
   conclusion.
 
+## Repository layout
+
+```
+block-sync-lean/
+├── formalization.md            ← you are here
+├── README.md                   ← build / run instructions
+├── BlockSynchroniser/
+│   ├── Block, Validator, Operations.lean
+│   ├── System, State, Trace.lean
+│   ├── Timing.lean             ← TimeMap, PartiallySynchronous
+│   ├── Causal.lean             ← inductive Reaches / causal
+│   ├── Quorum.lean             ← BFT quorum-intersection
+│   ├── Properties.lean         ← Definition 1.1–1.4
+│   ├── Validation.lean         ← non-vacuity sanity checks
+│   ├── Beluga/
+│   │   ├── BlockExt.lean       ← BelugaBlock (§4.1)
+│   │   ├── Patterns.lean       ← available/certified (§4.4)
+│   │   ├── State.lean          ← BelugaState + ReputationTable
+│   │   ├── Reputation.lean     ← §4.2 update rules
+│   │   ├── AdmissionControl.lean ← §4.2 parent selection
+│   │   ├── Pull.lean           ← §4.3 ImPoA + live/bulk
+│   │   ├── Protocol.lean       ← HonestStep + executable step
+│   │   ├── Network.lean        ← network-aware §4 protocol layer
+│   │   ├── Order.lean          ← canonical transaction order
+│   │   ├── PerformanceLemmas.lean ← Appendix C lemmas
+│   │   ├── Examples.lean       ← #eval smoke tests
+│   │   └── Theorems.lean       ← §5 paper layer (L1, T1–T4)
+│   └── Mysticeti/
+│       ├── Consensus.lean      ← decision rules + leader schedule (D.1)
+│       ├── Safety.lean         ← Lemmas 10, 13–16, Theorem 7 (D.3)
+│       ├── SafetyInvariant.lean ← Mysticeti safety invariants for belugaTrace
+│       └── Liveness.lean       ← MysticetiBelugaSynchrony bundle +
+│                                  Lemmas 7, 8, 9-corollary, 11, 12,
+│                                  Theorem 6 (D.2)
+├── Main.lean                   ← drives the executable Beluga trace
+├── lakefile.lean
+└── lean-toolchain              ← v4.28.0
+```
+
 ## Build
 
 ```bash
