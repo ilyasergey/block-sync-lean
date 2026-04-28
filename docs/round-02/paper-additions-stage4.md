@@ -6,6 +6,11 @@ Appendix D.2). Stage 3 covered the §5 partial-synchrony assumption
 (six items). Stage 4 extends it with two paper-implicit items
 needed by §D.2.
 
+The §D.2 mechanization (Lemmas 7, 8, 9-corollary, 11-existential,
+12, Theorem 6) is now **closed end-to-end without sorry or axiom**;
+see [`round-02-findings.md`](round-02-findings.md) §4.6 for the
+bundle architecture and the L11 deferral note.
+
 ---
 
 ## 1. Extend the §5 partial-synchrony assumption with two §4.2
@@ -62,6 +67,35 @@ the round-robin leader schedule) are already paper-stated; the
 safety lemmas (L13–L16, T7) are already covered by the
 "inherent facts" enumeration in §D.3 (introduced in round-02 to
 close round-01 finding F-5).
+
+Five other facts that the §D.2 mechanization consumes are also
+already paper-stated, but in different sections than §D.2 itself.
+We list them here for traceability — none requires a paper edit:
+
+1. **§D.1.2 admission rule.** *"Admission control prioritises
+   leader blocks among parents: if an honest validator at round
+   `r+1` has accepted the round-`r` leader's block, the leader's
+   block is among that validator's parents at round `r+1`."*
+   — paper §D.1.2 (admission control).
+2. **§D.1.1 footnote 6 cert-pattern timing.** The §4.4
+   certificate pattern, restricted to the round `r + 2`
+   referencers, is the predicate `directDecide` reads. Paper
+   §D.1.1 footnote 6 already says this verbatim.
+3. **§2.1 + §D.3 (iv) digest determinism.** *"The block digest is
+   derived from hashing the block and can be used to identify the
+   same block, where an identical digest implies the same block."*
+   — paper §D.3 (iv), restating §2.1.
+4. **§2.1 + §4.2 admission control rejects orphan parents.** A
+   parent referenced by an admitted block is itself in the
+   validator's view (and hence in the global pool). Paper §4.2
+   admission control discusses this; not separately enumerated.
+5. **§3 honest non-equivocation.** *"Honest validators only create
+   at most one block per round."* — paper §D.3 (i), restating §3
+   honest validator behavior.
+
+Items 1, 3, 4, 5 are inherent BFT/cryptographic facts already
+covered by §D.3's enumeration or by §3 protocol behavior. Item 2
+is a paper §D.1.1 footnote. None is a §D.2 conclusion in disguise.
 
 ---
 

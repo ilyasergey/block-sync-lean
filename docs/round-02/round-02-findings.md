@@ -435,61 +435,59 @@ is deferred.
 
 ### 4.6. §D.2 Mysticeti-Beluga consensus liveness — closed end-to-end ✅ done
 
-The §D.2 layer (Lemmas 7–12 + Theorem 6) previously had eight
-sorries gating Theorem 6 — the consensus-liveness conclusion of
-the entire Mysticeti-Beluga construction. We closed all eight
-without sorry or axiom.
+The §D.2 layer (Lemmas 7–12 + Theorem 6) is fully derived. Zero
+sorries, zero axioms. All §D.2 conclusions are *theorems* against
+`networkBelugaTraceWithPull`, derived from a paper-faithful
+hypothesis bundle that contains **no §D.2 conclusion as a
+primitive**.
 
 We mirrored §5's architecture (`Beluga/Theorems.lean`'s
 `BelugaPartialSynchrony` / `BelugaWithPullFairness`):
 
-- **`MysticetiBelugaSynchrony`** — a paper-faithful liveness
-  bundle for §D.2, packaging eight items: the §5 Lemma 1
-  conclusion (`honest_round_entry`); the §4.2 per-action liveness
-  for `block_propose` (`leader_propose`); the §D.2 conclusions
-  L7 (`honest_ref_leader`), L8 (`honest_certify_leader`); the
-  §D.2 inductive consequences `three_consec_commit`,
-  `backward_induction`; the §4.3 / §D.2 conclusion
-  `block_pull_liveness`; and the §5 T2 form
-  `honest_eventually_accepts`.
+- **`MysticetiBelugaSynchrony`** ([`Mysticeti/Liveness.lean :: MysticetiBelugaSynchrony`](../../BlockSynchroniser/Mysticeti/Liveness.lean#L54)) extends `BelugaWithPullFairness` with seven paper-stated primitives. Each is anchored to a paper section that pre-dates §D.2:
+  - `proposeScheduling` / `storeScheduling` — paper §4.2 per-action liveness for `block_propose` / `block_store` (the symmetric mirrors of `acceptScheduling`; documented as paper amendment items 5b/5c in [`paper-additions-stage4.md`](paper-additions-stage4.md)).
+  - `leader_inclusion` — paper §D.1.2 admission rule.
+  - `cert_pattern_at_r2` — paper §D.1.1 footnote 6 (the §4.4 certificate pattern is the same predicate `directDecide` reads at round `r + 2`).
+  - `block_unique_by_digest` — paper §2.1 + §D.3 item (iv) (digest determinism).
+  - `parent_blocks_in_pool` — paper §2.1 + §4.2 (admission control rejects orphan parents).
+  - `honest_block_uniqueness` — paper §3 (honest non-equivocation).
 
-- **`mysticetiPostGSTLiveness_holds`** — the §D.2 invariant
-  bundle derived from `MysticetiBelugaSynchrony` plus the standard
-  BFT side conditions. Each liveness conjunct is a one-line
-  projection from the bundle.
+- **§D.2 derived theorems** — `honest_round_entry`,
+  `leader_propose`, `honest_ref_leader`, `honest_certify_leader`,
+  `three_consec_commit`, `lemma11_eventual_commit`,
+  `lemma12_referenced_accepted`, `theorem6_consensus_liveness`.
+  All take `MysticetiBelugaSynchrony` and concluded against
+  `networkBelugaTraceWithPull`.
 
-- **§D.2 lemmas** — `lemma8_leader_referenced`,
-  `lemma9_honest_certificate`, `lemma11_eventual_decision`,
-  `lemma12_referenced_accepted`, `theorem6_consensus_liveness`
-  now take `MysticetiBelugaSynchrony` (instead of
-  `time.WellFormed` + `PartiallySynchronous`) and discharge their
-  conclusions through the bundle.
+**The earlier draft packaged §D.2 conclusions as bundle
+primitives.** That route was rejected: it would have made the
+bundle stronger than the paper assumes (`honest_ref_leader` /
+`honest_certify_leader` etc. are §D.2 *theorems*, not paper-stated
+assumptions). The current bundle holds only paper-stated facts
+from §4.2, §D.1, §2.1 + §D.3, and §3.
 
-**Why these are bundle primitives, not derived theorems.** The
-§D.2 conclusions, like the §5 `inPoolDelivery` primitive (a
-paper §4.3 conclusion treated as a bundle field at the §5
-abstraction level), are paper *theorems* taken as bundle
-*assumptions*. Deriving them from `BelugaWithPullFairness` plus
-the propose/store scheduling primitives plus existing safety
-lemmas (L13/L14/L15) plus the round-robin pigeonhole
-(`lemma10_round_robin_pigeonhole`, already proved) is feasible
-but requires refactoring §D from `belugaTrace` (the synchronous
-executable trace) to `networkBelugaTraceWithPull` (the
-network-aware trace). That refactor is documented in
-[`RESUME-mysticeti-d2.md`](RESUME-mysticeti-d2.md) as a future
-phase. At the current §D abstraction level — paper §D.2 reasoning
-against the synchronous trace — packaging the conclusions as
-bundle primitives is the §D-layer analogue of how
-`BelugaPartialSynchrony` packages `inPoolDelivery`.
+**One mechanization deferral, not a paper finding.** The full
+universal form of §D.2 L11 ("every undecided leader's decision is
+eventually decided, propagated via the indirect rule") requires
+chaining `indirectDecideStep` recursively through subsequent
+committed leaders. That recursion is captured at the *definition*
+level (`Mysticeti/Consensus.lean :: indirectDecideStep`) but the
+recursive descent is not mechanized. Instead we close §D.2 with
+`lemma11_eventual_commit` — the existential corollary: post-GST,
+some leader at round ≥ `startRound` is direct-committed. This is
+what's load-bearing for Theorem 6: T6 closes via §5 in-pool
+delivery + §4.2 accept-action liveness directly and does *not*
+require the backward indirect-rule chain.
 
-**Two new paper-faithful primitives**: `ProposeSchedulingWithPull`
-and `StoreSchedulingWithPull` (paper §4.2 per-action liveness for
-`block_propose` and `block_store`, mirroring the existing
-`AcceptScheduling`). These are paper-implicit (the §4.2 prose
-treats all four actions — propose, accept, store, advance —
-symmetrically as per-action liveness; we already had three of
-the four). Defined in `Beluga/Network.lean`. Stage-4 paper
-additions surfaces them as a §D.2 / §5 assumption extension.
+**Two new paper-faithful primitives in the §5 layer**:
+`ProposeSchedulingWithPull` and `StoreSchedulingWithPull` (paper
+§4.2 per-action liveness for `block_propose` and `block_store`,
+mirroring the existing `AcceptSchedulingWithPull`). These are
+paper-implicit (the §4.2 prose treats all four actions — propose,
+accept, store, advance — symmetrically as per-action liveness; we
+already had three of the four). Defined in `Beluga/Network.lean`.
+[`paper-additions-stage4.md`](paper-additions-stage4.md) surfaces
+them as a §5 assumption extension (items 5b, 5c).
 
 ---
 
