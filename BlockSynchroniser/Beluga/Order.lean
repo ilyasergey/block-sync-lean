@@ -29,13 +29,11 @@ import BlockSynchroniser.Beluga.Protocol
 namespace BlockSynchroniser
 namespace Beluga
 
-/-- The canonical transaction order produced by an honest validator's
-state at trace step `k`. Walks emitted ops in order; for each
-`block_accept v d` with `v = vid`, looks up the corresponding block
-in the state via `getBlockByDigest` and concatenates its payload. -/
-def belugaTransactionOrder
-    (system : BlockSynchroniserSystem) (k : Nat) (vid : ValidatorId) : List Transaction :=
-  let s := belugaTrace system k
+/-- State-level transaction order: walks an arbitrary `BelugaState`'s
+emitted ops, picks up `block_accept v d` with `v = vid`, looks up
+the block by digest, and concatenates payload. -/
+def belugaTransactionOrderState
+    (s : BelugaState) (vid : ValidatorId) : List Transaction :=
   s.emittedOperations.flatMap fun op =>
     match op with
     | .block_accept v d =>
@@ -45,6 +43,12 @@ def belugaTransactionOrder
         | none   => []
       else []
     | _ => []
+
+/-- The canonical transaction order produced by an honest validator's
+state at synchronous trace step `k`. -/
+def belugaTransactionOrder
+    (system : BlockSynchroniserSystem) (k : Nat) (vid : ValidatorId) : List Transaction :=
+  belugaTransactionOrderState (belugaTrace system k) vid
 
 /-- Block-by-digest uniqueness in the trace state: any two blocks in
 `(belugaTrace system k).blocks` with the same digest are equal.
@@ -117,7 +121,7 @@ theorem accepted_implies_in_belugaTransactionOrder
         block_unique_by_digest_in_trace system hids k B' B h_mem h_in h_B'_d
       subst h_eq; exact h_some
   -- Step 3: walk the flatMap. The block_accept op fires the branch.
-  unfold belugaTransactionOrder
+  unfold belugaTransactionOrder belugaTransactionOrderState
   rw [List.mem_flatMap]
   refine ⟨.block_accept vid_h B.d, h_op_mem, ?_⟩
   simp only [h_get]
