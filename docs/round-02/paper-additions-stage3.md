@@ -227,23 +227,29 @@ appeals to "the protocol scheduling is fast enough".
 
 ## 4. Three minor editorial points
 
-### 4.1. Cite Assumption 1 in proofs of Lemmas 4 and 5
+### 4.1. Cite Assumption 1 uniformly across Appendix C.2
 
-Lemmas 4 and 5 (Appendix C.2) invoke the latency-triangle bound
-implicitly when concluding *"all honest validators receive each
-other's round-`r` blocks within `Δ` post-GST"*. Citing
-Assumption 1 explicitly at the point of use clarifies the
+Appendix C.2's Lemma 2 cites Assumption 1 (Latency Triangle)
+explicitly when concluding *"`v_j` receives `B_i^{r-1}` directly
+from `v_i` before receiving it through any intermediate
+validator"*. The subsequent Lemmas 3, 4, and 5 invoke the same
+bound implicitly when concluding *"all honest validators receive
+each other's round-`r` blocks within `Δ` post-GST"* but do not
+cite it. Citing Assumption 1 at every point of use clarifies the
 structure of the argument; the math is correct as stated.
 
-### 4.2. Decide whether Lemma 2 was consolidated
+### 4.2. Decide whether the §5 round-latency lemma was consolidated
 
-Earlier versions had a Lemma 2 (round-to-round latency `≤ 3Δ`
-for an honest validator) sandwiched between Lemma 1 and Theorem 1.
-The current manuscript proves the same content inline inside
-Theorem 3. Either restore Lemma 2 as a named statement (if it is
-cited in downstream work) or add a brief footnote noting the
+Earlier versions had a second §5 lemma (round-to-round latency
+`≤ 3Δ` for an honest validator) sandwiched between Lemma 1 and
+Theorem 1. The current §5 proves the same content inline inside
+Theorem 3 and contains only Lemma 1 + Theorems 1–4. Either
+restore the second lemma as a named statement (if it is cited
+in downstream work) or add a brief footnote noting the
 consolidation. Without one of these, readers familiar with the
-earlier version may look for it and not find it.
+earlier version may look for it and not find it. (This is
+unrelated to Appendix C.2's Lemma 2, which is a different
+lemma about reputation.)
 
 ### 4.3. Clarify accept/store atomicity (or split with priority)
 
@@ -270,6 +276,6 @@ advance` so the structural argument can be cited.
 | §4.2 (rule iii) | Pin the target round and trigger: *"observes a block of round `≥ r`; advances to `r-1`."* | **High** — current wording admits an unsound skip-ahead reading |
 | §5 (before Lemma 1) | State the partial-synchrony assumption (six items) explicitly | **Medium** — currently implicit |
 | §4.3 | Name the pull-mechanism conclusion and state ImPoA's role as the underlying soundness condition (not just an acceptance path) | **Medium** — design intent currently unstated |
-| §C.2 (Lemmas 4, 5) | Cite Assumption 1 in proof bodies | **Low** — editorial |
-| §5 (Lemma 2 placement) | Note consolidation into Theorem 3, or restore | **Low** — editorial |
+| §C.2 (Lemmas 3, 4, 5) | Cite Assumption 1 in proof bodies (as Lemma 2 already does) | **Low** — editorial |
+| §5 (former round-latency lemma) | Note consolidation into Theorem 3, or restore as a named §5 lemma | **Low** — editorial |
 | §4 / Figure 8 | Make accept/store atomicity explicit, or split with action priority | **Low** — editorial |
