@@ -13,6 +13,8 @@ import BlockSynchroniser.Timing
 import BlockSynchroniser.Trace
 import BlockSynchroniser.Beluga.Patterns
 import BlockSynchroniser.Beluga.Protocol
+import BlockSynchroniser.Beluga.Network
+import BlockSynchroniser.Beluga.Theorems
 import BlockSynchroniser.Beluga.Order
 import BlockSynchroniser.Mysticeti.Consensus
 import BlockSynchroniser.Mysticeti.SafetyInvariant
@@ -96,101 +98,32 @@ these from `BelugaWithPullFairness` + the propose/store
 scheduling primitives in [`Beluga/Network.lean`](../Beluga/Network.lean).
 -/
 
-/-- **Paper §D.2 liveness primitives** for `belugaTrace`. Each
-field corresponds to a paper §D.2 lemma conclusion or a per-action
-liveness assumption from §4.2. -/
+/-- **`MysticetiBelugaSynchrony`** — paper-faithful liveness bundle
+for §D.2.
+
+Extends `BelugaWithPullFairness` (the §5 paper-faithful liveness
+bundle, see `Beluga/Theorems.lean`) with two paper-implicit
+per-action liveness primitives the §D.2 proofs additionally
+consume:
+
+- `proposeScheduling` — paper §4.2 per-action liveness for
+  `block_propose` (the §4.2 prose's symmetric per-action treatment;
+  `acceptScheduling` is already in `BelugaPartialSynchrony`).
+- `storeScheduling`   — paper §4.2 per-action liveness for
+  `block_store` (same reasoning).
+
+The §D.2 lemmas (Lemmas 7–12, Theorem 6) are *derived* from this
+bundle plus the existing safety lemmas (L13–L16,
+`lemma10_round_robin_pigeonhole`) and the Mysticeti consensus rule
+definitions (`directDecide`, `indirectDecide`). No §D.2 conclusion
+is taken as a primitive. -/
 structure MysticetiBelugaSynchrony
-    (system : BlockSynchroniserSystem) (time : TimeMap) : Prop where
-  /-- Paper §5 Lemma 1 (round-02 form): post-GST, every honest
-  validator catches up to a witnessed round within `3Δ`. -/
-  honest_round_entry :
-    ∀ (r : Round) (vid : ValidatorId) (k : ℕ),
-      isHonestValidator system vid = true → time k ≥ system.GST →
-      ∀ vid', isHonestValidator system vid' = true →
-        ∃ k', time k' ≤ time k + 3 * system.Δ ∧
-          (∃ bv ∈ (belugaTrace system k').validators,
-            bv.1 = vid' ∧ bv.2.currentRound ≥ r)
-  /-- Paper §4.2 per-action liveness for `block_propose`: post-GST,
-  the honest leader at round `r` emits its leader block within `Δ`. -/
-  leader_propose :
-    ∀ (r : Round) (vid_leader : ValidatorId) (k : ℕ),
-      isHonestValidator system vid_leader = true →
-      vid_leader = leaderOf system r → time k ≥ system.GST →
-      ∃ k', time k' ≤ time k + system.Δ ∧
-        ∃ B_L ∈ (belugaTrace system k').blocks,
-          B_L.author = vid_leader ∧ B_L.r = r
-  /-- Paper §D.2 Lemma 7 (honest validator references leader): post-GST,
-  every honest validator's round-`(r+1)` block has the round-`r`
-  honest leader's block as parent within `4Δ`. -/
-  honest_ref_leader :
-    ∀ (r : Round) (vid_leader vid_referencer : ValidatorId) (k : ℕ),
-      isHonestValidator system vid_leader = true →
-      isHonestValidator system vid_referencer = true →
-      vid_leader = leaderOf system r → time k ≥ system.GST →
-      ∃ k', time k' ≤ time k + 4 * system.Δ ∧
-        (∃ B ∈ (belugaTrace system k').blocks,
-          B.author = vid_referencer ∧ B.r = r + 1 ∧
-          ∃ B_L ∈ (belugaTrace system k').blocks,
-            B_L.author = vid_leader ∧ B_L.r = r ∧
-            B_L.d ∈ B.parents)
-  /-- Paper §D.2 Lemma 8 (honest leader certified): post-GST, the
-  round-`r` honest leader's block exists and becomes `certified`
-  within `4Δ`. -/
-  honest_certify_leader :
-    ∀ (r : Round) (vid_leader : ValidatorId) (k : ℕ),
-      isHonestValidator system vid_leader = true →
-      vid_leader = leaderOf system r → time k ≥ system.GST →
-      ∃ k', time k' ≤ time k + 4 * system.Δ ∧
-        (∃ B_L ∈ (belugaTrace system k').blocks,
-          isLeaderBlock system B_L ∧ B_L.r = r ∧
-          certified system (belugaTrace system k') B_L)
-  /-- Paper §D.2 Lemma 9 corollary (three consecutive honest
-  leaders direct-commit): combined with the round-robin pigeonhole
-  (paper §D.1.2, formalized as `lemma10_round_robin_pigeonhole`),
-  there exist three consecutive rounds whose leader blocks are all
-  decided `ToCommit` by the direct decision rule. -/
-  three_consec_commit :
-    ∀ (startRound : Round) (k₀ : ℕ), time k₀ ≥ system.GST →
-      ∃ r₁ ≥ startRound, ∃ k' ≥ k₀,
-        (∀ B_L ∈ (belugaTrace system k').blocks,
-          isLeaderBlock system B_L →
-          (B_L.r = r₁ ∨ B_L.r = r₁ + 1 ∨ B_L.r = r₁ + 2) →
-          directDecide system (belugaTrace system k') B_L = Decision.ToCommit)
-  /-- Paper §D.2 Lemma 11 backward-induction step: with three
-  consecutive committed leaders at rounds `r₁..r₁+2`, every leader
-  at an earlier round `r < r₁` is decided (non-`Undecided`). -/
-  backward_induction :
-    ∀ (r : Round) (r₁ : Round) (k' : ℕ),
-      r₁ > r + 2 →
-      (∀ B_L ∈ (belugaTrace system k').blocks,
-        isLeaderBlock system B_L →
-        (B_L.r = r₁ ∨ B_L.r = r₁ + 1 ∨ B_L.r = r₁ + 2) →
-        directDecide system (belugaTrace system k') B_L = Decision.ToCommit) →
-      (∀ B_L ∈ (belugaTrace system k').blocks,
-        isLeaderBlock system B_L → B_L.r = r →
-        directDecide system (belugaTrace system k') B_L ≠ Decision.Undecided)
-  /-- Paper §4.3 + §D.2 Lemma 12 (block accepted via `f+1`-references):
-  post-GST, an honest validator with `f+1` honest references for
-  digest `d` eventually accepts `d` (the ImPoA pull conclusion). -/
-  block_pull_liveness :
-    ∀ (vid : ValidatorId) (d : BlockDigest) (k₀ : ℕ),
-      isHonestValidator system vid = true → time k₀ ≥ system.GST →
-      (∃ honest_refs : List ValidatorId,
-        honest_refs.length ≥ system.f + 1 ∧
-        ∀ v ∈ honest_refs, isHonestValidator system v = true ∧
-          ∃ B' ∈ (belugaTrace system k₀).blocks,
-            B'.author = v ∧ B'.parents.contains d = true) →
-      ∃ k' ≥ k₀, HasAccepted (belugaTrace system k') vid d
-  /-- Paper §5 Theorem 2 form (causal availability propagation):
-  post-GST, if one honest validator accepts digest `d`, every honest
-  validator eventually accepts `d`. -/
-  honest_eventually_accepts :
-    ∀ (vid_acc vid_h : ValidatorId) (B : Block) (k : ℕ),
-      isHonestValidator system vid_acc = true →
-      isHonestValidator system vid_h = true →
-      time k ≥ system.GST →
-      HasAccepted (belugaTrace system k) vid_acc B.d →
-      ∃ k' ≥ k, HasAccepted (belugaTrace system k') vid_h B.d
+    (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop
+    extends Beluga.Network.BelugaWithPullFairness system time where
+  /-- Paper §4.2 per-action liveness for `block_propose`. -/
+  proposeScheduling : Beluga.Network.ProposeSchedulingWithPull system time
+  /-- Paper §4.2 per-action liveness for `block_store`. -/
+  storeScheduling   : Beluga.Network.StoreSchedulingWithPull system time
 
 
 /-- **Mysticeti-Beluga post-GST liveness bundle.**
@@ -340,10 +273,20 @@ private lemma byz_bound_of_system_constraints
   grind +locals
 
 /-- The §D.2 post-GST liveness invariant, derived from
-`MysticetiBelugaSynchrony` (paper §D.2 liveness primitives) plus
-the standard BFT side conditions. Each liveness conjunct is a
-one-line projection from the bundle; the system-level Byzantine
-bound is derived sorry-free from `hN` + `hHonest`. -/
+`MysticetiBelugaSynchrony` (a paper-faithful liveness bundle:
+`BelugaWithPullFairness` + per-action propose/store scheduling)
+plus the standard BFT side conditions.
+
+The system-level conjuncts (`hN`, `hHonest`, `h_ids`, `byz_bound`)
+are derived sorry-free. The remaining 8 liveness conjuncts have
+intermediate `sorry` placeholders: they hold against
+`networkBelugaTraceWithPull` and are derivable from `h_sync` (see
+[`docs/round-02/RESUME-mysticeti-d2.md`](../../../docs/round-02/RESUME-mysticeti-d2.md)
+for the full per-conjunct derivation plan), but the bundle's
+conjuncts are currently stated against `belugaTrace`. Bridging
+the synchronous trace to the network-aware trace, or refactoring
+the bundle to use `networkBelugaTraceWithPull`, is the next phase
+of this work. -/
 theorem mysticetiPostGSTLiveness_holds
     (system : BlockSynchroniserSystem)
     (time : TimeMap)
@@ -357,14 +300,14 @@ theorem mysticetiPostGSTLiveness_holds
   hHonest := hHonest
   h_ids := h_ids
   byz_bound := byz_bound_of_system_constraints system hN hHonest
-  honest_round_entry := h_sync.honest_round_entry
-  leader_propose := h_sync.leader_propose
-  honest_ref_leader := h_sync.honest_ref_leader
-  honest_certify_leader := h_sync.honest_certify_leader
-  three_consec_commit := h_sync.three_consec_commit
-  backward_induction := h_sync.backward_induction
-  block_pull_liveness := h_sync.block_pull_liveness
-  honest_eventually_accepts := h_sync.honest_eventually_accepts
+  honest_round_entry := by sorry
+  leader_propose := by sorry
+  honest_ref_leader := by sorry
+  honest_certify_leader := by sorry
+  three_consec_commit := by sorry
+  backward_induction := by sorry
+  block_pull_liveness := by sorry
+  honest_eventually_accepts := by sorry
 
 -- F-7(b) closed: the "TransactionOrder ↔ HasAccepted" link is now a
 -- *theorem* (`Beluga.accepted_implies_in_belugaTransactionOrder` in

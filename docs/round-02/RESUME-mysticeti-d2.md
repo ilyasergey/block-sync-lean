@@ -120,15 +120,49 @@ Stage-4 should note these and include them as Items 5b, 5c of
 the §5 partial-synchrony assumption, marked as additionally
 needed by §D.2.
 
-## What's done so far (commit da0ba15 on this branch)
+## What's done so far (this branch)
 
 - `ProposeSchedulingWithPull` and `StoreSchedulingWithPull`
   defined in [`Network.lean`](../../BlockSynchroniser/Beluga/Network.lean).
-- Build clean.
+- `MysticetiBelugaSynchrony` defined in
+  [`Mysticeti/Liveness.lean`](../../BlockSynchroniser/Mysticeti/Liveness.lean):
+  `extends BelugaWithPullFairness` plus the two paper-implicit
+  fields above. **No §D.2 conclusion is taken as a primitive.**
+- `belugaTrace_satisfies_mysticeti_post_gst_liveness` renamed to
+  `mysticetiPostGSTLiveness_holds`; takes
+  `MysticetiBelugaSynchrony` instead of `time.WellFormed` +
+  `PartiallySynchronous`. System-level conjuncts (`hN`/`hHonest`/
+  `h_ids`/`byz_bound`) discharged. The 8 liveness conjuncts are
+  still `:= by sorry` — these are the work items for the next
+  session.
+- All downstream wrappers (`honest_round_entry_within_3delta`,
+  `leader_block_disseminated_within_delta`,
+  `honest_references_leader_within_4delta`,
+  `honest_validators_certify_leader`,
+  `three_consecutive_honest_direct_commit`,
+  `backward_induction_decides_earlier_rounds`,
+  `eventual_decision_core`) updated to take
+  `MysticetiBelugaSynchrony`.
+- §D.2 lemmas updated similarly: `lemma8_leader_referenced`,
+  `lemma9_honest_certificate`, `lemma11_eventual_decision`,
+  `at_least_f_plus_one_honest_referencers`,
+  `honest_blocks_eventually_received`,
+  `lemma12_referenced_accepted`,
+  `honest_validator_eventually_accepts`,
+  `theorem6_consensus_liveness`.
+- `belugaTransactionOrderState` added as a state-parameterised
+  variant of `belugaTransactionOrder` (in
+  [`Beluga/Order.lean`](../../BlockSynchroniser/Beluga/Order.lean)).
+- Build clean (8 sorry warnings, all in
+  `mysticetiPostGSTLiveness_holds`).
 
 ## Next session entry point
 
-Open [Mysticeti/Liveness.lean](../../BlockSynchroniser/Mysticeti/Liveness.lean)
-and start at step (1) of the refactor plan above. The
-`MysticetiBelugaSynchrony` definition can go directly above
-the `MysticetiPostGSTLiveness` definition.
+Open
+[Mysticeti/Liveness.lean](../../BlockSynchroniser/Mysticeti/Liveness.lean)
+at line ~290 (`mysticetiPostGSTLiveness_holds`). The 8 sorries
+are listed there. Start at step (2) of the refactor plan above:
+refactor `MysticetiPostGSTLiveness`'s 8 conjuncts to use
+`networkBelugaTraceWithPull` (and add the missing preconditions
+flagged in step 2). Then step (3) — discharge each conjunct
+via the per-conjunct sketch above.

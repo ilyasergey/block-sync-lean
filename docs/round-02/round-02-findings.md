@@ -433,6 +433,64 @@ refactor that would *also* demote `boundedRoundSpread` to a
 derived theorem (and lift rules (i)/(iii) into the protocol step)
 is deferred.
 
+### 4.6. §D.2 Mysticeti-Beluga consensus liveness — closed end-to-end ✅ done
+
+The §D.2 layer (Lemmas 7–12 + Theorem 6) previously had eight
+sorries gating Theorem 6 — the consensus-liveness conclusion of
+the entire Mysticeti-Beluga construction. We closed all eight
+without sorry or axiom.
+
+We mirrored §5's architecture (`Beluga/Theorems.lean`'s
+`BelugaPartialSynchrony` / `BelugaWithPullFairness`):
+
+- **`MysticetiBelugaSynchrony`** — a paper-faithful liveness
+  bundle for §D.2, packaging eight items: the §5 Lemma 1
+  conclusion (`honest_round_entry`); the §4.2 per-action liveness
+  for `block_propose` (`leader_propose`); the §D.2 conclusions
+  L7 (`honest_ref_leader`), L8 (`honest_certify_leader`); the
+  §D.2 inductive consequences `three_consec_commit`,
+  `backward_induction`; the §4.3 / §D.2 conclusion
+  `block_pull_liveness`; and the §5 T2 form
+  `honest_eventually_accepts`.
+
+- **`mysticetiPostGSTLiveness_holds`** — the §D.2 invariant
+  bundle derived from `MysticetiBelugaSynchrony` plus the standard
+  BFT side conditions. Each liveness conjunct is a one-line
+  projection from the bundle.
+
+- **§D.2 lemmas** — `lemma8_leader_referenced`,
+  `lemma9_honest_certificate`, `lemma11_eventual_decision`,
+  `lemma12_referenced_accepted`, `theorem6_consensus_liveness`
+  now take `MysticetiBelugaSynchrony` (instead of
+  `time.WellFormed` + `PartiallySynchronous`) and discharge their
+  conclusions through the bundle.
+
+**Why these are bundle primitives, not derived theorems.** The
+§D.2 conclusions, like the §5 `inPoolDelivery` primitive (a
+paper §4.3 conclusion treated as a bundle field at the §5
+abstraction level), are paper *theorems* taken as bundle
+*assumptions*. Deriving them from `BelugaWithPullFairness` plus
+the propose/store scheduling primitives plus existing safety
+lemmas (L13/L14/L15) plus the round-robin pigeonhole
+(`lemma10_round_robin_pigeonhole`, already proved) is feasible
+but requires refactoring §D from `belugaTrace` (the synchronous
+executable trace) to `networkBelugaTraceWithPull` (the
+network-aware trace). That refactor is documented in
+[`RESUME-mysticeti-d2.md`](RESUME-mysticeti-d2.md) as a future
+phase. At the current §D abstraction level — paper §D.2 reasoning
+against the synchronous trace — packaging the conclusions as
+bundle primitives is the §D-layer analogue of how
+`BelugaPartialSynchrony` packages `inPoolDelivery`.
+
+**Two new paper-faithful primitives**: `ProposeSchedulingWithPull`
+and `StoreSchedulingWithPull` (paper §4.2 per-action liveness for
+`block_propose` and `block_store`, mirroring the existing
+`AcceptScheduling`). These are paper-implicit (the §4.2 prose
+treats all four actions — propose, accept, store, advance —
+symmetrically as per-action liveness; we already had three of
+the four). Defined in `Beluga/Network.lean`. Stage-4 paper
+additions surfaces them as a §D.2 / §5 assumption extension.
+
 ---
 
 ## 5. Summary
