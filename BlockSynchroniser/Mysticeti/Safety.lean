@@ -234,9 +234,7 @@ theorem lemma13_cert_persistence
     (system : BlockSynchroniserSystem) {S} [SystemState S] (state : S)
     (_h_no_eq : NoEquivocationInParents system state)
     (h_admission : AdmissionWellFormed system state)
-    -- Standard BFT side conditions (see "Notes on paper consistency"
-    -- in `formalization.md` and findings F-2, F-3 in
-    -- `docs/round-01/mechanization-findings.md`).
+    -- Standard BFT side conditions.
     (hN : system.n = 3 * system.f + 1)
     (h_authors_valid : ∀ B' ∈ SystemState.blocks state,
       ∃ pair ∈ system.validators, pair.1 = B'.author)
@@ -427,10 +425,9 @@ two non-`Undecided` honest views agree (the safety claim), not the
 fuller "decide on the same set of leader blocks" claim used in the
 paper's induction. The two are bridged by **decision completeness**
 (see `h_decision_complete` on `theorem7_consensus_safety` below) —
-a liveness consequence the paper invokes silently. This is finding
-**F-7(a)** in `docs/round-01/mechanization-findings.md`.
+a liveness consequence the paper invokes silently.
 
-**Added protocol-invariant hypothesis (round 3c bridge closure):**
+**Protocol-invariant hypothesis:**
 - `h_view_traceback` — every non-`Undecided` honest view on a digest
   `d` traces back to a leader block `B` with `B.d = d` in the state
   whose `directDecide` is non-`Undecided`. This captures the protocol
@@ -485,22 +482,21 @@ Paper proof (verbatim):
 > in the ordered blocks, all honest validators order them
 > consistently.*
 
-**Mechanization notes** (findings F-7(a), F-7(b) in
-`docs/round-01/mechanization-findings.md`):
+**Mechanization notes:**
 
-- *F-7(a)* — the paper's "decide identical leader blocks" overstates
-  Lemma 16, which only gives *consistency* (no two honest validators
-  decide non-`Undecided` differently) — not full *equality* of
-  decided sets, which is a liveness property. We surface
+- The paper's "decide identical leader blocks" overstates Lemma 16,
+  which only gives *consistency* (no two honest validators decide
+  non-`Undecided` differently) — not full *equality* of decided
+  sets, which is a liveness property. We surface
   `h_decision_complete` as an explicit hypothesis to bridge the gap.
 
-- *F-7(b)* — "transaction ordering respects view equality" is silently
-  relied on. We surface this as `h_order_from_view`. For the
-  `belugaTrace` instantiation a concrete realization is provided in
+- "Transaction ordering respects view equality" is silently relied
+  on. We surface this as `h_order_from_view`. For the `belugaTrace`
+  instantiation a concrete realization is provided in
   `Beluga/Order.lean` (`belugaTransactionOrder` +
   `accepted_implies_in_belugaTransactionOrder`).
 
-**Added protocol-invariant hypothesis (round 3c bridge closure):**
+**Protocol-invariant hypothesis:**
 - `h_decision_complete` — decision completeness: if one honest
   validator's view on a digest is `Undecided`, then all honest
   validators' views on that digest are `Undecided` (and vice versa).

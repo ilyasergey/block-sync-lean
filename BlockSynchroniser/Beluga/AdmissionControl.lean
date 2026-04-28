@@ -71,7 +71,7 @@ when it has accepted `≥ 2f+1` round-`r` blocks whose authors' reputations
 exceed the threshold `R_t = R_{2f+1} - R_L`.
 
 The dual rule (ii) — per-round timeout `T_rd` expires — is a wall-clock
-condition handled in the protocol semantics layer (Phase 4d/e).
+condition handled in the network-level protocol layer.
 -/
 def canAdvanceByQuorum {S} [SystemState S]
     (system : BlockSynchroniserSystem)

@@ -5,19 +5,18 @@ Licensed under the Apache License, Version 2.0.
 
 Canonical transaction order for the Beluga trace.
 
-Closes finding F-7(b) (the order-from-view modeling artifact in
-`docs/round-01/mechanization-findings.md`) by defining the transaction order as a
-concrete *function* of trace state rather than an abstract parameter. The
-order-faithfulness theorem `accepted_implies_in_belugaTransactionOrder` is then
-a *theorem* about this function, not an axiom.
+The transaction order is defined as a concrete *function* of trace state
+rather than an abstract parameter, so the order-faithfulness theorem
+`accepted_implies_in_belugaTransactionOrder` is a *theorem* about this
+function, not an axiom.
 
 The order is the canonical traversal: walk the validator's `block_accept`
 operations in the order they were emitted, look up the corresponding block in
 the state, and concatenate payloads.
 
 Depends only on the structural trace invariants `BlockInv` and
-`digest_injective` from `Beluga/Protocol.lean` (already proved in project
-`3f6cf619`). No fairness or liveness needed.
+`digest_injective` from `Beluga/Protocol.lean`. No fairness or liveness
+needed.
 -/
 import Mathlib.Tactic
 import BlockSynchroniser.Block
@@ -79,7 +78,7 @@ lemma block_unique_by_digest_in_trace
   rw [h_r, h_a] at hp
   exact h_inv.uniquePropose _ _ _ _ hp hp'
 
-/-- **Order faithfulness theorem (closes F-7(b)).**
+/-- **Order faithfulness theorem.**
 
 If an honest validator has accepted a block `B` that is in the trace
 state at step `k`, then every transaction in `B.payload` appears in

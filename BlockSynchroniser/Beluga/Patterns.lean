@@ -29,8 +29,7 @@ def strongReferencerAuthors {S} [SystemState S] (state : S) (B : Block) : List V
 validators' blocks. Per the paper, "referenced" includes both strong links
 (parents) and weak links (weaklinks). For now we conservatively count strong
 links only — every weak-link-included reference is at least as inclusive, so
-this lower-bounds the paper's notion. The fully-faithful version that includes
-weaklinks will land alongside Beluga-specific state in Phase 4.
+this lower-bounds the paper's notion.
 
 A block forming an availability pattern is called *available*: at least one
 honest validator can attest to its causal availability.
@@ -63,8 +62,8 @@ version.
 Captures the safety property that, in any state induced by a correct
 execution, no two honest validators (whether the same one or two distinct
 ones) ever reference conflicting blocks for the same `(author, round)`
-pair. In Beluga this is enforced by the AC module (Phase 4); we state
-it abstractly here as a hypothesis on the state.
+pair. In Beluga this is enforced by the admission-control module; we
+state it abstractly here as a hypothesis on the state.
 
 The within-block specialization (`B₁ = B₂`) is the simpler form
 "honest validators don't include two parents from the same proposer
@@ -138,8 +137,7 @@ lemma strongReferencerAuthors_are_validators {S} [SystemState S]
 Stated as an informal consequence in §4.4 (no lemma number); we formalize it
 here. Specializing `B₁.author = B₂.author = leader(r)` gives Appendix D
 **Lemma 15** ("at most one leader block can be certified for any round r"),
-which is the load-bearing form for the Mysticeti-Beluga safety theorem
-(Phase 6).
+which is the load-bearing form for the Mysticeti-Beluga safety theorem.
 
 The following additional hypotheses beyond the original statement were
 required for the formalization (they are standard BFT assumptions implicit

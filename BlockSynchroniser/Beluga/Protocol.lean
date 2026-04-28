@@ -10,7 +10,7 @@ a transition system. Two complementary characterizations:
 
 * **`HonestStep`** — a *relational* predicate over `(s, s')` pairs.
   Captures what it means for a transition to be consistent with honest
-  validator behavior. Used by Phase 5 theorems.
+  validator behavior. Used by the §5 theorems.
 
 * **`step`** — an *executable* function that produces one valid honest
   schedule (round-robin). Used to run the protocol (`#eval`,
@@ -124,8 +124,9 @@ Conditions:
   reputation threshold).
 * `s'` differs only in `vid`'s `currentRound`, now `r + 1`.
 
-Note: rule (ii) — `T_rd` timeout expires — is a wall-clock condition.
-We omit it here; the timing model is deferred (see formalization.md).
+Note: rule (ii) — `T_rd` timeout expires — is a wall-clock condition
+folded into the timing model in `Beluga/Network.lean`; the synchronous
+relation here covers only rule (i).
 -/
 def HonestAdvance
     (system : BlockSynchroniserSystem) (s s' : BelugaState)
@@ -179,8 +180,8 @@ A transition `s → s'` is consistent with honest behavior iff it falls
 into one of the honest-action cases (propose / accept / store / advance)
 *or* it is a Byzantine step.
 
-In Phase 5 theorems, we additionally constrain `s'` to require the
-honest-step witness when reasoning about honest validators' guarantees.
+The §5 theorems additionally constrain `s'` to require the honest-step
+witness when reasoning about honest validators' guarantees.
 -/
 def HonestStep
     (system : BlockSynchroniserSystem) (s s' : BelugaState) : Prop :=
@@ -299,10 +300,10 @@ event-driven loop. The mapping:
 | `create_new_block(r, B^{r-1})` lines 1–13 | `doPropose system s vid r` |
 | `block_accept_i` for acceptable parents (line 13, expanded as ImPoA-driven accept rule §4.3) | `doAccept s vid B` (when parents accepted) |
 | `block_store_i` after accept + availability check (§4.3 Hybrid Pull) | `doStore s vid B` |
-| Round advance (§4.2 "advances to round r if either: (i) receives 2f+1 blocks from round r-1 whose creators have reputations above a threshold ... or (ii) the per-round timeout T_rd expires") | `doAdvance s vid` (under the simplified gate `allProposedFor`, see F-1a) |
+| Round advance (§4.2 "advances to round r if either: (i) receives 2f+1 blocks from round r-1 whose creators have reputations above a threshold ... or (ii) the per-round timeout T_rd expires") | `doAdvance s vid` (under the simplified gate `allProposedFor`) |
 | `AC_parent_selection` line 14–17 (rep-ordered top 2f+1) | `acParentSelection` in [`AdmissionControl.lean`](AdmissionControl.lean) |
 | `update_score_with_watermarks` line 23–30 (reputation update) | `updateScoreWithWatermarks` in [`Reputation.lean`](Reputation.lean) |
-| Pull invocation lines 31–32 (blame on missing block) | `reputationPenalty` (modeling decision: deferred behavioural pull; see F-3) |
+| Pull invocation lines 31–32 (blame on missing block) | `reputationPenalty` (modeling decision: deferred behavioural pull) |
 
 **Action-priority structure.** Our `tryActFor` packages the four
 state-transitions into a deterministic priority order (propose →
@@ -325,7 +326,7 @@ deterministic collapse of the event loop suitable for a closed-form
 trace model. This is faithful to the paper's claim that Beluga's
 guarantees do not depend on the event ordering, only on the
 existence of *some* compatible schedule (formalized as
-`SchedulerFairness`, F-1a).
+`SchedulerFairness`).
 
 **What's *not* in `tryActFor` (and where it lives).** Block
 construction details from Figure 8 — `weaklinks`, `watermark`,
@@ -381,8 +382,8 @@ def step (system : BlockSynchroniserSystem) (s : BelugaState) : BelugaState :=
 The Beluga-induced trace at step `n` (paper §4 protocol unrolled).
 
 `belugaTrace system 0 = BelugaState.init system`; subsequent states are
-produced by iterating `step`. Phase 5's main theorems are stated
-against `belugaTrace`.
+produced by iterating `step`. The §5 main theorems are stated against
+`belugaTrace`.
 -/
 def belugaTrace (system : BlockSynchroniserSystem) : Trace BelugaState :=
   fun n => Nat.rec (BelugaState.init system) (fun _ s => step system s) n
@@ -918,11 +919,7 @@ theorem causallyClosed_trace (system : BlockSynchroniserSystem)
     CausallyClosed (belugaTrace system k) vid :=
   causallyClosed_of_acceptInv _ vid (acceptInv_trace system vid hids k)
 
-/-! ### Helper lemmas for `step_refines_HonestStep`
-
-The three private lemmas below + the proof of `step_refines_HonestStep`
-itself were filled by **Aristotle round 3f (project `116385ce`)**. See
-[`docs/aristotle-attributions.md`](../../docs/aristotle-attributions.md). -/
+/-! ### Helper lemmas for `step_refines_HonestStep` -/
 
 -- (hasAcceptedDigest_false_imp and hasAcceptedDigest_true_imp moved above)
 

@@ -10,15 +10,11 @@ formalization*: each one demonstrates that our Lean version of a property is
 satisfiable (or, dually, falsifiable) by a specific concrete trace.
 
 * The paper's Theorems 1–4 (§5) say "**Beluga the protocol** satisfies each of
-  the four properties." Those will live in `BlockSynchroniser/Beluga/Theorems.lean`
-  in Phase 5, and they are stated against `BelugaTrace`, not the hand-built
-  `goldenTrace` here.
+  the four properties." Those live in `BlockSynchroniser/Beluga/Theorems.lean`
+  and are stated against `BelugaTrace`, not the hand-built `goldenTrace` here.
 * Everything in *this* file is about catching definition bugs *before* we try
   to prove the paper theorems. If `goldenTrace` cannot be shown to satisfy
   `RoundProgression`, the formal version of `RoundProgression` is suspect.
-
-See `formalization.md` (top-level) for the project-wide picture and the
-distinction spelled out.
 
 ## Three lines of defense (in order of effort)
 
