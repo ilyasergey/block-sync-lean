@@ -108,17 +108,20 @@ explicit, or models a paper datatype slightly differently. None
 implies a paper concern.
 
 - **`signature` field on `Block` omitted** (paper §2.1). The paper's
-  block carries six fields `(r, d, author, parents, payload, signature)`;
-  ours carries the first five. Signature semantics are not invoked
-  by any theorem we target.
+  [`Block`](BlockSynchroniser/Block.lean#L22) carries six fields
+  `(r, d, author, parents, payload, signature)`; ours carries the
+  first five. Signature semantics are not invoked by any theorem
+  we target.
 
 - **`BelugaState.WellFormed system s`**: every entry in
   `s.validators` is registered in `system.validators`. The paper
   conflates state's validators with the system's by construction;
-  our `BelugaState` is a separate data type that doesn't enforce
-  this, so we surface it as an explicit hypothesis.
+  our [`BelugaState`](BlockSynchroniser/Beluga/State.lean#L97) is
+  a separate data type that doesn't enforce this, so we surface it
+  as an explicit hypothesis.
 
-- **§5 hypothesis bundles.** Lemma 1 consumes
+- **§5 hypothesis bundles.**
+  [Lemma 1](BlockSynchroniser/Beluga/Theorems.lean#L1506) consumes
   [`BelugaPartialSynchrony`](BlockSynchroniser/Beluga/Theorems.lean#L68);
   T1–T4 consume
   [`BelugaWithPullFairness`](BlockSynchroniser/Beluga/Theorems.lean#L98)
@@ -128,7 +131,8 @@ implies a paper concern.
 - **Lemma 5 split (Appendix C).** The paper's Lemma 5 mixes the
   probabilistic "expected latency" claim with the deterministic
   "or at least one malicious validator is blamed" disjunction. We
-  formalize only the deterministic disjunct.
+  formalize only the deterministic disjunct as
+  [`lemma5_round_latency_or_blamed`](BlockSynchroniser/Beluga/PerformanceLemmas.lean#L145).
 
 - **§D.2 hypothesis bundle.** The §D.2 liveness theorems are derived
   from
@@ -144,8 +148,9 @@ implies a paper concern.
   quantifies "every undecided leader is eventually decided" via the
   §D.1.1 indirect rule. We formalize the existential corollary that
   feeds Theorem 6 directly — at every starting round there exists a
-  future leader that direct-commits — and do not mechanize the
-  recursive indirect-rule descent.
+  future leader that direct-commits
+  ([`lemma11_eventual_commit`](BlockSynchroniser/Mysticeti/Liveness.lean#L909))
+  — and do not mechanize the recursive indirect-rule descent.
 
 - **Transaction order as a concrete function.** Paper §D.2 / §D.3
   treat the per-validator ordered transaction sequence abstractly.
@@ -155,14 +160,17 @@ implies a paper concern.
   operations and prove order-faithfulness as a theorem rather than
   taking it as an abstract parameter.
 
-- **L16 / T7 explicit hypotheses.** Paper Lemma 16's "consistent
-  decisions" claim and Theorem 7's prefix-consistency of ordered
-  sequences silently invoke decision completeness, view-traceback to
-  a directly-decided leader, and order-respects-view-equality. We
-  surface these as explicit hypotheses (`h_decision_complete`,
-  `h_view_traceback`, `h_order_from_view`); for `belugaTrace` the
-  order-from-view hypothesis is discharged by the concrete
-  transaction-order construction above.
+- **L16 / T7 explicit hypotheses.** Paper
+  [Lemma 16](BlockSynchroniser/Mysticeti/Safety.lean#L437)'s
+  "consistent decisions" claim and
+  [Theorem 7](BlockSynchroniser/Mysticeti/Safety.lean#L507)'s
+  prefix-consistency of ordered sequences silently invoke decision
+  completeness, view-traceback to a directly-decided leader, and
+  order-respects-view-equality. We surface these as explicit
+  hypotheses (`h_decision_complete`, `h_view_traceback`,
+  `h_order_from_view`); for `belugaTrace` the order-from-view
+  hypothesis is discharged by the concrete transaction-order
+  construction above.
 
 ## Repository layout
 
