@@ -147,35 +147,42 @@ half of §4.2; 6 is the design intent of §4.3, currently only
 sketched. Naming them brings the §5 hypothesis chain in line with
 what the proofs actually need.
 
-A note on Item 3 specifically. Rule (ii) is mentioned in §4.2 but
-never cited in §5. It pulls weight nonetheless: the inductive
-argument inside the proof of Theorem 3 — *"By induction on the
-round, for any future round `r' > r`, at least `2f + 1` validators
-will create and disseminate their round-`r'` blocks"* — silently
-assumes the protocol makes forward progress at every round. In the
-happy case, once `2f + 1` honest validators reach round `r`,
-their round-`r` blocks form the next-round quorum and rule (i)
-fires. But under the adversary, an honest validator can be stuck
-with only `2f` round-`r-1` blocks accepted (the Byzantine
-validators delaying just one block); rule (i) does not fire, rule
-(iii) does not fire either, and the only mechanism that forces
-the validator out of round `r-1` is rule (ii)'s `T_rd` timeout.
-T3's induction therefore relies on rule (ii) as the protocol's
-sole *unconditional* progress mechanism. Citing it as Item 3 of
-the §5 assumption makes this dependence explicit.
+Two of these items deserve a longer note, because they pull weight
+in the §5 proofs in ways the current manuscript does not surface.
 
-A note on Item 6 and ImPoA. The proof of Lemma 1 currently invokes
-ImPoA inline — *"honest validators can accept all these honest
-latest blocks via either block fetching or imPoAs by time `t + 3Δ`"*
-— presenting ImPoA as one of two acceptance paths. But ImPoA's
-role in §4.3 is deeper than that: the pull mechanism's *soundness*
-(the guarantee that a pull for a missing block `B` reaches a
-responder that actually has `B`) rests on the same `f + 1`-
-references quorum-intersection argument. Without ImPoA, a pull
-could fail outright for a Byzantine-authored block whose proposer
-delivered it to fewer than `f + 1` honest validators. ImPoA is
-therefore the structural fact that makes the entire `push ∪ pull`
-mechanism sufficient to establish Item 6.
+### 2.1. Item 3 (rule ii) is what makes Theorem 3's induction sound
+
+Rule (ii) is mentioned in §4.2 but never cited in §5. It pulls
+weight nonetheless: the inductive argument inside the proof of
+Theorem 3 — *"By induction on the round, for any future round
+`r' > r`, at least `2f + 1` validators will create and disseminate
+their round-`r'` blocks"* — silently assumes the protocol makes
+forward progress at every round. In the happy case, once `2f + 1`
+honest validators reach round `r`, their round-`r` blocks form
+the next-round quorum and rule (i) fires. But under the adversary,
+an honest validator can be stuck with only `2f` round-`r-1` blocks
+accepted (the Byzantine validators delaying just one block); rule
+(i) does not fire, rule (iii) does not fire either, and the only
+mechanism that forces the validator out of round `r-1` is rule
+(ii)'s `T_rd` timeout. T3's induction therefore relies on rule
+(ii) as the protocol's sole *unconditional* progress mechanism.
+Citing it as Item 3 of the §5 assumption makes this dependence
+explicit.
+
+### 2.2. Item 6 and ImPoA's two roles in §4.3
+
+The proof of Lemma 1 currently invokes ImPoA inline — *"honest
+validators can accept all these honest latest blocks via either
+block fetching or imPoAs by time `t + 3Δ`"* — presenting ImPoA as
+one of two acceptance paths. But ImPoA's role in §4.3 is deeper
+than that: the pull mechanism's *soundness* (the guarantee that a
+pull for a missing block `B` reaches a responder that actually
+has `B`) rests on the same `f + 1`-references quorum-intersection
+argument. Without ImPoA, a pull could fail outright for a
+Byzantine-authored block whose proposer delivered it to fewer
+than `f + 1` honest validators. ImPoA is therefore the structural
+fact that makes the entire `push ∪ pull` mechanism sufficient to
+establish Item 6.
 
 We recommend §4.3 state this dependence in one sentence — *"The
 pull mechanism's success post-GST relies on ImPoA: when an honest
@@ -188,6 +195,8 @@ ImPoA-as-acceptance-path observation moves to §4.3 where it
 belongs alongside the soundness-of-pull observation; §5's L1 proof
 becomes a clean composition of Δ-delivery + 3Δ-acceptance + rule
 (i)/(iii) advancement.
+
+### 2.3. Outcome
 
 Lemma 1 and Theorems 1–4 can then be stated as *"under the Beluga
 partial-synchrony assumption, …"* and the §5 prose can cite Items
