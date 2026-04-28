@@ -9,8 +9,8 @@ prose is in paper terms; nothing references repository internals.
 
 (4) We provide a complete machine-checked formalisation of Beluga
 in Lean 4 [`\cite{Moura021}`], covering all non-probabilistic
-results of the paper, discharged from paper-stated assumptions with
-no axioms beyond Lean's standard library.
+results of the paper. The proofs rely only on the paper's
+assumptions and Lean's standard library.
 
 ## 2. End-of-§5 line
 
