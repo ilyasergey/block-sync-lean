@@ -7,32 +7,32 @@ prose is in paper terms; nothing references repository internals.
 
 ## 1. Contribution line (after current item (3))
 
-> *(4) We provide a complete machine-checked formalisation of Beluga
-> in Lean 4 [`\cite{DBLP:conf/cade/Moura021}`], covering all
-> non-probabilistic results of the paper — the four block-synchronizer
-> properties (Definition 1), the §5 main theorems (T1–T4), the
-> deterministic Appendix C lemmas (L3, L4, L5), and the
-> Mysticeti-Beluga liveness and safety theorems (T6, T7) along with
-> their supporting lemmas — discharged from paper-stated assumptions
-> with no axioms beyond Lean's standard library. The accompanying
-> material includes the proof artefacts and a paper-to-code map.*
+(4) We provide a complete machine-checked formalisation of Beluga
+in Lean 4 [`\cite{DBLP:conf/cade/Moura021}`], covering all
+non-probabilistic results of the paper — the four block-synchronizer
+properties (Definition 1), the §5 main theorems (T1–T4), the
+deterministic Appendix C lemmas (L3, L4, L5), and the
+Mysticeti-Beluga liveness and safety theorems (T6, T7) along with
+their supporting lemmas — discharged from paper-stated assumptions
+with no axioms beyond Lean's standard library. The accompanying
+material includes the proof artefacts and a paper-to-code map.
 
 ## 2. End-of-§5 line
 
 Insert as the last paragraph of §5 (immediately after the proof of
 Theorem 4):
 
-> *All results in this section have been formalised and machine-checked
-> in Lean 4 [`\cite{DBLP:conf/cade/Moura021}`]; the proof artefacts are
-> available with the accompanying material.*
+All results in this section have been formalised and machine-checked
+in Lean 4 [`\cite{DBLP:conf/cade/Moura021}`]; the proof artefacts are
+available with the accompanying material.
 
 ## 3. Acknowledgement line
 
 Insert into the Acknowledgements section (replacing or augmenting the
 existing acknowledgement):
 
-> *The Lean 4 formalisation accompanying this paper was developed with
-> the assistance of automated proof-assistance systems.*
+The Lean 4 formalisation accompanying this paper was developed with
+the assistance of automated proof-assistance systems.
 
 ## 4. Standalone appendix — Lean formalisation
 
