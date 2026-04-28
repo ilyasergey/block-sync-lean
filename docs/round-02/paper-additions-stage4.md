@@ -10,13 +10,14 @@ Insert at the start of §D.2 (before Lemma 7) a short paragraph
 naming the assumptions and inherent facts §D.2's derivations
 consume:
 
-> *The §D.2 derivations consume the §5 partial-synchrony
-> assumption, the §4.2 per-action liveness for `block_propose`
-> and `block_store` (the symmetric counterparts of the §5
-> accept-action `Δ`-bound), the §D.1.1 cert-pattern equivalence
-> (footnote 6), the §D.1.2 leader-inclusion rule, the §D.3
-> non-equivocation and digest-determinism facts (items (i) and
-> (iv)), and the following inherent fact about Beluga's pool:*
+> *The §D.2 derivations consume the §2 post-GST `Δ`-delivery
+> bound, the §4.2 protocol rules (per-action liveness for
+> `block_propose`, `block_accept`, `block_store`, and the round
+> advancement rules including the timeout `T_rd`), the §4.3 pull
+> protocol, the §D.1.1 cert-pattern equivalence (footnote 6),
+> the §D.1.2 leader-inclusion rule, the §D.3 non-equivocation
+> and digest-determinism facts (items (i) and (iv)), and the
+> following inherent fact about Beluga's pool:*
 >
 > *The global block pool is parent-closed: if a block `B` is in
 > the accepted set of some honest validator, then for every
