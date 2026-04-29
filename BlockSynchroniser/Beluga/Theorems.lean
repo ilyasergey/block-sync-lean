@@ -21,8 +21,7 @@ and the §5 theorems
 
 The §5 headline `beluga_isBlockSynchronizer` consumes the bundle once
 and concludes that Beluga's network-aware trace satisfies all four
-block-synchronizer properties — fully derived from the paper-stated
-liveness primitives, with no `Eventual*` axioms.
+block-synchronizer properties.
 
 The relational synchronous-style invariants of Beluga's executable
 `step` function (round monotonicity, advance inversion, etc.) are
@@ -128,8 +127,8 @@ If `vid` is honest in `system`, then `vid` appears in `system.validators`
 with `isHonest = true`.
 -/
 lemma honest_validator_in_system (system : BlockSynchroniserSystem) (vid : ValidatorId)
-    (h : isHonestValidator system vid = true) :
-    ∃ p ∈ system.validators, p.1 = vid ∧ p.2 = true := by
+    (h : isHonestValidator system vid) :
+    ∃ p ∈ system.validators, p.1 = vid ∧ p.2 := by
   unfold isHonestValidator at h
   unfold BlockSynchroniserSystem.isHonest at h
   grind
@@ -145,7 +144,7 @@ lemma find_beq_eq_find {α : Type} (l : List (Nat × α)) (vid : Nat) :
 If `vid` is honest, then `getValidator` on the initial state returns `some`.
 -/
 lemma getValidator_init_some (system : BlockSynchroniserSystem) (vid : ValidatorId)
-    (h : isHonestValidator system vid = true) :
+    (h : isHonestValidator system vid) :
     ∃ bv, (BelugaState.init system).getValidator vid = some bv := by
   have h_map : (List.map (fun (vid, _) =>
       (vid, { reputation := ReputationTable.init system : BelugaValidator }))
@@ -373,7 +372,7 @@ lemma step_round_at_most_one (system : BlockSynchroniserSystem) (s : BelugaState
 Honest validators are present at every trace step.
 -/
 lemma honest_validator_persistent_trace (system : BlockSynchroniserSystem)
-    (vid : ValidatorId) (hvid : isHonestValidator system vid = true) (k : Nat) :
+    (vid : ValidatorId) (hvid : isHonestValidator system vid) (k : Nat) :
     ∃ bv, (belugaTrace system k).getValidator vid = some bv := by
   exact Nat.recOn k ( getValidator_init_some system vid hvid ) fun n ihn => getValidator_persistent _ _ _ ihn
 
@@ -509,8 +508,8 @@ step, it remains true at all later steps. -/
 private lemma hasProposedFor_monotone
     (system : BlockSynchroniserSystem) (vid : ValidatorId) (r : Round)
     (i j : Nat) (hij : i ≤ j)
-    (h : hasProposedFor (belugaTrace system i) vid r = true) :
-    hasProposedFor (belugaTrace system j) vid r = true := by
+    (h : hasProposedFor (belugaTrace system i) vid r) :
+    hasProposedFor (belugaTrace system j) vid r := by
   induction' hij with j _ ih
   · exact h
   · -- step j → step (j+1) preserves the propose op via emittedOperations monotonicity.
@@ -561,7 +560,7 @@ private lemma step_validators_ids_preserved
         with _ | B_sto
       · rw [h_findSto] at h_act
         simp only at h_act
-        by_cases h_prop : (!hasProposedFor s a.1 a.2.currentRound) = true
+        by_cases h_prop : (!hasProposedFor s a.1 a.2.currentRound)
         · rw [if_pos h_prop] at h_act
           have : s_post = doPropose system s a.1 a.2.currentRound :=
             (Option.some.inj h_act).symm
@@ -569,7 +568,7 @@ private lemma step_validators_ids_preserved
           unfold doPropose
           rfl
         · rw [if_neg h_prop] at h_act
-          by_cases h_all : allProposedFor system s a.2.currentRound = true
+          by_cases h_all : allProposedFor system s a.2.currentRound
           · rw [if_pos h_all] at h_act
             have : s_post = doAdvance s a.1 := (Option.some.inj h_act).symm
             rw [this, doAdvance]
@@ -578,7 +577,7 @@ private lemma step_validators_ids_preserved
             simp at h_act
       · rw [h_findSto] at h_act
         simp only at h_act
-        by_cases h_prop : (!hasProposedFor s a.1 a.2.currentRound) = true
+        by_cases h_prop : (!hasProposedFor s a.1 a.2.currentRound)
         · rw [if_pos h_prop] at h_act
           have : s_post = doPropose system s a.1 a.2.currentRound :=
             (Option.some.inj h_act).symm
@@ -589,7 +588,7 @@ private lemma step_validators_ids_preserved
           exact updateValidator_validators_ids_preserved _ _ _
     · rw [h_findAcc] at h_act
       simp only at h_act
-      by_cases h_prop : (!hasProposedFor s a.1 a.2.currentRound) = true
+      by_cases h_prop : (!hasProposedFor s a.1 a.2.currentRound)
       · rw [if_pos h_prop] at h_act
         have : s_post = doPropose system s a.1 a.2.currentRound :=
           (Option.some.inj h_act).symm
@@ -692,13 +691,13 @@ private lemma step_advance_inversion
     (h : s.getValidator vid = some bv)
     (h' : (step system s).getValidator vid = some bv')
     (h_advance : bv'.currentRound = bv.currentRound + 1) :
-    hasProposedFor s vid bv.currentRound = true ∧
+    hasProposedFor s vid bv.currentRound ∧
     (∀ B ∈ s.blocks,
-      hasAcceptedDigest s vid B.d = true ∨
+      hasAcceptedDigest s vid B.d ∨
       ∃ pd ∈ B.parents, hasAcceptedDigest s vid pd = false) ∧
     (∀ B ∈ s.blocks,
-      hasAcceptedDigest s vid B.d = true → hasStoredDigest s vid B.d = true) ∧
-    allProposedFor system s bv.currentRound = true := by
+      hasAcceptedDigest s vid B.d → hasStoredDigest s vid B.d) ∧
+    allProposedFor system s bv.currentRound := by
   unfold step at h'
   rcases h_fs : List.findSome? (fun x => tryActFor system s x.1 x.2) s.validators
     with _ | s_post
@@ -728,7 +727,7 @@ private lemma step_advance_inversion
         with _ | B_sto
       · rw [h_findSto] at h_act
         simp only at h_act
-        by_cases h_prop_gate : (!hasProposedFor s a.1 a.2.currentRound) = true
+        by_cases h_prop_gate : (!hasProposedFor s a.1 a.2.currentRound)
         · rw [if_pos h_prop_gate] at h_act
           have h_post_eq : s_post = doPropose system s a.1 a.2.currentRound :=
             (Option.some.inj h_act).symm
@@ -740,12 +739,12 @@ private lemma step_advance_inversion
           have : bv.currentRound = bv'.currentRound := by rw [h_eq]
           grind
         · rw [if_neg h_prop_gate] at h_act
-          by_cases h_all : allProposedFor system s a.2.currentRound = true
+          by_cases h_all : allProposedFor system s a.2.currentRound
           · rw [if_pos h_all] at h_act
             have h_post_eq : s_post = doAdvance s a.1 :=
               (Option.some.inj h_act).symm
             rw [h_post_eq] at h'
-            have h_hpr : hasProposedFor s a.1 a.2.currentRound = true := by
+            have h_hpr : hasProposedFor s a.1 a.2.currentRound := by
               cases h_b : hasProposedFor s a.1 a.2.currentRound
               · exfalso; apply h_prop_gate; simp [h_b]
               · rfl
@@ -761,7 +760,7 @@ private lemma step_advance_inversion
                 rw [List.find?_eq_none] at h_findAcc
                 have h_no := h_findAcc B hB
                 rw [h_eq_vid]
-                by_cases h_acc : hasAcceptedDigest s a.1 B.d = true
+                by_cases h_acc : hasAcceptedDigest s a.1 B.d
                 · left; exact h_acc
                 · right
                   have h_acc_false : hasAcceptedDigest s a.1 B.d = false := by
@@ -783,7 +782,7 @@ private lemma step_advance_inversion
                 rw [List.find?_eq_none] at h_findSto
                 have h_no := h_findSto B hB
                 rw [h_eq_vid]
-                by_cases h_sto : hasStoredDigest s a.1 B.d = true
+                by_cases h_sto : hasStoredDigest s a.1 B.d
                 · exact h_sto
                 · exfalso
                   have h_sto_false : hasStoredDigest s a.1 B.d = false := by
@@ -804,7 +803,7 @@ private lemma step_advance_inversion
             simp at h_act
       · rw [h_findSto] at h_act
         simp only at h_act
-        by_cases h_prop_gate : (!hasProposedFor s a.1 a.2.currentRound) = true
+        by_cases h_prop_gate : (!hasProposedFor s a.1 a.2.currentRound)
         · rw [if_pos h_prop_gate] at h_act
           have h_post_eq : s_post = doPropose system s a.1 a.2.currentRound :=
             (Option.some.inj h_act).symm
@@ -825,7 +824,7 @@ private lemma step_advance_inversion
           grind
     · rw [h_findAcc] at h_act
       simp only at h_act
-      by_cases h_prop_gate : (!hasProposedFor s a.1 a.2.currentRound) = true
+      by_cases h_prop_gate : (!hasProposedFor s a.1 a.2.currentRound)
       · rw [if_pos h_prop_gate] at h_act
         have h_post_eq : s_post = doPropose system s a.1 a.2.currentRound :=
           (Option.some.inj h_act).symm
@@ -853,7 +852,7 @@ private lemma step_advance_implies_hasProposedFor
     (h : s.getValidator vid = some bv)
     (h' : (step system s).getValidator vid = some bv')
     (h_advance : bv'.currentRound = bv.currentRound + 1) :
-    hasProposedFor s vid bv.currentRound = true :=
+    hasProposedFor s vid bv.currentRound :=
   (step_advance_inversion system s vid bv bv' h_nodup h h' h_advance).1
 
 /- Projection of `step_advance_inversion`: store-disabled. -/
@@ -865,7 +864,7 @@ private lemma step_advance_implies_stored
     (h' : (step system s).getValidator vid = some bv')
     (h_advance : bv'.currentRound = bv.currentRound + 1) :
     ∀ B ∈ s.blocks,
-      hasAcceptedDigest s vid B.d = true → hasStoredDigest s vid B.d = true :=
+      hasAcceptedDigest s vid B.d → hasStoredDigest s vid B.d :=
   (step_advance_inversion system s vid bv bv' h_nodup h h' h_advance).2.2.1
 
 /- Projection of `step_advance_inversion`: accept-disabled. -/
@@ -877,7 +876,7 @@ private lemma step_advance_implies_acceptComplete
     (h' : (step system s).getValidator vid = some bv')
     (h_advance : bv'.currentRound = bv.currentRound + 1) :
     ∀ B ∈ s.blocks,
-      hasAcceptedDigest s vid B.d = true ∨
+      hasAcceptedDigest s vid B.d ∨
       ∃ pd ∈ B.parents, hasAcceptedDigest s vid pd = false :=
   (step_advance_inversion system s vid bv bv' h_nodup h h' h_advance).2.1
 
@@ -889,7 +888,7 @@ private lemma step_advance_implies_allProposedFor
     (h : s.getValidator vid = some bv)
     (h' : (step system s).getValidator vid = some bv')
     (h_advance : bv'.currentRound = bv.currentRound + 1) :
-    allProposedFor system s bv.currentRound = true :=
+    allProposedFor system s bv.currentRound :=
   (step_advance_inversion system s vid bv bv' h_nodup h h' h_advance).2.2.2
 
 /- `step` preserves "absent": if vid isn't in `s.validators`, it isn't
@@ -920,7 +919,7 @@ private lemma proposed_for_lt_currentRound
     (system : BlockSynchroniserSystem)
     (h_sys_nodup : ValidatorsNodup system) :
     ∀ k vid bv, (belugaTrace system k).getValidator vid = some bv →
-      ∀ r' < bv.currentRound, hasProposedFor (belugaTrace system k) vid r' = true := by
+      ∀ r' < bv.currentRound, hasProposedFor (belugaTrace system k) vid r' := by
   intro k
   induction k with
   | zero =>
@@ -1065,20 +1064,20 @@ private lemma block_parents_in_pool
             with _ | B_sto
           · rw [h_findSto] at h_act
             simp only at h_act
-            by_cases h_p : (!hasProposedFor s a.1 a.2.currentRound) = true
+            by_cases h_p : (!hasProposedFor s a.1 a.2.currentRound)
             · rw [if_pos h_p] at h_act
               have : s_post = doPropose system s a.1 a.2.currentRound :=
                 (Option.some.inj h_act).symm
               rw [this]; exact doPropose_blocks system s _ _ _ hB'
             · rw [if_neg h_p] at h_act
-              by_cases h_a : allProposedFor system s a.2.currentRound = true
+              by_cases h_a : allProposedFor system s a.2.currentRound
               · rw [if_pos h_a] at h_act
                 have : s_post = doAdvance s a.1 := (Option.some.inj h_act).symm
                 rw [this, doAdvance_blocks_eq]; exact hB'
               · rw [if_neg h_a] at h_act; simp at h_act
           · rw [h_findSto] at h_act
             simp only at h_act
-            by_cases h_p : (!hasProposedFor s a.1 a.2.currentRound) = true
+            by_cases h_p : (!hasProposedFor s a.1 a.2.currentRound)
             · rw [if_pos h_p] at h_act
               have : s_post = doPropose system s a.1 a.2.currentRound :=
                 (Option.some.inj h_act).symm
@@ -1088,7 +1087,7 @@ private lemma block_parents_in_pool
               rw [this, doStore_blocks_eq]; exact hB'
         · rw [h_findAcc] at h_act
           simp only at h_act
-          by_cases h_p : (!hasProposedFor s a.1 a.2.currentRound) = true
+          by_cases h_p : (!hasProposedFor s a.1 a.2.currentRound)
           · rw [if_pos h_p] at h_act
             have : s_post = doPropose system s a.1 a.2.currentRound :=
               (Option.some.inj h_act).symm
@@ -1123,7 +1122,7 @@ private lemma block_parents_in_pool
           with _ | B_sto
         · rw [h_findSto] at h_act
           simp only at h_act
-          by_cases h_p : (!hasProposedFor s a.1 a.2.currentRound) = true
+          by_cases h_p : (!hasProposedFor s a.1 a.2.currentRound)
           · -- doPropose case: B is either old or = newB.
             rw [if_pos h_p] at h_act
             have h_post : s_post = doPropose system s a.1 a.2.currentRound :=
@@ -1152,7 +1151,7 @@ private lemma block_parents_in_pool
               refine ⟨B_p, h_blocks_mono B_p hB_p_mem, hd_eq, hr_eq⟩
           · -- doAdvance case: blocks unchanged.
             rw [if_neg h_p] at h_act
-            by_cases h_a : allProposedFor system s a.2.currentRound = true
+            by_cases h_a : allProposedFor system s a.2.currentRound
             · rw [if_pos h_a] at h_act
               have h_post : s_post = doAdvance s a.1 := (Option.some.inj h_act).symm
               rw [h_post, doAdvance_blocks_eq] at hB
@@ -1161,7 +1160,7 @@ private lemma block_parents_in_pool
             · rw [if_neg h_a] at h_act; simp at h_act
         · rw [h_findSto] at h_act
           simp only at h_act
-          by_cases h_p : (!hasProposedFor s a.1 a.2.currentRound) = true
+          by_cases h_p : (!hasProposedFor s a.1 a.2.currentRound)
           · rw [if_pos h_p] at h_act
             have h_post : s_post = doPropose system s a.1 a.2.currentRound :=
               (Option.some.inj h_act).symm
@@ -1193,7 +1192,7 @@ private lemma block_parents_in_pool
             exact ⟨B_p, h_blocks_mono B_p hB_p, hd, hr_p⟩
       · rw [h_findAcc] at h_act
         simp only at h_act
-        by_cases h_p : (!hasProposedFor s a.1 a.2.currentRound) = true
+        by_cases h_p : (!hasProposedFor s a.1 a.2.currentRound)
         · rw [if_pos h_p] at h_act
           have h_post : s_post = doPropose system s a.1 a.2.currentRound :=
             (Option.some.inj h_act).symm
@@ -1240,7 +1239,7 @@ private lemma accepted_at_advance
     (h_R : bv.currentRound = R)
     (h_advance : bv'.currentRound = R + 1) :
     ∀ B ∈ (belugaTrace system k_a).blocks, B.r ≤ R →
-      hasAcceptedDigest (belugaTrace system k_a) vid B.d = true := by
+      hasAcceptedDigest (belugaTrace system k_a) vid B.d := by
   have h_advance' : bv'.currentRound = bv.currentRound + 1 := by rw [h_R]; exact h_advance
   have h_nodup_a := belugaTrace_validators_nodup system h_sys_nodup k_a
   have h_acc_complete :=
@@ -1261,7 +1260,7 @@ private lemma accepted_at_advance
         rw [← hBeq, ← hB_p_r]
         exact Nat.lt_succ_self _
       have h_pR : B_p.r ≤ R := le_trans (Nat.le_of_lt h_lt) hBR
-      have h_p_acc : hasAcceptedDigest (belugaTrace system k_a) vid B_p.d = true :=
+      have h_p_acc : hasAcceptedDigest (belugaTrace system k_a) vid B_p.d :=
         ih B_p.r h_lt B_p hB_p rfl h_pR
       rw [hB_p_d] at h_p_acc
       rw [h_p_acc] at h_pd_unacc
@@ -1272,7 +1271,7 @@ is in `s.emittedOperations`. Bridge between the boolean predicate
 and the operation-list witness. -/
 private lemma hasProposedFor_iff_mem (s : BelugaState)
     (vid : ValidatorId) (r : Round) :
-    hasProposedFor s vid r = true ↔
+    hasProposedFor s vid r ↔
     ∃ B, ValidatorOperation.block_propose vid B r ∈ s.emittedOperations := by
   unfold hasProposedFor
   rw [List.any_eq_true]
@@ -1325,7 +1324,7 @@ private lemma isHonestValidator_of_mem
     (system : BlockSynchroniserSystem) (vid : ValidatorId)
     (h_nodup : ValidatorsNodup system)
     (h_mem : (vid, true) ∈ system.validators) :
-    isHonestValidator system vid = true := by
+    isHonestValidator system vid := by
   unfold isHonestValidator BlockSynchroniserSystem.isHonest
   have h_find : system.validators.find? (fun (id, _) => id == vid) = some (vid, true) :=
     find_of_mem_nodup_fst system.validators vid true h_nodup h_mem
@@ -1369,7 +1368,7 @@ in this file). -/
 private lemma isHonest_of_mem_local
     (system : BlockSynchroniserSystem) (vid : ValidatorId)
     (h_mem : (vid, true) ∈ system.validators) :
-    isHonestValidator system vid = true := by
+    isHonestValidator system vid := by
   unfold isHonestValidator BlockSynchroniserSystem.isHonest
   have h_find : system.validators.find? (fun p => p.1 == vid) = some (vid, true) :=
     find?_of_mem_nodup _ vid true h_mem system.validatorsNodup
@@ -1387,7 +1386,7 @@ private lemma isHonest_of_mem_local
 `system.validators`. -/
 private lemma mem_validators_of_isHonest
     {system : BlockSynchroniserSystem} {vid : ValidatorId}
-    (h : isHonestValidator system vid = true) :
+    (h : isHonestValidator system vid) :
     (vid, true) ∈ system.validators := by
   unfold isHonestValidator BlockSynchroniserSystem.isHonest at h
   match h_some : system.validators.find? (fun p => p.1 = vid) with
@@ -1397,7 +1396,7 @@ private lemma mem_validators_of_isHonest
     have h_p_in := List.mem_of_find?_eq_some h_some
     have h_match := List.find?_some h_some
     have h_p1 : p.1 = vid := by simpa using h_match
-    have h_p2 : p.2 = true := h
+    have h_p2 : p.2 := h
     have h_p_eq : p = (vid, true) := by
       obtain ⟨a, b⟩ := p
       simp at h_p1 h_p2
@@ -1415,13 +1414,13 @@ private lemma lemma1_witness_for_validator_list
     (r : Round) (k₀ : Nat)
     (h_post_gst : time k₀ ≥ system.GST)
     (vid_ref : ValidatorId) (bv_ref : BelugaValidator)
-    (h_honest_ref : isHonestValidator system vid_ref = true)
+    (h_honest_ref : isHonestValidator system vid_ref)
     (h_bv_ref : (networkTraceWithPull system time k₀).base.getValidator vid_ref = some bv_ref)
     (h_round_ref : bv_ref.currentRound = r) :
     ∀ (vs : List (ValidatorId × Bool)),
-      (∀ p ∈ vs, p.2 = true → isHonestValidator system p.1 = true) →
+      (∀ p ∈ vs, p.2 → isHonestValidator system p.1) →
       ∃ k', k₀ ≤ k' ∧ time k' ≤ time k₀ + 4 * system.Δ ∧
-        ∀ p ∈ vs, p.2 = true →
+        ∀ p ∈ vs, p.2 →
           ∃ bv, (networkTraceWithPull system time k').base.getValidator p.1 = some bv ∧
                 bv.currentRound ≥ r := by
   intro vs
@@ -1434,12 +1433,12 @@ private lemma lemma1_witness_for_validator_list
     · intro p h_mem; simp at h_mem
   | cons hd vs_t ih =>
     intro h_premise
-    have h_vs_t_premise : ∀ p ∈ vs_t, p.2 = true → isHonestValidator system p.1 = true :=
+    have h_vs_t_premise : ∀ p ∈ vs_t, p.2 → isHonestValidator system p.1 :=
       fun p h_mem h_b => h_premise p (List.mem_cons_of_mem _ h_mem) h_b
     obtain ⟨k_t, hk_t_lo, hk_t_hi, h_vs_t_step⟩ := ih h_vs_t_premise
-    by_cases h_hd_b : hd.2 = true
+    by_cases h_hd_b : hd.2
     · -- hd is honest
-      have h_hd_honest : isHonestValidator system hd.1 = true :=
+      have h_hd_honest : isHonestValidator system hd.1 :=
         h_premise hd List.mem_cons_self h_hd_b
       obtain ⟨bv_hd, h_bv_hd⟩ := network_honest_validator_persistent_traceWithPull
         system time hd.1 h_hd_honest k₀
@@ -1509,16 +1508,16 @@ theorem lemma1_honest_round_entry
     ∀ (r : Round) (k₀ : Nat),
       time k₀ ≥ system.GST →
       (∃ vid_ref bv_ref,
-        isHonestValidator system vid_ref = true ∧
+        isHonestValidator system vid_ref ∧
         (networkTraceWithPull system time k₀).base.getValidator vid_ref = some bv_ref ∧
         bv_ref.currentRound = r) →
       ∃ k', k₀ ≤ k' ∧ time k' ≤ time k₀ + 4 * system.Δ ∧
-        ∀ vid, isHonestValidator system vid = true →
+        ∀ vid, isHonestValidator system vid →
           ∃ bv, (networkTraceWithPull system time k').base.getValidator vid = some bv ∧
                 bv.currentRound ≥ r := by
   intro r k₀ h_post_gst ⟨vid_ref, bv_ref, h_honest_ref, h_bv_ref, h_round_ref⟩
   -- Premise for the helper: every honest pair in system.validators has the corresponding isHonestValidator.
-  have h_premise : ∀ p ∈ system.validators, p.2 = true → isHonestValidator system p.1 = true := by
+  have h_premise : ∀ p ∈ system.validators, p.2 → isHonestValidator system p.1 := by
     intro p h_mem h_b
     have h_pair_mem : (p.1, true) ∈ system.validators := by
       have h_p_eq : p = (p.1, true) := by
@@ -1537,14 +1536,14 @@ theorem lemma1_honest_round_entry
 `EventualCausalAcceptance` and `EventualRoundAcceptance` are the two
 paper-implicit liveness conjuncts in §5's T2 and T4 proofs. They are
 defined here on a generic `Trace BelugaState` so the with-pull track
-below can prove them as theorems (rather than take them as axioms). -/
+below can prove them as derived theorems. -/
 
 /-- For any honest validator that has accepted some digest `d`
 corresponding to a block `B`, every causal ancestor `B'` of `B` is
 eventually accepted by `vid`. -/
 def EventualCausalAcceptance (system : BlockSynchroniserSystem)
     (trace : Trace BelugaState) : Prop :=
-  ∀ k vid d B, isHonestValidator system vid = true →
+  ∀ k vid d B, isHonestValidator system vid →
     HasAccepted (trace k) vid d →
     getBlockByDigest (trace k) d = some B →
     ∀ B', Reaches (trace k) B B' →
@@ -1605,7 +1604,7 @@ private lemma authorOfDigest_of_propose
   have h_witness_match :
       (match ValidatorOperation.block_propose vid_p B r with
        | .block_propose _ block r' => block.d == digest system r vid_p && r' == r
-       | _ => false) = true := by simp [h_d_eq]
+       | _ => false) := by simp [h_d_eq]
   cases h_find : ops.find? (fun op =>
       match op with
       | .block_propose _ block r' => block.d == digest system r vid_p && r' == r
@@ -1644,9 +1643,9 @@ private lemma authorOfDigest_of_propose
 /-- The list `(system.validators.filter (·.2)).map Prod.fst` has
 nodup IDs. -/
 private lemma honestList_nodup (system : BlockSynchroniserSystem) :
-    ((system.validators.filter (fun p => p.2 = true)).map Prod.fst).Nodup := by
+    ((system.validators.filter (fun p => p.2)).map Prod.fst).Nodup := by
   have h_v_nodup : (system.validators.map Prod.fst).Nodup := system.validatorsNodup
-  have h_sub : (system.validators.filter (fun p => p.2 = true)).map Prod.fst |>.Sublist
+  have h_sub : (system.validators.filter (fun p => p.2)).map Prod.fst |>.Sublist
         (system.validators.map Prod.fst) :=
     List.Sublist.map Prod.fst List.filter_sublist
   exact h_v_nodup.sublist h_sub
@@ -1677,8 +1676,8 @@ private lemma find_of_mem_nodup_id_eq {α β : Type*} [DecidableEq α]
 /-- Each member of `honestList` is honest. -/
 private lemma honestList_all_honest (system : BlockSynchroniserSystem)
     (p : ValidatorId)
-    (hp : p ∈ (system.validators.filter (fun q => q.2 = true)).map Prod.fst) :
-    isHonestValidator system p = true := by
+    (hp : p ∈ (system.validators.filter (fun q => q.2)).map Prod.fst) :
+    isHonestValidator system p := by
   rw [List.mem_map] at hp
   obtain ⟨q, h_q_in, h_q_eq⟩ := hp
   rw [List.mem_filter] at h_q_in
@@ -1695,8 +1694,8 @@ private lemma honestList_all_honest (system : BlockSynchroniserSystem)
 /-! ## Main theorem: `network_eventualRoundAcceptance` -/
 
 /-- Under the with-pull primitives, `networkBelugaTraceWithPull`
-satisfies `EventualRoundAcceptance`, so T4's `EventualRoundAcceptance`
-hypothesis becomes a derived fact rather than an axiom. -/
+satisfies `EventualRoundAcceptance`. T4 then consumes this as a
+derived fact. -/
 theorem network_eventualRoundAcceptance
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
     (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
@@ -1707,7 +1706,7 @@ theorem network_eventualRoundAcceptance
     (h_accept : AcceptScheduling system time) :
     EventualRoundAcceptance system (networkBelugaTraceWithPull system time) := by
   intro round vid h_vid_honest_prop
-  have h_vid_honest : isHonestValidator system vid = true := h_vid_honest_prop
+  have h_vid_honest : isHonestValidator system vid := h_vid_honest_prop
   -- Step 1: post-GST step.
   obtain ⟨k_gst, h_k_gst⟩ : ∃ k, time k ≥ system.GST := h_time_unbounded system.GST
   -- Step 2: bring all honest to currentRound ≥ round + 1 by some k_R.
@@ -1716,7 +1715,7 @@ theorem network_eventualRoundAcceptance
       h_scheduling h_spread vid h_vid_honest k_gst h_k_gst (round + 1)
   -- The honest validator ID list.
   set honestList : List ValidatorId :=
-    (system.validators.filter (fun p => p.2 = true)).map Prod.fst with h_honestList_def
+    (system.validators.filter (fun p => p.2)).map Prod.fst with h_honestList_def
   -- Step 3: iterate to get k_acc where vid accepts every honest digest.
   obtain ⟨k_acc, h_acc⟩ :=
     all_honest_in_list_eventually_accepted system time h_mono h_time_unbounded
@@ -1728,18 +1727,18 @@ theorem network_eventualRoundAcceptance
   -- Lift acceptance to k_final.
   have h_acc_final : ∀ p ∈ honestList,
       hasAcceptedDigest (networkTraceWithPull system time k_final).base vid
-        (digest system round p) = true := by
+        (digest system round p) := by
     intro p hp
     exact network_hasAcceptedDigest_monotone_withPull system time vid (digest system round p)
       k_acc k_final (le_max_left _ _) (h_acc p hp)
   -- At k_R, every honest has proposed for round; lift to k_final via monotonicity.
   have h_propose_final : ∀ p ∈ honestList,
-      hasProposedFor (networkTraceWithPull system time k_final).base p round = true := by
+      hasProposedFor (networkTraceWithPull system time k_final).base p round := by
     intro p hp
     have h_p_honest := honestList_all_honest system p hp
     obtain ⟨bv_p, h_bv_p, h_bv_p_round⟩ := h_all_at_R p h_p_honest
     have h_proposed_at_R :
-        hasProposedFor (networkTraceWithPull system time k_R).base p round = true :=
+        hasProposedFor (networkTraceWithPull system time k_R).base p round :=
       network_proposed_for_lt_currentRoundWithPull system time k_R p bv_p h_bv_p round
         h_bv_p_round
     exact network_hasProposedFor_monotoneWithPull system time p round k_R k_final
@@ -1791,7 +1790,7 @@ theorem network_eventualRoundAcceptance
   -- honestList.toFinset has card ≥ 2f+1.
   have h_honestList_card : honestList.toFinset.card ≥ 2 * system.f + 1 := by
     rw [List.toFinset_card_of_nodup (honestList_nodup system)]
-    show ((system.validators.filter (fun p => p.2 = true)).map Prod.fst).length ≥ 2 * system.f + 1
+    show ((system.validators.filter (fun p => p.2)).map Prod.fst).length ≥ 2 * system.f + 1
     rw [List.length_map]
     exact system.honestBound
   -- Combine: 2f+1 ≤ honestList.toFinset.card ≤ acceptedAuthors_pre.toFinset.card
@@ -1822,7 +1821,7 @@ the honest pair. -/
 private lemma network_isHonestValidator_of_mem
     (system : BlockSynchroniserSystem) (vid : ValidatorId)
     (h_mem : (vid, true) ∈ system.validators) :
-    isHonestValidator system vid = true := by
+    isHonestValidator system vid := by
   unfold isHonestValidator BlockSynchroniserSystem.isHonest
   have h_find : system.validators.find? (fun p => p.1 == vid) = some (vid, true) :=
     find?_of_mem_nodup _ vid true h_mem system.validatorsNodup
@@ -1868,7 +1867,7 @@ theorem network_theorem1_block_availability_withPull
   obtain ⟨bv_post, h_bv_post⟩ :=
     network_honest_validator_persistent_traceWithPull system time vid h_honest k_post
   set r := bv_post.currentRound with hr_def
-  have h_persistent : ∀ vid k, isHonestValidator system vid = true →
+  have h_persistent : ∀ vid k, isHonestValidator system vid →
       ∃ bv, (networkTraceWithPull system time k).base.getValidator vid = some bv :=
     fun vid k h => network_honest_validator_persistent_traceWithPull system time vid h k
   obtain ⟨k_target, hk_target_le, _, h_target_all⟩ :=
@@ -1891,17 +1890,17 @@ theorem network_theorem1_block_availability_withPull
     have h_le : k ≤ k_a := le_trans hk_post_le hk_a_le
     exact networkBelugaTraceWithPull_emittedOperations_monotone system time k k_a h_le _ h_acc
   have h_acc_bool :
-      hasAcceptedDigest (networkTraceWithPull system time k_a).base vid d = true := by
+      hasAcceptedDigest (networkTraceWithPull system time k_a).base vid d := by
     unfold hasAcceptedDigest
     rw [List.any_eq_true]
     exact ⟨_, h_acc_at_a, by simp +decide⟩
   obtain ⟨B, hB_mem, hB_d⟩ :=
     network_acceptedBlockExists_traceWithPull system time vid k_a d h_acc_at_a
   have h_acc_B :
-      hasAcceptedDigest (networkTraceWithPull system time k_a).base vid B.d = true := by
+      hasAcceptedDigest (networkTraceWithPull system time k_a).base vid B.d := by
     rw [hB_d]; exact h_acc_bool
   have h_sto_B :
-      hasStoredDigest (networkTraceWithPull system time k_a).base vid B.d = true :=
+      hasStoredDigest (networkTraceWithPull system time k_a).base vid B.d :=
     h_stored_gate B hB_mem h_acc_B
   unfold hasStoredDigest at h_sto_B
   rw [List.any_eq_true] at h_sto_B
@@ -1930,7 +1929,7 @@ theorem network_theorem3_round_progression_withPull
     Properties.RoundProgression system (networkBelugaTraceWithPull system time) := by
   intro round
   have hHonest := system.honestBound
-  set honest_pairs := system.validators.filter (fun p => p.2 = true) with h_hp_def
+  set honest_pairs := system.validators.filter (fun p => p.2) with h_hp_def
   have h_hp_ne : honest_pairs ≠ [] := by
     intro h_e
     have : honest_pairs.length = 0 := by rw [h_e]; rfl
@@ -1939,7 +1938,7 @@ theorem network_theorem3_round_progression_withPull
   have h_pair_w_mem : pair_w ∈ honest_pairs := List.head_mem _
   have h_pw_filter := List.mem_filter.mp h_pair_w_mem
   have h_pw_in : pair_w ∈ system.validators := h_pw_filter.1
-  have h_pw_true : pair_w.2 = true := by simpa using h_pw_filter.2
+  have h_pw_true : pair_w.2 := by simpa using h_pw_filter.2
   set vid_w := pair_w.1 with hv_w_def
   have h_w_pair_eq : (vid_w, true) ∈ system.validators := by
     have h_eq : pair_w = (vid_w, true) := by
@@ -1947,7 +1946,7 @@ theorem network_theorem3_round_progression_withPull
       · rfl
       · exact h_pw_true
     rw [← h_eq]; exact h_pw_in
-  have h_w_honest : isHonestValidator system vid_w = true :=
+  have h_w_honest : isHonestValidator system vid_w :=
     network_isHonestValidator_of_mem system vid_w h_w_pair_eq
   obtain ⟨k₀, h_k₀_gst⟩ := h_time_unbounded system.GST
   obtain ⟨k, _, _, h_all⟩ :=
@@ -1985,14 +1984,14 @@ theorem network_theorem3_round_progression_withPull
     obtain ⟨pair, h_pair_mem, h_pair_fst⟩ := List.mem_map.mp h_vid_mem
     have h_pair_filter := List.mem_filter.mp h_pair_mem
     have h_pair_in : pair ∈ system.validators := h_pair_filter.1
-    have h_pair_true : pair.2 = true := by simpa using h_pair_filter.2
+    have h_pair_true : pair.2 := by simpa using h_pair_filter.2
     have h_vid_pair_in : (vid, true) ∈ system.validators := by
       have h_pair_eq : pair = (vid, true) := by
         apply Prod.ext
         · exact h_pair_fst
         · exact h_pair_true
       rw [← h_pair_eq]; exact h_pair_in
-    have h_vid_honest : isHonestValidator system vid = true :=
+    have h_vid_honest : isHonestValidator system vid :=
       network_isHonestValidator_of_mem system vid h_vid_pair_in
     obtain ⟨bv, h_bv, h_bv_round⟩ := h_all vid h_vid_honest
     have h_round_lt : round < bv.currentRound := h_bv_round
@@ -2029,14 +2028,14 @@ theorem network_eventualCausalAcceptance_modulo_gap
     (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
     (h_time_unbounded : ∀ T, ∃ k, time k ≥ T)
     (h_in_pool_accept : ∀ k vid B,
-      isHonestValidator system vid = true →
+      isHonestValidator system vid →
       time k ≥ system.GST →
       B ∈ (networkTraceWithPull system time k).base.blocks →
       ∃ k', k ≤ k' ∧
-        hasAcceptedDigest (networkTraceWithPull system time k').base vid B.d = true) :
+        hasAcceptedDigest (networkTraceWithPull system time k').base vid B.d) :
     EventualCausalAcceptance system (networkBelugaTraceWithPull system time) := by
   intro k vid d B h_vid_honest_prop h_acc h_get B' h_reach
-  have h_vid_honest : isHonestValidator system vid = true := h_vid_honest_prop
+  have h_vid_honest : isHonestValidator system vid := h_vid_honest_prop
   induction h_reach with
   | refl =>
     -- B' = B (unified by induction). vid has accepted d, and B.d = d.
@@ -2074,10 +2073,8 @@ theorem network_eventualCausalAcceptance_modulo_gap
 
 /-- Under the with-pull primitives — including `NetworkInPoolDeliveryWithPull`
 which captures paper §4.3's universal pull-channel delivery —
-`networkBelugaTraceWithPull` satisfies `EventualCausalAcceptance`,
-turning T2's hypothesis into a derived fact. Combined with
-`network_eventualRoundAcceptance`, both `Eventual*` axioms become
-theorems. -/
+`networkBelugaTraceWithPull` satisfies `EventualCausalAcceptance`.
+T2 then consumes this as a derived fact. -/
 theorem network_eventualCausalAcceptance
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
     (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
@@ -2094,8 +2091,7 @@ theorem network_eventualCausalAcceptance
 
 /-- **Theorem 2 (paper §5), with-pull.** T2 expressed against
 `networkTraceWithPull`, taking `EventualCausalAcceptance` as a
-hypothesis. The hypothesis is discharged by
-`network_eventualCausalAcceptance` to obtain the axiom-free corollary. -/
+hypothesis (discharged by `network_eventualCausalAcceptance`). -/
 theorem network_theorem2_causal_availability_withPull
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
     (h_eventual : EventualCausalAcceptance system (networkBelugaTraceWithPull system time)) :
@@ -2105,10 +2101,9 @@ theorem network_theorem2_causal_availability_withPull
 
 /-! ## Unified with-pull corollary: Beluga-with-pull is a block synchronizer -/
 
-/-- **§5 corollary (axiom-free).** Under the with-pull primitives,
+/-- **§5 corollary.** Under the with-pull primitives,
 `networkBelugaTraceWithPull` satisfies all four block-synchronizer
-properties. All four theorems (T1/T2/T3/T4) are fully derived; no
-`Eventual*` axioms remain. -/
+properties. -/
 theorem networkTraceWithPull_isBlockSynchronizer
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
     (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
@@ -2135,8 +2130,7 @@ theorem networkTraceWithPull_isBlockSynchronizer
 /-- **§5 headline theorem.** Under `BelugaWithPullFairness`, the
 network-aware Beluga trace satisfies all four block-synchronizer
 properties (T1: BlockAvailability, T2: CausalAvailability, T3:
-RoundProgression, T4: RoundTermination). All four are fully derived;
-no `Eventual*` axioms remain. -/
+RoundProgression, T4: RoundTermination). -/
 theorem beluga_isBlockSynchronizer
     {system : BlockSynchroniserSystem} {time : Nat → Nat}
     (h : BelugaWithPullFairness system time) :

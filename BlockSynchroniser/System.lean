@@ -64,16 +64,9 @@ def isHonest (system : BlockSynchroniserSystem) (id : ValidatorId) : Bool :=
 `honestMajority` (`n ≥ 3f+1`), `validatorCountCorrect` (`n = validators.length`),
 and `byzantineBound` (Byzantine count ≤ f). -/
 theorem honestBound (system : BlockSynchroniserSystem) :
-    (system.validators.filter (fun p => p.2 = true)).length ≥ 2 * system.f + 1 := by
+    (system.validators.filter (fun p => p.2)).length ≥ 2 * system.f + 1 := by
   have h_partition := List.length_eq_length_filter_add (l := system.validators)
     (f := fun p : ValidatorId × Bool => p.2)
-  have h_filter_eq :
-      (system.validators.filter (fun p => p.2 = true)).length =
-      (system.validators.filter (fun p => p.2)).length := by
-    congr 1
-    apply List.filter_congr
-    intro p _; simp
-  rw [h_filter_eq]
   have h_n := system.validatorCountCorrect
   have h_maj := system.honestMajority
   have h_byz := system.byzantineBound

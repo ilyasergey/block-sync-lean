@@ -144,7 +144,7 @@ validator 0): no `block_accept` ever fires. -/
 theorem not_roundTermination_emptyTrace :
     ¬ RoundTermination goldenSystem emptyTrace := by
   intro h
-  have honest0 : isHonestValidator goldenSystem 0 = true := by decide
+  have honest0 : isHonestValidator goldenSystem 0 := by decide
   obtain ⟨k, hk⟩ := h 0 0 honest0
   simp [opsAt, emptyTrace, emptyState, SystemState.emittedOperations] at hk
 
@@ -257,7 +257,7 @@ theorem store_mem_gOpsThrough (r R : Nat) (hr : r ≤ R) (v i : Nat)
   gRoundOps_mem_gOpsThrough r R hr _ (gRoundOps_store_mem r v i hv hi)
 
 theorem isHonest_goldenSystem_iff (vid : ValidatorId) :
-    isHonestValidator goldenSystem vid = true ↔ vid < 4 := by
+    isHonestValidator goldenSystem vid ↔ vid < 4 := by
   rcases vid with ( _ | _ | _ | _ | vid ) <;> tauto
 
 /-

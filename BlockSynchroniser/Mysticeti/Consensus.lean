@@ -36,46 +36,61 @@ def isLeaderBlock (system : BlockSynchroniserSystem) (B : Block) : Prop :=
 
 /--
 **Skip pattern** (paper Appendix D.1.1): leader block `B_L` is *not*
-referenced by `2f+1` blocks of the *successive* round (round `B.r + 1`).
+referenced by `2f+1` blocks (from distinct validators) of the
+*successive* round (round `B.r + 1`).
 
-Equivalently: fewer than `2f+1` round-`(B.r+1)` blocks include `B_L.d`
-in their parents.
+Equivalently: fewer than `2f+1` distinct-author round-`(B.r+1)`
+blocks include `B_L.d` in their parents.
 -/
 def skipPattern (system : BlockSynchroniserSystem) {S} [SystemState S]
     (state : S) (B : Block) : Prop :=
-  let nextRound :=
-    (SystemState.blocks state).filter (fun B' =>
-      B'.r == B.r + 1 && B'.parents.contains B.d)
-  nextRound.length < 2 * system.f + 1
+  let nextRoundAuthors :=
+    ((SystemState.blocks state).filter (fun B' =>
+      B'.r == B.r + 1 && B'.parents.contains B.d)).map (·.author) |>.eraseDups
+  nextRoundAuthors.length < 2 * system.f + 1
 
 /-- Bool-valued `skipPattern`. -/
 def skipPatternB (system : BlockSynchroniserSystem) {S} [SystemState S]
     (state : S) (B : Block) : Bool :=
-  let nextRound :=
-    (SystemState.blocks state).filter (fun B' =>
-      B'.r == B.r + 1 && B'.parents.contains B.d)
-  decide (nextRound.length < 2 * system.f + 1)
+  let nextRoundAuthors :=
+    ((SystemState.blocks state).filter (fun B' =>
+      B'.r == B.r + 1 && B'.parents.contains B.d)).map (·.author) |>.eraseDups
+  decide (nextRoundAuthors.length < 2 * system.f + 1)
 
 /--
-**Certificate pattern at round `B.r + 1`** (paper Appendix D.1.1
-footnote 6 — same as §4.4 certificate pattern, restricted to the next
-round).
+**`B'` is a certificate for `B`** (paper Appendix D.1.1): a block `B'`
+includes the §4.4 certificate pattern on `B` via strong links in its
+causal history. For the direct-decision rule at round `B.r + 2`, this
+specialises to the two-hop form: `B'` has at least `2f+1`
+distinct-author round-`(B.r + 1)` parents, each of which references
+`B` as a parent.
+-/
+def isCertificateBlockB (system : BlockSynchroniserSystem) {S} [SystemState S]
+    (state : S) (B B' : Block) : Bool :=
+  let parentRefs := (SystemState.blocks state).filter (fun P =>
+    B'.parents.contains P.d && P.r == B.r + 1 && P.parents.contains B.d)
+  let distinctAuthors := parentRefs.map (·.author) |>.eraseDups
+  decide (distinctAuthors.length ≥ 2 * system.f + 1)
+
+/--
+**Certificate pattern at round `atRound`** (paper Appendix D.1.1):
+at least `2f+1` distinct-author round-`atRound` blocks are each a
+certificate for `B`. The direct-decision rule reads this predicate
+at `atRound = B.r + 2`.
 -/
 def certificatePatternAt (system : BlockSynchroniserSystem) {S} [SystemState S]
     (state : S) (B : Block) (atRound : Round) : Prop :=
-  let referencers :=
-    (SystemState.blocks state).filter (fun B' =>
-      B'.r == atRound && B'.parents.contains B.d)
-  let distinctAuthors := referencers.map (·.author) |>.eraseDups
+  let certs := (SystemState.blocks state).filter (fun B' =>
+    B'.r == atRound && isCertificateBlockB system state B B')
+  let distinctAuthors := certs.map (·.author) |>.eraseDups
   distinctAuthors.length ≥ 2 * system.f + 1
 
 /-- Bool-valued `certificatePatternAt`. -/
 def certificatePatternAtB (system : BlockSynchroniserSystem) {S} [SystemState S]
     (state : S) (B : Block) (atRound : Round) : Bool :=
-  let referencers :=
-    (SystemState.blocks state).filter (fun B' =>
-      B'.r == atRound && B'.parents.contains B.d)
-  let distinctAuthors := referencers.map (·.author) |>.eraseDups
+  let certs := (SystemState.blocks state).filter (fun B' =>
+    B'.r == atRound && isCertificateBlockB system state B B')
+  let distinctAuthors := certs.map (·.author) |>.eraseDups
   decide (distinctAuthors.length ≥ 2 * system.f + 1)
 
 /-! ## Decision rules (paper Appendix D.1.1) -/
@@ -159,8 +174,8 @@ another skips.")
 def ConsensusView.Consistent (system : BlockSynchroniserSystem)
     (view : ConsensusView) : Prop :=
   ∀ d vid₁ vid₂,
-    isHonestValidator system vid₁ = true →
-    isHonestValidator system vid₂ = true →
+    isHonestValidator system vid₁ →
+    isHonestValidator system vid₂ →
     view vid₁ d ≠ Decision.Undecided →
     view vid₂ d ≠ Decision.Undecided →
     view vid₁ d = view vid₂ d
@@ -172,10 +187,10 @@ other (so they agree on the common prefix and grow monotonically).
 def TransactionOrder.Consistent (system : BlockSynchroniserSystem)
     (order : TransactionOrder) : Prop :=
   ∀ vid₁ vid₂,
-    isHonestValidator system vid₁ = true →
-    isHonestValidator system vid₂ = true →
-    (order vid₁).isPrefixOf (order vid₂) = true ∨
-    (order vid₂).isPrefixOf (order vid₁) = true
+    isHonestValidator system vid₁ →
+    isHonestValidator system vid₂ →
+    (order vid₁).isPrefixOf (order vid₂) ∨
+    (order vid₂).isPrefixOf (order vid₁)
 
 end Mysticeti
 end BlockSynchroniser

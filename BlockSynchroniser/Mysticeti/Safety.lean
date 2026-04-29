@@ -44,139 +44,6 @@ def isCertificateFor {S} [SystemState S] (state : S) (C B : Block) : Prop :=
   C ∈ SystemState.blocks state ∧
   B ∈ SystemState.blocks state
 
-/-! ## Lemma 10 — round-robin pigeonhole (paper Appendix D)
-
-There are `3f + 1` groups of three consecutive rounds in any window of
-`3f + 3` rounds. Due to the round-robin schedule, each of the `2f + 1`
-honest validators appears in 3 such groups, contributing `3 · (2f+1)
-= 6f+3` total honest-leader positions across `3f+1` groups — average
-`> 2`, so by pigeonhole some group has 3 honest leaders.
--/
-
-/-- Combinatorial helper for `lemma10_round_robin_pigeonhole`.
-
-In a circular sequence of length `n = 3f+1` with at most `f` "false"
-positions, three consecutive "true" positions exist. Proved by
-contradiction: each of the `n = 3f+1` triples `(i, i+1, i+2)` has a
-false member; but each false position covers exactly 3 triples
-(by the wrap-around), total coverage `3f < 3f+1`, contradiction.
--/
-lemma consecutive_triple_exists (n f : Nat) (g : Nat → Bool)
-    (hn : n = 3 * f + 1)
-    (h_false_count : (Finset.range n |>.filter (fun i => g i = false)).card ≤ f)
-    (h_wrap1 : g n = g 0) (h_wrap2 : g (n + 1) = g 1) :
-    ∃ i, i < n ∧ g i = true ∧ g (i + 1) = true ∧ g (i + 2) = true := by
-  have h_sum_ge : ∑ i ∈ Finset.range n, (if g i = false then 1 else 0)
-      + ∑ i ∈ Finset.range n, (if g (i + 1) = false then 1 else 0)
-      + ∑ i ∈ Finset.range n, (if g (i + 2) = false then 1 else 0) ≤ 3 * f := by
-    have h_sum_ge : ∑ i ∈ Finset.range n, (if g (i + 1) = false then 1 else 0)
-        = ∑ i ∈ Finset.range n, (if g i = false then 1 else 0) := by
-      rcases n with (_ | _ | n) <;> simp_all +arith +decide [Finset.sum_range_succ']
-      · simp_all +decide [Finset.filter_singleton]
-      · rw [Finset.card_filter, Finset.card_filter]
-        rw [Finset.sum_range_succ, Finset.sum_range_succ']; aesop
-    have h_sum_ge : ∑ i ∈ Finset.range n, (if g (i + 2) = false then 1 else 0)
-        = ∑ i ∈ Finset.range n, (if g i = false then 1 else 0) := by
-      rcases n with (_ | _ | n) <;> simp_all +decide [Finset.sum_range_succ']
-      · simp_all +decide [Finset.filter_singleton]
-      · rw [Finset.card_filter, Finset.card_filter] at *
-        rw [← h_sum_ge, Finset.sum_range_succ, Finset.sum_range_succ']; aesop
-    simp_all +arith +decide [Finset.sum_ite]
-  contrapose! h_sum_ge
-  have h_sum_ge : ∀ i < n, (if g i = false then 1 else 0)
-      + (if g (i + 1) = false then 1 else 0)
-      + (if g (i + 2) = false then 1 else 0) ≥ 1 := by grind
-  simpa only [← Finset.sum_add_distrib] using
-    lt_of_lt_of_le (by norm_num [hn])
-      (Finset.sum_le_sum fun i hi => h_sum_ge i (Finset.mem_range.mp hi))
-
-/-- **Lemma 10 (paper Appendix D.3).**
-
-> *The round-robin schedule of leader blocks in Mysticeti-Beluga
-> ensures that in any window of `3f + 3` rounds, there are three
-> consecutive rounds with honest leader blocks.*
-
-Paper proof sketch: there are `3f + 1` groups of three consecutive
-rounds in any window of `3f + 3` rounds. Due to the round-robin
-schedule, each of the `2f + 1` honest validators is one of the
-leaders in exactly 3 such groups. Total honest-leader positions:
-`3 · (2f+1) = 6f+3` across `3f+1` groups; by pigeonhole some group
-contains `⌈(6f+3)/(3f+1)⌉ = 3` honest leader blocks.
-
-The Lean statement returns the explicit start round of the
-consecutive-honest triple. -/
-theorem lemma10_round_robin_pigeonhole
-    (system : BlockSynchroniserSystem) (startRound : Round)
-    (hN : system.n = 3 * system.f + 1)
-    (hHonest : (system.validators.filter (fun p => p.2 = true)).length
-                = 2 * system.f + 1)
-    -- Validator IDs are {0, ..., n-1}, matching the round-robin's
-    -- `r % n` output. Without this, `leaderOf` could produce IDs that
-    -- don't correspond to any registered validator, making
-    -- `isHonestValidator` return `false` for all leaders.
-    (h_ids : ∀ i < system.n, ∃ pair ∈ system.validators, pair.1 = i) :
-    ∃ r ≥ startRound, r + 2 < startRound + (3 * system.f + 3) ∧
-      isHonestValidator system (leaderOf system r) ∧
-      isHonestValidator system (leaderOf system (r + 1)) ∧
-      isHonestValidator system (leaderOf system (r + 2)) := by
-  have h_pigeonhole : ∃ i < system.n,
-      isHonestValidator system (leaderOf system (startRound + i)) ∧
-      isHonestValidator system (leaderOf system (startRound + i + 1)) ∧
-      isHonestValidator system (leaderOf system (startRound + i + 2)) := by
-    have := consecutive_triple_exists (3 * system.f + 1) system.f
-        (fun i => isHonestValidator system ((startRound + i) % (3 * system.f + 1)))
-        rfl ?_ ?_ ?_
-    · unfold leaderOf; aesop
-    · have h_false_count : (Finset.range (3 * system.f + 1)
-          |>.filter (fun i => isHonestValidator system i = false)).card ≤ system.f := by
-        have h_false_count : (Finset.filter (fun i => isHonestValidator system i = false)
-            (Finset.range (3 * system.f + 1))).card
-            ≤ (system.validators.filter (fun p => p.2 = false)).length := by
-          have h_false_count : Finset.filter (fun i => isHonestValidator system i = false)
-              (Finset.range (3 * system.f + 1))
-              ⊆ Finset.image (fun p => p.1) (List.toFinset
-                  (List.filter (fun p => p.2 = false) system.validators)) := by
-            intro i hi
-            simp_all +decide [isHonestValidator]
-            cases h_ids i hi.1 <;> simp_all +decide [BlockSynchroniserSystem.isHonest]
-            cases h : List.find? (fun x => decide (x.1 = i)) system.validators <;>
-              simp_all +decide [List.find?_eq_none]
-            · exact False.elim <| h i |>.2 ‹_› rfl
-            · grind
-          exact le_trans (Finset.card_le_card h_false_count)
-            (Finset.card_image_le.trans (List.toFinset_card_le _))
-        have h_false_count : (system.validators.filter (fun p => p.2 = true)).length
-            + (system.validators.filter (fun p => p.2 = false)).length = system.n := by
-          have h_false_count : ∀ (l : List (ValidatorId × Bool)),
-              (l.filter (fun p => p.2 = true)).length
-              + (l.filter (fun p => p.2 = false)).length = l.length := by
-            intro l; induction l <;> simp +decide [*]; grind
-          rw [h_false_count, system.validatorCountCorrect]
-        grind
-      convert h_false_count using 1
-      refine Finset.card_bij (fun i _ => (startRound + i) % (3 * system.f + 1)) ?_ ?_ ?_ <;>
-        simp +decide [Nat.mod_lt]
-      · exact fun a _ ha' => ⟨Nat.le_of_lt_succ <| Nat.mod_lt _ <| Nat.succ_pos _, ha'⟩
-      · intro a₁ ha₁ ha₂ a₂ ha₃ ha₄ h
-        have := Nat.modEq_iff_dvd.mp h.symm
-        simp_all +decide [Nat.dvd_iff_mod_eq_zero]
-        obtain ⟨k, hk⟩ := this; nlinarith [show k = 0 by nlinarith]
-      · intro b hb hb'
-        use (b + (3 * system.f + 1) - startRound % (3 * system.f + 1)) % (3 * system.f + 1)
-        simp +decide [← ZMod.val_natCast,
-          Nat.cast_sub (show startRound % (3 * system.f + 1) ≤ b + (3 * system.f + 1) from
-            le_trans (Nat.mod_lt _ (Nat.succ_pos _) |> Nat.le_of_lt) (Nat.le_add_left _ _))]
-        simp +decide [Nat.cast_sub (show (startRound : ℕ) % (3 * system.f + 1)
-            ≤ b + (3 * system.f + 1) from
-            le_trans (Nat.mod_lt _ (Nat.succ_pos _) |> Nat.le_of_lt) (Nat.le_add_left _ _))]
-        exact ⟨⟨Nat.le_of_lt_succ <| by exact ZMod.val_lt _,
-              by simpa [Nat.mod_eq_of_lt (show b < 3 * system.f + 1 from
-                Nat.lt_succ_of_le hb)] using hb'⟩, hb⟩
-    · norm_num [Nat.mod_eq_of_lt]
-    · simp +decide [← hN, Nat.mod_eq_of_lt]
-      norm_num [add_assoc, Nat.add_mod]
-  grind
-
 /-
 In a list of ≥ f+1 registered validators, at least one is honest.
 Follows from h_byz_bound: at most f validators are Byzantine, so a list
@@ -190,7 +57,7 @@ private lemma exists_honest_in_shared
     (h_shared_valid : ∀ vid ∈ shared, ∃ pair ∈ system.validators, pair.1 = vid)
     (h_byz_bound : (system.validators.filter (fun p => p.2 = false)).length
       ≤ system.f) :
-    ∃ v ∈ shared, isHonestValidator system v = true := by
+    ∃ v ∈ shared, isHonestValidator system v := by
   contrapose! h_byz_bound;
   refine' lt_of_lt_of_le h_shared_len _;
   have h_byzantine_count : List.toFinset (List.map (fun p => p.1) (List.filter (fun p => p.2 = false) system.validators)) ⊇ List.toFinset shared := by
@@ -203,12 +70,12 @@ private lemma exists_honest_in_shared
   exact this.trans ( List.toFinset_card_le _ ) |> le_trans <| by simp +decide [ List.filter_eq ] ;
 
 /--
-**Lemma 13 (paper Appendix D.3).**
+**Lemma 12 (paper Appendix D.3).**
 
-> *In Mysticeti-Beluga, if `2f + 1` round `r` blocks from distinct
-> validators are certificates of a block `B`, then every block in
-> any round `r' > r` must (directly or transitively) reference a
-> certificate for `B` formed in round `r`.*
+> *In Mysticeti-Beluga, if `2f + 1` round `r + 1` blocks from
+> distinct validators are certificates of a block `B`, then every
+> block in any round `r' > r` must (directly or transitively)
+> reference a certificate for `B` formed in round `r`.*
 
 **Note on indexing.** The paper writes "round `r` blocks ... are
 certificates of a block `B`", but a *certificate for `B`* is a
@@ -230,7 +97,7 @@ not equivocate, every round `B.r + 2` block must reference a
 certificate for `B`. Induction on rounds propagates to all
 `r' > B.r + 1`.
 -/
-theorem lemma13_cert_persistence
+theorem lemma12_cert_persistence
     (system : BlockSynchroniserSystem) {S} [SystemState S] (state : S)
     (_h_no_eq : NoEquivocationInParents system state)
     (h_admission : AdmissionWellFormed system state)
@@ -243,7 +110,7 @@ theorem lemma13_cert_persistence
     -- Honest validators produce at most one block per (author, round) pair.
     -- In a real protocol, this follows from digital signatures + honest behavior.
     (h_honest_unique : ∀ B₁ ∈ SystemState.blocks state, ∀ B₂ ∈ SystemState.blocks state,
-      isHonestValidator system B₁.author = true →
+      isHonestValidator system B₁.author →
       B₁.author = B₂.author → B₁.r = B₂.r → B₁ = B₂)
     (B : Block) (h_B : B ∈ SystemState.blocks state)
     (h_cert : ∃ certs : List Block,
@@ -277,7 +144,7 @@ theorem lemma13_cert_persistence
           · assumption;
           · grind +locals;
         · exact hN;
-      obtain ⟨v, hv⟩ : ∃ v ∈ shared, isHonestValidator system v = true := by
+      obtain ⟨v, hv⟩ : ∃ v ∈ shared, isHonestValidator system v := by
         apply exists_honest_in_shared;
         · assumption;
         · linarith;
@@ -303,6 +170,38 @@ theorem lemma13_cert_persistence
   exact h_ind ( B'.r - ( B.r + 2 ) ) ( Nat.zero_le _ ) B' h_in ( by rw [ add_tsub_cancel_of_le h_later ] )
 
 /--
+**Lemma 13 (paper Appendix D.3).**
+
+> *In Mysticeti-Beluga, if an honest validator directly skips a
+> round-`r` leader block `B_r^L`, then no honest validator commits
+> `B_r^L`.*
+
+Paper proof sketch: a direct skip occurs only if at least `2f + 1`
+blocks in round `r + 1` do not reference `B_r^L`. But if `B_r^L`
+is committed, then by the decision rule, at least `2f + 1` round
+`r + 1` blocks reference it. The two `2f + 1`-quorums intersect in
+at least one honest validator, who would have to equivocate —
+contradiction.
+
+In our Lean statement the "no commit" claim is reduced to
+`view vid B.d ≠ Decision.ToCommit` for every honest `vid`, given
+`directDecide system state B = Decision.ToSkip` and the protocol
+fact that honest views agree with `directDecide` on this digest.
+-/
+theorem lemma13_no_commit
+    (system : BlockSynchroniserSystem) {S} [SystemState S] (state : S)
+    (view : ConsensusView)
+    (B : Block) (h_direct_skip : directDecide system state B = Decision.ToSkip)
+    (h_view_direct : ∀ vid, isHonestValidator system vid →
+                       view vid B.d = directDecide system state B) :
+    ∀ vid, isHonestValidator system vid →
+      view vid B.d ≠ Decision.ToCommit := by
+  -- By h_view_direct, every honest validator's view on B.d equals
+  -- directDecide system state B = Decision.ToSkip (by h_direct_skip).
+  -- Since Decision.ToSkip ≠ Decision.ToCommit, the conclusion follows.
+  grind
+
+/--
 **Lemma 14 (paper Appendix D.3).**
 
 > *In Mysticeti-Beluga, if an honest validator directly commits
@@ -319,7 +218,7 @@ Paper proof sketch (two cases):
 * *Indirect skip.* An indirect skip occurs through a later leader
   `B_{r'}^L` with `r' > r + 2` whose causal history does not
   reference any certificate for `B_r^L`. But `B_r^L` is directly
-  committed, so it has `2f + 1` certificates; by Lemma 13, every
+  committed, so it has `2f + 1` certificates; by Lemma 12, every
   block in rounds `> r + 1` references one of them — contradiction.
 
 In our Lean statement the "no skip" claim is reduced to
@@ -331,9 +230,9 @@ theorem lemma14_no_skip
     (system : BlockSynchroniserSystem) {S} [SystemState S] (state : S)
     (view : ConsensusView)
     (B : Block) (h_direct_commit : directDecide system state B = Decision.ToCommit)
-    (h_view_direct : ∀ vid, isHonestValidator system vid = true →
+    (h_view_direct : ∀ vid, isHonestValidator system vid →
                        view vid B.d = directDecide system state B) :
-    ∀ vid, isHonestValidator system vid = true →
+    ∀ vid, isHonestValidator system vid →
       view vid B.d ≠ Decision.ToSkip := by
   -- By h_view_direct, every honest validator's view on B.d equals
   -- directDecide system state B = Decision.ToCommit (by h_direct_commit).
@@ -412,7 +311,7 @@ Paper proof (verbatim):
 > *Inductive step.* Assume the statement holds for all rounds in
 > `(k, n]`. Consider round `k`. If either validator directly commits
 > or directly skips `B_k^L`, the other must make the same decision
-> by Lemma 11 and Lemma 14. Otherwise, both decisions are indirect
+> by Lemma 13 and Lemma 14. Otherwise, both decisions are indirect
 > and derived from a later committed leader. Let `k_i` and `k_j` be
 > the rounds of the first such commits for `v_i` and `v_j`,
 > respectively. By the induction hypothesis, `k_i = k_j`, and both
@@ -437,14 +336,14 @@ a liveness consequence the paper invokes silently.
 theorem lemma16_consistent_status
     (system : BlockSynchroniserSystem) {S} [SystemState S] (state : S)
     (view : ConsensusView)
-    (h_view_direct : ∀ vid B, isHonestValidator system vid = true →
+    (h_view_direct : ∀ vid B, isHonestValidator system vid →
                        isLeaderBlock system B → B ∈ SystemState.blocks state →
                        directDecide system state B ≠ Decision.Undecided →
                        view vid B.d = directDecide system state B)
     -- Protocol invariant: every non-Undecided honest view on digest d
     -- traces back to a leader block B with B.d = d in the state whose
     -- directDecide is non-Undecided.
-    (h_view_traceback : ∀ vid d, isHonestValidator system vid = true →
+    (h_view_traceback : ∀ vid d, isHonestValidator system vid →
         view vid d ≠ Decision.Undecided →
         ∃ B, isLeaderBlock system B ∧ B ∈ SystemState.blocks state ∧
           directDecide system state B ≠ Decision.Undecided ∧ B.d = d) :
@@ -512,19 +411,19 @@ theorem theorem7_consensus_safety
       -- transaction ordering is derived consistently from the consensus
       -- view: if two honest validators have the same view, their orders
       -- are consistent prefixes of each other.
-      ∀ vid₁ vid₂, isHonestValidator system vid₁ = true →
-                   isHonestValidator system vid₂ = true →
+      ∀ vid₁ vid₂, isHonestValidator system vid₁ →
+                   isHonestValidator system vid₂ →
                    (∀ d, view vid₁ d = view vid₂ d) →
-                   (order vid₁).isPrefixOf (order vid₂) = true ∨
-                   (order vid₂).isPrefixOf (order vid₁) = true)
+                   (order vid₁).isPrefixOf (order vid₂) ∨
+                   (order vid₂).isPrefixOf (order vid₁))
     -- Protocol invariant (decision completeness): if one honest
     -- validator's view on digest d is Undecided, then so is every other
     -- honest validator's view (and vice versa). This upgrades
     -- ConsensusView.Consistent (no conflicting non-Undecided) to full
     -- view equality for honest validators.
     (h_decision_complete : ∀ vid₁ vid₂ d,
-        isHonestValidator system vid₁ = true →
-        isHonestValidator system vid₂ = true →
+        isHonestValidator system vid₁ →
+        isHonestValidator system vid₂ →
         (view vid₁ d = Decision.Undecided ↔ view vid₂ d = Decision.Undecided)) :
     order.Consistent system := by
   -- Paper argument: By Lemma 16, all honest validators assign identical
@@ -549,7 +448,7 @@ theorem theorem7_consensus_safety
 /-! ## belugaTrace-specialised wrappers
 
 For the executable `belugaTrace` instantiation, the four
-protocol-invariant hypotheses on L13 / L15
+protocol-invariant hypotheses on L12 / L15
 (`AdmissionWellFormed`, `NoEquivocationInParents`, the
 honest-author uniqueness assumption, the authors-are-registered side
 condition) are not assumptions: they are bundled in
@@ -557,18 +456,18 @@ condition) are not assumptions: they are bundled in
 `belugaTrace_satisfies_mysticetiSafetyInv` (modulo the
 `authorsValid` conjunct, queued for delegation).
 
-These wrappers consume the bundle and re-state L13 / L15 against
+These wrappers consume the bundle and re-state L12 / L15 against
 `belugaTrace`, leaving only the genuine BFT side conditions (`hN`,
 `h_byz_bound`, `hids`) — paper assumptions that cannot be derived
 from the executable trace. -/
 
-/-- **Lemma 13 (paper Appendix D.3) for the Beluga trace.**
+/-- **Lemma 12 (paper Appendix D.3) for the Beluga trace.**
 
-belugaTrace specialisation of `lemma13_cert_persistence`. The four
+belugaTrace specialisation of `lemma12_cert_persistence`. The four
 protocol-invariant hypotheses (`h_no_eq`, `h_admission`,
 `h_authors_valid`, `h_honest_unique`) are discharged from
 [`belugaTrace_satisfies_mysticetiSafetyInv`](SafetyInvariant.lean). -/
-theorem lemma13_cert_persistence_belugaTrace
+theorem lemma12_cert_persistence_belugaTrace
     (system : BlockSynchroniserSystem)
     (hids : ValidIds system)
     (hN : system.n = 3 * system.f + 1)
@@ -586,7 +485,7 @@ theorem lemma13_cert_persistence_belugaTrace
     ∃ C, isCertificateFor (Beluga.belugaTrace system k) C B ∧
          Reaches (Beluga.belugaTrace system k) B' C := by
   have h_inv := belugaTrace_satisfies_mysticetiSafetyInv system hids k
-  exact lemma13_cert_persistence system (Beluga.belugaTrace system k)
+  exact lemma12_cert_persistence system (Beluga.belugaTrace system k)
     h_inv.noEquivocation h_inv.admission hN h_inv.authorsValid h_byz_bound
     (fun B₁ hB₁ B₂ hB₂ _ => h_inv.uniqueByAuthorRound B₁ hB₁ B₂ hB₂)
     B h_B h_cert B' h_in h_later
