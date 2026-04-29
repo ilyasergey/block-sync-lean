@@ -838,9 +838,7 @@ theorem lemma9_round_robin_pigeonhole
         obtain ⟨k, hk⟩ := this; nlinarith [show k = 0 by nlinarith]
       · intro b hb hb'
         use (b + (3 * system.f + 1) - startRound % (3 * system.f + 1)) % (3 * system.f + 1)
-        simp +decide [← ZMod.val_natCast,
-          Nat.cast_sub (show startRound % (3 * system.f + 1) ≤ b + (3 * system.f + 1) from
-            le_trans (Nat.mod_lt _ (Nat.succ_pos _) |> Nat.le_of_lt) (Nat.le_add_left _ _))]
+        simp +decide [← ZMod.val_natCast]
         simp +decide [Nat.cast_sub (show (startRound : ℕ) % (3 * system.f + 1)
             ≤ b + (3 * system.f + 1) from
             le_trans (Nat.mod_lt _ (Nat.succ_pos _) |> Nat.le_of_lt) (Nat.le_add_left _ _))]

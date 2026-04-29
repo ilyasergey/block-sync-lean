@@ -80,14 +80,14 @@ fairness derivation, named liveness primitives) lives in
 | **Lemma 7** — round-`r` honest leader's block is referenced by every honest round-`(r+1)` block | [`Mysticeti/Liveness.lean :: honest_ref_leader`](BlockSynchroniser/Mysticeti/Liveness.lean#L368) | ✅ |
 | **Lemma 8** — round-`r` honest leader's block becomes certified | [`Mysticeti/Liveness.lean :: honest_certify_leader`](BlockSynchroniser/Mysticeti/Liveness.lean#L557) | ✅ |
 | **Lemma 9** — round-robin pigeonhole (3 consecutive honest leaders in any 3f+3 window) | [`Mysticeti/Liveness.lean :: lemma9_round_robin_pigeonhole`](BlockSynchroniser/Mysticeti/Liveness.lean#L783) | ✅ |
-| **Lemma 10** — eventual direct commit at every starting round | [`Mysticeti/Liveness.lean :: lemma10_eventual_commit`](BlockSynchroniser/Mysticeti/Liveness.lean#L1108) | ✅ — formalised in the form Theorem 6 consumes (post-GST, every starting round has a future round at which the leader's block direct-commits). |
-| **Lemma 11** — block referenced by `2f+1` subsequent blocks ⇒ honest validators eventually `block_accept` it | [`Mysticeti/Liveness.lean :: lemma11_referenced_accepted`](BlockSynchroniser/Mysticeti/Liveness.lean#L1132) | ✅ |
+| **Lemma 10** — eventual direct commit at every starting round | [`Mysticeti/Liveness.lean :: lemma10_eventual_commit`](BlockSynchroniser/Mysticeti/Liveness.lean#L1106) | ✅ — formalised in the form Theorem 6 consumes (post-GST, every starting round has a future round at which the leader's block direct-commits). |
+| **Lemma 11** — block referenced by `2f+1` subsequent blocks ⇒ honest validators eventually `block_accept` it | [`Mysticeti/Liveness.lean :: lemma11_referenced_accepted`](BlockSynchroniser/Mysticeti/Liveness.lean#L1130) | ✅ |
 | **Lemma 12** — certificate persistence across rounds | [`Mysticeti/Safety.lean :: lemma12_cert_persistence`](BlockSynchroniser/Mysticeti/Safety.lean#L100) | ✅ |
 | **Lemma 13** — directly-skipped leader is never committed | [`Mysticeti/Safety.lean :: lemma13_no_commit`](BlockSynchroniser/Mysticeti/Safety.lean#L191) | ✅ |
 | **Lemma 14** — no honest validator skips a directly-committed leader | [`Mysticeti/Safety.lean :: lemma14_no_skip`](BlockSynchroniser/Mysticeti/Safety.lean#L229) | ✅ |
 | **Lemma 15** — at most one certified leader per round | [`Mysticeti/Safety.lean :: lemma15_unique_cert`](BlockSynchroniser/Mysticeti/Safety.lean#L269) | ✅ |
 | **Lemma 16** — consistent leader-status decision across honest validators | [`Mysticeti/Safety.lean :: lemma16_consistent_status`](BlockSynchroniser/Mysticeti/Safety.lean#L336) | ✅ |
-| **Theorem 6** — Mysticeti-Beluga consensus liveness | [`Mysticeti/Liveness.lean :: theorem6_consensus_liveness`](BlockSynchroniser/Mysticeti/Liveness.lean#L1176) | ✅ |
+| **Theorem 6** — Mysticeti-Beluga consensus liveness | [`Mysticeti/Liveness.lean :: theorem6_consensus_liveness`](BlockSynchroniser/Mysticeti/Liveness.lean#L1174) | ✅ |
 | **Theorem 7** — Mysticeti-Beluga consensus safety | [`Mysticeti/Safety.lean :: theorem7_consensus_safety`](BlockSynchroniser/Mysticeti/Safety.lean#L406) | ✅ |
 | Mysticeti safety invariants for `belugaTrace` | [`Mysticeti/SafetyInvariant.lean :: belugaTrace_satisfies_mysticetiSafetyInv`](BlockSynchroniser/Mysticeti/SafetyInvariant.lean#L246) | ✅ |
 
@@ -147,7 +147,7 @@ implies a paper concern.
 - **Lemma 10 statement form.** Paper L10 ensures every undecided
   leader is eventually decided, supporting the §D.1.1 indirect-rule
   chain. We formalise it in the form Theorem 6 consumes
-  ([`lemma10_eventual_commit`](BlockSynchroniser/Mysticeti/Liveness.lean#L1108)):
+  ([`lemma10_eventual_commit`](BlockSynchroniser/Mysticeti/Liveness.lean#L1106)):
   post-GST, at every starting round there is a future round whose
   leader block direct-commits. T6 then derives every honest
   validator's eventual acceptance from this and the §5 in-pool
