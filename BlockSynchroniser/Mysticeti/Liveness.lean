@@ -28,7 +28,7 @@ open Beluga
 
 /-! ## §D.2 post-GST liveness bundle
 
-The §D.2 lemmas (L7–L12, T6) consume two paper-implicit per-action
+The §D.2 lemmas (L7–L11, T6) consume two paper-implicit per-action
 liveness primitives on top of the §5 bundle: the §4.2
 `block_propose` and `block_store` per-action `Δ`-bounds (the §4.2
 prose's symmetric per-action treatment of the four protocol
@@ -653,7 +653,7 @@ theorem honest_certify_leader
   rw [h_refAuthors_len_eq]
   omega
 
-/-! ### §D.2 Lemma 9 corollary — direct commit for an honest leader -/
+/-! ### Direct commit for an honest leader (helper for §D.2) -/
 
 /-- Direct-commit helper: given an honest leader at round `r`, post-GST,
 there is a future step `k'` and a leader block `B_L` at round `r` whose
@@ -771,17 +771,17 @@ private theorem direct_commit_for_honest_leader
   rw [h_cert]
   rfl
 
-/-! ### §D.2 Lemma 9 corollary — three consecutive direct commits -/
+/-! ### Three consecutive direct commits (helper for §D.2) -/
 
-/-- Paper §D.2 Lemma 9 corollary: with three consecutive honest leaders,
-their leader blocks all direct-commit `ToCommit`.
+/-- Helper for §D.2 (proof of Lemma 10): with three consecutive
+honest leaders, their leader blocks all direct-commit `ToCommit`.
 
 Concretely: there is a future step `k'` and a starting round `r₁ ≥
 startRound` such that for every leader block `B_L` in the pool at `k'`
 whose round is `r₁`, `r₁+1`, or `r₁+2`, `directDecide` returns
 `Decision.ToCommit`. The universal-over-`B_L` form is mechanically
 sound because the round bracket pins blocks to honest authors (via the
-round-robin schedule and `lemma10_round_robin_pigeonhole`), and
+round-robin schedule and `lemma9_round_robin_pigeonhole`), and
 `honest_block_uniqueness` collapses any two leader blocks at the same
 honest-authored round to the same block. -/
 theorem three_consec_commit
@@ -799,7 +799,7 @@ theorem three_consec_commit
           = Decision.ToCommit) := by
   -- Step 1: lemma10 → r₁ ≥ startRound with three consecutive honest leaders.
   obtain ⟨r₁, hr₁_ge, _hr₁_lt, h_hon₀, h_hon₁, h_hon₂⟩ :=
-    Mysticeti.Safety.lemma10_round_robin_pigeonhole system startRound hN hHonest h_ids
+    Mysticeti.Safety.lemma9_round_robin_pigeonhole system startRound hN hHonest h_ids
   refine ⟨r₁, hr₁_ge, ?_⟩
   -- Step 2: derive committed leader blocks at each of the three rounds.
   obtain ⟨k_a, hk_a_lo, B_a, hB_a_in, hB_a_author, hB_a_round, hB_a_commit⟩ :=
@@ -893,20 +893,20 @@ theorem three_consec_commit
     rw [h_eq]
     exact hB_c_commit
 
-/-! ### §D.2 Lemma 11 (existential eventual commit) -/
+/-! ### §D.2 Lemma 10 (existential eventual commit) -/
 
-/-- Paper §D.2 Lemma 11 (existential corollary of `three_consec_commit`):
+/-- Paper §D.2 Lemma 10 (existential corollary of `three_consec_commit`):
 post-GST, there is a future state at which some leader block at some
 round `≥ startRound` is direct-committed.
 
-The paper's full §D.2 L11 ("every leader's decision is eventually
+The paper's full §D.2 L10 ("every leader's decision is eventually
 decided") additionally invokes the §D.1.1 indirect-decision rule to
 chain decisions backward through committed leaders; that recursion
 needs `indirectDecideStep`-level mechanization which is deferred.
 Theorem 6 (`theorem6_consensus_liveness`) below does not use the
 backward chain — it draws acceptance propagation directly from §5
 in-pool delivery and §4.2 accept-action liveness. -/
-theorem lemma11_eventual_commit
+theorem lemma10_eventual_commit
     {system : BlockSynchroniserSystem} {time : Nat → Nat}
     (h_sync : MysticetiBelugaSynchrony system time)
     (hN : system.n = 3 * system.f + 1)
@@ -920,17 +920,17 @@ theorem lemma11_eventual_commit
           = Decision.ToCommit := by
   -- Use lemma10 → r₁; then extract B_L via direct_commit_for_honest_leader.
   obtain ⟨r₁, hr₁_ge, _hr₁_lt, h_hon₀, _, _⟩ :=
-    Mysticeti.Safety.lemma10_round_robin_pigeonhole system startRound hN hHonest h_ids
+    Mysticeti.Safety.lemma9_round_robin_pigeonhole system startRound hN hHonest h_ids
   obtain ⟨k', hk'_lo, B_L, hB_L_in, hB_L_author, hB_L_round, hB_L_commit⟩ :=
     direct_commit_for_honest_leader h_sync r₁ k₀ h_gst h_hon₀
   refine ⟨r₁, hr₁_ge, k', hk'_lo, B_L, hB_L_in, ?_, hB_L_round, hB_L_commit⟩
   unfold isLeaderBlock; rw [hB_L_author, hB_L_round]
 
-/-! ### §D.2 Lemma 12 — block accepted via `f+1`-references -/
+/-! ### §D.2 Lemma 11 — block accepted via `f+1`-references -/
 
-/-- Paper §D.2 Lemma 12: post-GST, an honest validator with `f+1` honest
+/-- Paper §D.2 Lemma 11: post-GST, an honest validator with `f+1` honest
 references for digest `d` eventually accepts `d`. -/
-theorem lemma12_referenced_accepted
+theorem lemma11_referenced_accepted
     {system : BlockSynchroniserSystem} {time : Nat → Nat}
     (h_sync : MysticetiBelugaSynchrony system time)
     (vid : ValidatorId) (d : BlockDigest) (k₀ : ℕ)

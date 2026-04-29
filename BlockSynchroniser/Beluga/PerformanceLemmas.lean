@@ -51,11 +51,11 @@ def LatencyTriangle
               bv.currentRound = r + 1)
 
 /-
-**Lemma 3 (paper Appendix C.2).**
+**Lemma 2 (paper Appendix C.2).**
 *After GST, each honest validator will not get blamed and have its
 reputation decreased by honest validators.*
 -/
-theorem lemma3_honest_not_blamed
+theorem lemma2_honest_not_blamed
     (system : BlockSynchroniserSystem)
     (time : TimeMap)
     (_h_time : time.WellFormed)
@@ -99,7 +99,13 @@ private lemma round_advance_chain
     obtain ⟨ k'', hk₄, hk₅, hk₆ ⟩ := h_lt ( r + d + 1 ) k' ( by linarith [ h_time.1 k k' hk₁ ] ) hk₃;
     grind
 
-theorem lemma4_round_latency_delta
+/-
+**Lemma 3 (paper Appendix C.2).**
+*After GST, if all honest validators enter round `r` at time `t_r`
+and have their reputation higher than any malicious validator, then
+for any future round `r' ≥ r`, the latency of round `r'` is `Δ`.*
+-/
+theorem lemma3_round_latency_delta
     (system : BlockSynchroniserSystem)
     (time : TimeMap)
     (h_time : time.WellFormed)
@@ -131,18 +137,17 @@ theorem lemma4_round_latency_delta
   grind
 
 /-
-**Lemma 5 (paper Appendix C.2 — deterministic part).**
+**Lemma 4 (paper Appendix C.2 — deterministic part).**
 *After GST, if all honest validators enter round `r` at time `t_r`,
 then for any future round `r' > r`: either the latency of round `r'`
 is within `2Δ`, or at least one malicious validator is blamed by
 honest validators (in which case the latency of round `r'` is at most
-`3Δ`).*
+`4Δ`).*
 
-This is the deterministic disjunction; the expected-latency framing
-(Lemma 5 in the paper) is treated separately as Lemma 5 in the paper
-text combines both. The probabilistic version is out of scope.
+This is the deterministic disjunction; the expected-latency disjunct
+of paper Lemma 4 is probabilistic and out of scope.
 -/
-theorem lemma5_round_latency_or_blamed
+theorem lemma4_round_latency_or_blamed
     (system : BlockSynchroniserSystem)
     (time : TimeMap)
     (h_time : time.WellFormed)

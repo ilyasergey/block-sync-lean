@@ -44,7 +44,7 @@ def isCertificateFor {S} [SystemState S] (state : S) (C B : Block) : Prop :=
   C ∈ SystemState.blocks state ∧
   B ∈ SystemState.blocks state
 
-/-! ## Lemma 10 — round-robin pigeonhole (paper Appendix D)
+/-! ## Lemma 9 — round-robin pigeonhole (paper Appendix D.2)
 
 There are `3f + 1` groups of three consecutive rounds in any window of
 `3f + 3` rounds. Due to the round-robin schedule, each of the `2f + 1`
@@ -53,7 +53,7 @@ honest validators appears in 3 such groups, contributing `3 · (2f+1)
 `> 2`, so by pigeonhole some group has 3 honest leaders.
 -/
 
-/-- Combinatorial helper for `lemma10_round_robin_pigeonhole`.
+/-- Combinatorial helper for `lemma9_round_robin_pigeonhole`.
 
 In a circular sequence of length `n = 3f+1` with at most `f` "false"
 positions, three consecutive "true" positions exist. Proved by
@@ -90,7 +90,7 @@ lemma consecutive_triple_exists (n f : Nat) (g : Nat → Bool)
     lt_of_lt_of_le (by norm_num [hn])
       (Finset.sum_le_sum fun i hi => h_sum_ge i (Finset.mem_range.mp hi))
 
-/-- **Lemma 10 (paper Appendix D.3).**
+/-- **Lemma 9 (paper Appendix D.2).**
 
 > *The round-robin schedule of leader blocks in Mysticeti-Beluga
 > ensures that in any window of `3f + 3` rounds, there are three
@@ -105,7 +105,7 @@ contains `⌈(6f+3)/(3f+1)⌉ = 3` honest leader blocks.
 
 The Lean statement returns the explicit start round of the
 consecutive-honest triple. -/
-theorem lemma10_round_robin_pigeonhole
+theorem lemma9_round_robin_pigeonhole
     (system : BlockSynchroniserSystem) (startRound : Round)
     (hN : system.n = 3 * system.f + 1)
     (hHonest : (system.validators.filter (fun p => p.2 = true)).length
@@ -203,12 +203,12 @@ private lemma exists_honest_in_shared
   exact this.trans ( List.toFinset_card_le _ ) |> le_trans <| by simp +decide [ List.filter_eq ] ;
 
 /--
-**Lemma 13 (paper Appendix D.3).**
+**Lemma 12 (paper Appendix D.3).**
 
-> *In Mysticeti-Beluga, if `2f + 1` round `r` blocks from distinct
-> validators are certificates of a block `B`, then every block in
-> any round `r' > r` must (directly or transitively) reference a
-> certificate for `B` formed in round `r`.*
+> *In Mysticeti-Beluga, if `2f + 1` round `r + 1` blocks from
+> distinct validators are certificates of a block `B`, then every
+> block in any round `r' > r` must (directly or transitively)
+> reference a certificate for `B` formed in round `r`.*
 
 **Note on indexing.** The paper writes "round `r` blocks ... are
 certificates of a block `B`", but a *certificate for `B`* is a
@@ -230,7 +230,7 @@ not equivocate, every round `B.r + 2` block must reference a
 certificate for `B`. Induction on rounds propagates to all
 `r' > B.r + 1`.
 -/
-theorem lemma13_cert_persistence
+theorem lemma12_cert_persistence
     (system : BlockSynchroniserSystem) {S} [SystemState S] (state : S)
     (_h_no_eq : NoEquivocationInParents system state)
     (h_admission : AdmissionWellFormed system state)
@@ -303,6 +303,38 @@ theorem lemma13_cert_persistence
   exact h_ind ( B'.r - ( B.r + 2 ) ) ( Nat.zero_le _ ) B' h_in ( by rw [ add_tsub_cancel_of_le h_later ] )
 
 /--
+**Lemma 13 (paper Appendix D.3).**
+
+> *In Mysticeti-Beluga, if an honest validator directly skips a
+> round-`r` leader block `B_r^L`, then no honest validator commits
+> `B_r^L`.*
+
+Paper proof sketch: a direct skip occurs only if at least `2f + 1`
+blocks in round `r + 1` do not reference `B_r^L`. But if `B_r^L`
+is committed, then by the decision rule, at least `2f + 1` round
+`r + 1` blocks reference it. The two `2f + 1`-quorums intersect in
+at least one honest validator, who would have to equivocate —
+contradiction.
+
+In our Lean statement the "no commit" claim is reduced to
+`view vid B.d ≠ Decision.ToCommit` for every honest `vid`, given
+`directDecide system state B = Decision.ToSkip` and the protocol
+fact that honest views agree with `directDecide` on this digest.
+-/
+theorem lemma13_no_commit
+    (system : BlockSynchroniserSystem) {S} [SystemState S] (state : S)
+    (view : ConsensusView)
+    (B : Block) (h_direct_skip : directDecide system state B = Decision.ToSkip)
+    (h_view_direct : ∀ vid, isHonestValidator system vid = true →
+                       view vid B.d = directDecide system state B) :
+    ∀ vid, isHonestValidator system vid = true →
+      view vid B.d ≠ Decision.ToCommit := by
+  -- By h_view_direct, every honest validator's view on B.d equals
+  -- directDecide system state B = Decision.ToSkip (by h_direct_skip).
+  -- Since Decision.ToSkip ≠ Decision.ToCommit, the conclusion follows.
+  grind
+
+/--
 **Lemma 14 (paper Appendix D.3).**
 
 > *In Mysticeti-Beluga, if an honest validator directly commits
@@ -319,7 +351,7 @@ Paper proof sketch (two cases):
 * *Indirect skip.* An indirect skip occurs through a later leader
   `B_{r'}^L` with `r' > r + 2` whose causal history does not
   reference any certificate for `B_r^L`. But `B_r^L` is directly
-  committed, so it has `2f + 1` certificates; by Lemma 13, every
+  committed, so it has `2f + 1` certificates; by Lemma 12, every
   block in rounds `> r + 1` references one of them — contradiction.
 
 In our Lean statement the "no skip" claim is reduced to
@@ -412,7 +444,7 @@ Paper proof (verbatim):
 > *Inductive step.* Assume the statement holds for all rounds in
 > `(k, n]`. Consider round `k`. If either validator directly commits
 > or directly skips `B_k^L`, the other must make the same decision
-> by Lemma 11 and Lemma 14. Otherwise, both decisions are indirect
+> by Lemma 13 and Lemma 14. Otherwise, both decisions are indirect
 > and derived from a later committed leader. Let `k_i` and `k_j` be
 > the rounds of the first such commits for `v_i` and `v_j`,
 > respectively. By the induction hypothesis, `k_i = k_j`, and both
@@ -549,7 +581,7 @@ theorem theorem7_consensus_safety
 /-! ## belugaTrace-specialised wrappers
 
 For the executable `belugaTrace` instantiation, the four
-protocol-invariant hypotheses on L13 / L15
+protocol-invariant hypotheses on L12 / L15
 (`AdmissionWellFormed`, `NoEquivocationInParents`, the
 honest-author uniqueness assumption, the authors-are-registered side
 condition) are not assumptions: they are bundled in
@@ -557,18 +589,18 @@ condition) are not assumptions: they are bundled in
 `belugaTrace_satisfies_mysticetiSafetyInv` (modulo the
 `authorsValid` conjunct, queued for delegation).
 
-These wrappers consume the bundle and re-state L13 / L15 against
+These wrappers consume the bundle and re-state L12 / L15 against
 `belugaTrace`, leaving only the genuine BFT side conditions (`hN`,
 `h_byz_bound`, `hids`) — paper assumptions that cannot be derived
 from the executable trace. -/
 
-/-- **Lemma 13 (paper Appendix D.3) for the Beluga trace.**
+/-- **Lemma 12 (paper Appendix D.3) for the Beluga trace.**
 
-belugaTrace specialisation of `lemma13_cert_persistence`. The four
+belugaTrace specialisation of `lemma12_cert_persistence`. The four
 protocol-invariant hypotheses (`h_no_eq`, `h_admission`,
 `h_authors_valid`, `h_honest_unique`) are discharged from
 [`belugaTrace_satisfies_mysticetiSafetyInv`](SafetyInvariant.lean). -/
-theorem lemma13_cert_persistence_belugaTrace
+theorem lemma12_cert_persistence_belugaTrace
     (system : BlockSynchroniserSystem)
     (hids : ValidIds system)
     (hN : system.n = 3 * system.f + 1)
@@ -586,7 +618,7 @@ theorem lemma13_cert_persistence_belugaTrace
     ∃ C, isCertificateFor (Beluga.belugaTrace system k) C B ∧
          Reaches (Beluga.belugaTrace system k) B' C := by
   have h_inv := belugaTrace_satisfies_mysticetiSafetyInv system hids k
-  exact lemma13_cert_persistence system (Beluga.belugaTrace system k)
+  exact lemma12_cert_persistence system (Beluga.belugaTrace system k)
     h_inv.noEquivocation h_inv.admission hN h_inv.authorsValid h_byz_bound
     (fun B₁ hB₁ B₂ hB₂ _ => h_inv.uniqueByAuthorRound B₁ hB₁ B₂ hB₂)
     B h_B h_cert B' h_in h_later

@@ -65,10 +65,10 @@ fairness derivation, named liveness primitives) lives in
 | Paper | Code | Status |
 |---|---|---|
 | **Assumption 1 — latency triangle** | [`Beluga/PerformanceLemmas.lean :: LatencyTriangle`](BlockSynchroniser/Beluga/PerformanceLemmas.lean#L40) | ✅ |
-| **Lemma 3** — honest validators are not blamed (post-GST) | [`Beluga/PerformanceLemmas.lean :: lemma3_honest_not_blamed`](BlockSynchroniser/Beluga/PerformanceLemmas.lean#L58) | ✅ |
-| **Lemma 4** — round latency `Δ` when honest reputations dominate | [`Beluga/PerformanceLemmas.lean :: lemma4_round_latency_delta`](BlockSynchroniser/Beluga/PerformanceLemmas.lean#L102) | ✅ |
-| **Lemma 5** — round latency `2Δ`-or-blame (deterministic part) | [`Beluga/PerformanceLemmas.lean :: lemma5_round_latency_or_blamed`](BlockSynchroniser/Beluga/PerformanceLemmas.lean#L145) | ✅ |
-| **Lemmas 6, 7** + **Theorem 5** — expected-latency bounds | — | ⊘ probabilistic. |
+| **Lemma 2** — honest validators are not blamed (post-GST) | [`Beluga/PerformanceLemmas.lean :: lemma2_honest_not_blamed`](BlockSynchroniser/Beluga/PerformanceLemmas.lean#L58) | ✅ |
+| **Lemma 3** — round latency `Δ` when honest reputations dominate | [`Beluga/PerformanceLemmas.lean :: lemma3_round_latency_delta`](BlockSynchroniser/Beluga/PerformanceLemmas.lean#L108) | ✅ |
+| **Lemma 4** — round latency `2Δ`-or-blame (deterministic part) | [`Beluga/PerformanceLemmas.lean :: lemma4_round_latency_or_blamed`](BlockSynchroniser/Beluga/PerformanceLemmas.lean#L150) | ✅ |
+| **Lemma 5**, **Lemma 6**, **Theorem 5** — expected-latency bounds | — | ⊘ probabilistic. |
 
 ### Appendix D — Mysticeti-Beluga
 
@@ -79,17 +79,17 @@ fairness derivation, named liveness primitives) lives in
 | D.1.2 — Round-robin leader schedule | [`Mysticeti/Consensus.lean :: leaderOf` / `isLeaderBlock`](BlockSynchroniser/Mysticeti/Consensus.lean#L27) | ✅ |
 | **Lemma 7** — round-`r` honest leader's block is referenced by every honest round-`(r+1)` block | [`Mysticeti/Liveness.lean :: honest_ref_leader`](BlockSynchroniser/Mysticeti/Liveness.lean#L368) | ✅ |
 | **Lemma 8** — round-`r` honest leader's block becomes certified | [`Mysticeti/Liveness.lean :: honest_certify_leader`](BlockSynchroniser/Mysticeti/Liveness.lean#L557) | ✅ |
-| **Lemma 9 corollary** — three consecutive honest leaders direct-commit | [`Mysticeti/Liveness.lean :: three_consec_commit`](BlockSynchroniser/Mysticeti/Liveness.lean#L787) | ✅ |
-| **Lemma 10** — round-robin pigeonhole (3 consecutive honest leaders in any 3f+3 window) | [`Mysticeti/Safety.lean :: lemma10_round_robin_pigeonhole`](BlockSynchroniser/Mysticeti/Safety.lean#L108) | ✅ |
-| **Lemma 11** — eventual direct commit at every starting round | [`Mysticeti/Liveness.lean :: lemma11_eventual_commit`](BlockSynchroniser/Mysticeti/Liveness.lean#L909) | ✅ |
-| **Lemma 12** — block referenced by `f+1` honest validators ⇒ honest validators eventually accept it | [`Mysticeti/Liveness.lean :: lemma12_referenced_accepted`](BlockSynchroniser/Mysticeti/Liveness.lean#L933) | ✅ |
-| **Lemma 13** — certificate persistence across rounds | [`Mysticeti/Safety.lean :: lemma13_cert_persistence`](BlockSynchroniser/Mysticeti/Safety.lean#L233) | ✅ |
-| **Lemma 14** — no honest validator skips a directly-committed leader | [`Mysticeti/Safety.lean :: lemma14_no_skip`](BlockSynchroniser/Mysticeti/Safety.lean#L330) | ✅ |
-| **Lemma 15** — at most one certified leader per round | [`Mysticeti/Safety.lean :: lemma15_unique_cert`](BlockSynchroniser/Mysticeti/Safety.lean#L370) | ✅ |
-| **Lemma 16** — consistent leader-status decision across honest validators | [`Mysticeti/Safety.lean :: lemma16_consistent_status`](BlockSynchroniser/Mysticeti/Safety.lean#L437) | ✅ |
+| **Lemma 9** — round-robin pigeonhole (3 consecutive honest leaders in any 3f+3 window) | [`Mysticeti/Safety.lean :: lemma9_round_robin_pigeonhole`](BlockSynchroniser/Mysticeti/Safety.lean#L108) | ✅ |
+| **Lemma 10** — eventual direct commit at every starting round | [`Mysticeti/Liveness.lean :: lemma10_eventual_commit`](BlockSynchroniser/Mysticeti/Liveness.lean#L909) | ◐ — existential corollary; the universal indirect-rule chain is deferred. |
+| **Lemma 11** — block referenced by `2f+1` subsequent blocks ⇒ honest validators eventually `block_accept` it | [`Mysticeti/Liveness.lean :: lemma11_referenced_accepted`](BlockSynchroniser/Mysticeti/Liveness.lean#L933) | ✅ |
+| **Lemma 12** — certificate persistence across rounds | [`Mysticeti/Safety.lean :: lemma12_cert_persistence`](BlockSynchroniser/Mysticeti/Safety.lean#L233) | ✅ |
+| **Lemma 13** — directly-skipped leader is never committed | [`Mysticeti/Safety.lean :: lemma13_no_commit`](BlockSynchroniser/Mysticeti/Safety.lean#L324) | ✅ |
+| **Lemma 14** — no honest validator skips a directly-committed leader | [`Mysticeti/Safety.lean :: lemma14_no_skip`](BlockSynchroniser/Mysticeti/Safety.lean#L362) | ✅ |
+| **Lemma 15** — at most one certified leader per round | [`Mysticeti/Safety.lean :: lemma15_unique_cert`](BlockSynchroniser/Mysticeti/Safety.lean#L402) | ✅ |
+| **Lemma 16** — consistent leader-status decision across honest validators | [`Mysticeti/Safety.lean :: lemma16_consistent_status`](BlockSynchroniser/Mysticeti/Safety.lean#L469) | ✅ |
 | **Theorem 6** — Mysticeti-Beluga consensus liveness | [`Mysticeti/Liveness.lean :: theorem6_consensus_liveness`](BlockSynchroniser/Mysticeti/Liveness.lean#L977) | ✅ |
-| **Theorem 7** — Mysticeti-Beluga consensus safety | [`Mysticeti/Safety.lean :: theorem7_consensus_safety`](BlockSynchroniser/Mysticeti/Safety.lean#L507) | ✅ |
-| Mysticeti safety invariants for `belugaTrace` | [`Mysticeti/SafetyInvariant.lean :: belugaTrace_satisfies_mysticetiSafetyInv`](BlockSynchroniser/Mysticeti/SafetyInvariant.lean#L249) | ✅ |
+| **Theorem 7** — Mysticeti-Beluga consensus safety | [`Mysticeti/Safety.lean :: theorem7_consensus_safety`](BlockSynchroniser/Mysticeti/Safety.lean#L539) | ✅ |
+| Mysticeti safety invariants for `belugaTrace` | [`Mysticeti/SafetyInvariant.lean :: belugaTrace_satisfies_mysticetiSafetyInv`](BlockSynchroniser/Mysticeti/SafetyInvariant.lean#L246) | ✅ |
 
 ## Not in the paper — internal validation
 
@@ -132,7 +132,7 @@ implies a paper concern.
   probabilistic "expected latency" claim with the deterministic
   "or at least one malicious validator is blamed" disjunction. We
   formalize only the deterministic disjunct as
-  [`lemma5_round_latency_or_blamed`](BlockSynchroniser/Beluga/PerformanceLemmas.lean#L145).
+  [`lemma4_round_latency_or_blamed`](BlockSynchroniser/Beluga/PerformanceLemmas.lean#L145).
 
 - **§D.2 hypothesis bundle.** The §D.2 liveness theorems are derived
   from
@@ -144,12 +144,12 @@ implies a paper concern.
   in pool), and §3 (honest non-equivocation). None is itself a §D.2
   conclusion.
 
-- **Lemma 11 existential form.** The paper's L11 universally
+- **Lemma 10 existential form.** The paper's L10 universally
   quantifies "every undecided leader is eventually decided" via the
   §D.1.1 indirect rule. We formalize the existential corollary that
   feeds Theorem 6 directly — at every starting round there exists a
   future leader that direct-commits
-  ([`lemma11_eventual_commit`](BlockSynchroniser/Mysticeti/Liveness.lean#L909))
+  ([`lemma10_eventual_commit`](BlockSynchroniser/Mysticeti/Liveness.lean#L909))
   — and do not mechanize the recursive indirect-rule descent.
 
 - **Transaction order as a concrete function.** Paper §D.2 / §D.3
@@ -161,9 +161,9 @@ implies a paper concern.
   taking it as an abstract parameter.
 
 - **L16 / T7 explicit hypotheses.** Paper
-  [Lemma 16](BlockSynchroniser/Mysticeti/Safety.lean#L437)'s
+  [Lemma 16](BlockSynchroniser/Mysticeti/Safety.lean#L469)'s
   "consistent decisions" claim and
-  [Theorem 7](BlockSynchroniser/Mysticeti/Safety.lean#L507)'s
+  [Theorem 7](BlockSynchroniser/Mysticeti/Safety.lean#L539)'s
   prefix-consistency of ordered sequences silently invoke decision
   completeness, view-traceback to a directly-decided leader, and
   order-respects-view-equality. We surface these as explicit
@@ -201,11 +201,10 @@ block-sync-lean/
 │   │   └── Theorems.lean       ← §5 paper layer (L1, T1–T4)
 │   └── Mysticeti/
 │       ├── Consensus.lean      ← decision rules + leader schedule (D.1)
-│       ├── Safety.lean         ← Lemmas 10, 13–16, Theorem 7 (D.3)
+│       ├── Safety.lean         ← Lemma 9 (D.2) + Lemmas 12–16, Theorem 7 (D.3)
 │       ├── SafetyInvariant.lean ← Mysticeti safety invariants for belugaTrace
 │       └── Liveness.lean       ← MysticetiBelugaSynchrony bundle +
-│                                  Lemmas 7, 8, 9-corollary, 11, 12,
-│                                  Theorem 6 (D.2)
+│                                  Lemmas 7, 8, 10, 11, Theorem 6 (D.2)
 ├── Main.lean                   ← drives the executable Beluga trace
 ├── lakefile.lean
 └── lean-toolchain              ← v4.28.0

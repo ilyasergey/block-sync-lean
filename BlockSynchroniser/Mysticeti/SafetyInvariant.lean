@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0.
 
 Trace invariants packaged for Mysticeti-Beluga safety (Appendix D.3).
 
-`Mysticeti/Safety.lean` states the paper's L13/L15 against an abstract
+`Mysticeti/Safety.lean` states the paper's L12/L15 against an abstract
 `SystemState`; each of those lemmas takes four protocol-invariant
 hypotheses (`AdmissionWellFormed`, `NoEquivocationInParents`, the
 honest-author uniqueness assumption, and the authors-are-registered
@@ -17,7 +17,7 @@ emitted operations.
 
 This module bundles the four facts as `MysticetiSafetyInv` and proves
 the bundle for `belugaTrace`. `Mysticeti/Safety.lean` then provides
-belugaTrace-specialised wrappers `lemma13_cert_persistence_belugaTrace`
+belugaTrace-specialised wrappers `lemma12_cert_persistence_belugaTrace`
 and `lemma15_unique_cert_belugaTrace` whose only remaining hypotheses
 are the genuine BFT side conditions (`hN`, `h_byz_bound`, `hids`) —
 paper assumptions that cannot be derived from the executable trace.
@@ -34,10 +34,10 @@ open Beluga
 
 /-- Trace invariants needed by Mysticeti-Beluga safety (Appendix D.3).
 
-Bundles four facts that L13/L15 take as explicit hypotheses but that
+Bundles four facts that L12/L15 take as explicit hypotheses but that
 hold of `belugaTrace` for free:
 
-| Field                 | Corresponds to L13/L15 hypothesis                                  |
+| Field                 | Corresponds to L12/L15 hypothesis                                  |
 |-----------------------|--------------------------------------------------------------------|
 | `admission`           | `h_admission : AdmissionWellFormed system state`                   |
 | `uniqueByAuthorRound` | `h_honest_unique` (stronger — drops the honesty hypothesis)        |
@@ -51,7 +51,7 @@ structure MysticetiSafetyInv (system : BlockSynchroniserSystem) (s : BelugaState
   `belugaTrace_admissionWellFormed`. -/
   admission : AdmissionWellFormed system s
   /-- Author + round determine the block (paper §4.4). Stronger than
-  L13's `h_honest_unique`: no honesty hypothesis is needed because
+  L12's `h_honest_unique`: no honesty hypothesis is needed because
   `BlockInv.uniquePropose` is total. -/
   uniqueByAuthorRound :
     ∀ B₁ ∈ s.blocks, ∀ B₂ ∈ s.blocks,
