@@ -15,16 +15,17 @@ Causal availability) are the load-bearing definitions. The formalization:
   reputation, push/pull, network model);
 - proves the §5 main theorems (T1–T4) — Beluga satisfies all four
   block-synchronizer properties;
-- proves the Appendix C deterministic performance bounds (L3, L4, L5);
+- proves the Appendix C deterministic performance bounds (L2, L3, L4);
 - proves the Appendix D Mysticeti-Beluga consensus theorems (safety
   T7 and liveness T6, plus the supporting lemmas L7–L16).
 
 **Not formalized.** The probabilistic / expected-value claims:
 random-pull complexity bound (§4.3), expected-latency bounds (§C
-Lemmas 6, 7 and Theorem 5), and the expected-latency disjunct of
-Lemma 5. The recursive descent of the §D.1.1 indirect-decision rule
-is also not mechanized — Lemma 11 is formalized in its existential
-form, which is what Theorem 6's proof actually consumes.
+Lemma 5, Lemma 6 and Theorem 5), and the expected-latency disjunct
+of Lemma 4. The recursive descent of the §D.1.1 indirect-decision
+rule is also not mechanized — Lemma 10 is formalized in the form
+Theorem 6's proof actually consumes (existential, every starting
+round has a future round whose leader direct-commits).
 
 ## Overview
 
