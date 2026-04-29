@@ -6,9 +6,8 @@ Licensed under the Apache License, Version 2.0.
 Canonical transaction order for the Beluga trace.
 
 The transaction order is defined as a concrete *function* of trace state
-rather than an abstract parameter, so the order-faithfulness theorem
-`accepted_implies_in_belugaTransactionOrder` is a *theorem* about this
-function, not an axiom.
+rather than an abstract parameter, so the order-faithfulness statement
+`accepted_implies_in_belugaTransactionOrder` is a derived theorem.
 
 The order is the canonical traversal: walk the validator's `block_accept`
 operations in the order they were emitted, look up the corresponding block in

@@ -1536,7 +1536,7 @@ theorem lemma1_honest_round_entry
 `EventualCausalAcceptance` and `EventualRoundAcceptance` are the two
 paper-implicit liveness conjuncts in §5's T2 and T4 proofs. They are
 defined here on a generic `Trace BelugaState` so the with-pull track
-below can prove them as theorems (rather than take them as axioms). -/
+below can prove them as derived theorems. -/
 
 /-- For any honest validator that has accepted some digest `d`
 corresponding to a block `B`, every causal ancestor `B'` of `B` is
@@ -1694,8 +1694,8 @@ private lemma honestList_all_honest (system : BlockSynchroniserSystem)
 /-! ## Main theorem: `network_eventualRoundAcceptance` -/
 
 /-- Under the with-pull primitives, `networkBelugaTraceWithPull`
-satisfies `EventualRoundAcceptance`, so T4's `EventualRoundAcceptance`
-hypothesis becomes a derived fact rather than an axiom. -/
+satisfies `EventualRoundAcceptance`. T4 then consumes this as a
+derived fact. -/
 theorem network_eventualRoundAcceptance
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
     (h_mono : ∀ i j, i ≤ j → time i ≤ time j)
@@ -2073,10 +2073,8 @@ theorem network_eventualCausalAcceptance_modulo_gap
 
 /-- Under the with-pull primitives — including `NetworkInPoolDeliveryWithPull`
 which captures paper §4.3's universal pull-channel delivery —
-`networkBelugaTraceWithPull` satisfies `EventualCausalAcceptance`,
-turning T2's hypothesis into a derived fact. Combined with
-`network_eventualRoundAcceptance`, both `Eventual*` axioms become
-theorems. -/
+`networkBelugaTraceWithPull` satisfies `EventualCausalAcceptance`.
+T2 then consumes this as a derived fact. -/
 theorem network_eventualCausalAcceptance
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
     (h_mono : ∀ i j, i ≤ j → time i ≤ time j)

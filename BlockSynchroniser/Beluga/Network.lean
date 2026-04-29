@@ -519,7 +519,7 @@ from honest sender `vid_s` was emitted at or before step `k`, then
 some step `k'` within wall-clock `Δ` of `k` has every honest
 recipient's inbox containing the op.
 
-The axiom corresponds to paper Section 2's network model:
+The primitive corresponds to paper Section 2's network model:
 
 > *We assume the network is partially synchronous: after GST, every
 > message between honest validators is delivered within Δ.*
@@ -2597,10 +2597,9 @@ implicit "honest validators run the protocol" assumption. -/
 
 /-- **`ActionScheduling`** — paper §4.2: post-GST, honest validators
 with enabled actions are scheduled by the trace within `Δ` wall-clock.
-Combined with `NetworkDelivery`, this discharges the previous
-`SchedulerFairness` axiom in a paper-faithful factoring (each axiom
-now corresponds to a paper-stated primitive: §2 `Δ`-delivery and §4.2
-protocol-execution). -/
+Combined with `NetworkDelivery`, this discharges the bundled
+`SchedulerFairness` primitive: each field corresponds to a
+paper-stated rule (§2 `Δ`-delivery and §4.2 protocol-execution). -/
 def ActionScheduling (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
   ∀ k vid bv,
     isHonestValidator system vid →

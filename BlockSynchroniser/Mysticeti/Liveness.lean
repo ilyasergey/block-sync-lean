@@ -746,17 +746,17 @@ lemma consecutive_triple_exists (n f : Nat) (g : Nat → Bool)
       + ∑ i ∈ Finset.range n, (if g (i + 2) = false then 1 else 0) ≤ 3 * f := by
     have h_sum_ge : ∑ i ∈ Finset.range n, (if g (i + 1) = false then 1 else 0)
         = ∑ i ∈ Finset.range n, (if g i = false then 1 else 0) := by
-      rcases n with (_ | _ | n) <;> simp_all +arith +decide [Finset.sum_range_succ']
+      rcases n with (_ | _ | n) <;> simp_all +arith +decide
       · simp_all +decide [Finset.filter_singleton]
       · rw [Finset.card_filter, Finset.card_filter]
         rw [Finset.sum_range_succ, Finset.sum_range_succ']; aesop
     have h_sum_ge : ∑ i ∈ Finset.range n, (if g (i + 2) = false then 1 else 0)
         = ∑ i ∈ Finset.range n, (if g i = false then 1 else 0) := by
-      rcases n with (_ | _ | n) <;> simp_all +decide [Finset.sum_range_succ']
+      rcases n with (_ | _ | n) <;> simp_all +decide
       · simp_all +decide [Finset.filter_singleton]
       · rw [Finset.card_filter, Finset.card_filter] at *
         rw [← h_sum_ge, Finset.sum_range_succ, Finset.sum_range_succ']; aesop
-    simp_all +arith +decide [Finset.sum_ite]
+    simp_all +arith +decide
   contrapose! h_sum_ge
   have h_sum_ge : ∀ i < n, (if g i = false then 1 else 0)
       + (if g (i + 1) = false then 1 else 0)
@@ -830,11 +830,11 @@ theorem lemma9_round_robin_pigeonhole
         grind
       convert h_false_count using 1
       refine Finset.card_bij (fun i _ => (startRound + i) % (3 * system.f + 1)) ?_ ?_ ?_ <;>
-        simp +decide [Nat.mod_lt]
+        simp +decide
       · exact fun a _ ha' => ⟨Nat.le_of_lt_succ <| Nat.mod_lt _ <| Nat.succ_pos _, ha'⟩
       · intro a₁ ha₁ ha₂ a₂ ha₃ ha₄ h
         have := Nat.modEq_iff_dvd.mp h.symm
-        simp_all +decide [Nat.dvd_iff_mod_eq_zero]
+        simp_all +decide
         obtain ⟨k, hk⟩ := this; nlinarith [show k = 0 by nlinarith]
       · intro b hb hb'
         use (b + (3 * system.f + 1) - startRound % (3 * system.f + 1)) % (3 * system.f + 1)
@@ -848,7 +848,7 @@ theorem lemma9_round_robin_pigeonhole
               by simpa [Nat.mod_eq_of_lt (show b < 3 * system.f + 1 from
                 Nat.lt_succ_of_le hb)] using hb'⟩, hb⟩
     · norm_num [Nat.mod_eq_of_lt]
-    · simp +decide [← hN, Nat.mod_eq_of_lt]
+    · simp +decide [← hN]
       norm_num [add_assoc, Nat.add_mod]
   grind
 
