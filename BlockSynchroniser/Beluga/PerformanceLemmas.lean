@@ -41,12 +41,12 @@ def LatencyTriangle
     (system : BlockSynchroniserSystem) (time : TimeMap) : Prop :=
   ∀ r k,
     time k ≥ system.GST →
-    (∀ vid, isHonestValidator system vid = true →
+    (∀ vid, isHonestValidator system vid →
       ∃ bv, (belugaTrace system k).getValidator vid = some bv ∧
             bv.currentRound = r) →
     ∃ k', k ≤ k' ∧
       time k' ≤ time k + system.Δ ∧
-      (∀ vid, isHonestValidator system vid = true →
+      (∀ vid, isHonestValidator system vid →
         ∃ bv, (belugaTrace system k').getValidator vid = some bv ∧
               bv.currentRound = r + 1)
 
@@ -62,8 +62,8 @@ theorem lemma2_honest_not_blamed
     (_h_sync : PartiallySynchronous system (belugaTrace system) time)
     (_R_L : Nat) :
     ∀ vid₁ vid₂,
-      isHonestValidator system vid₁ = true →
-      isHonestValidator system vid₂ = true →
+      isHonestValidator system vid₁ →
+      isHonestValidator system vid₂ →
       ∀ k, time k ≥ system.GST →
         -- vid₂'s reputation table for vid₁ is *not* decreased between step k
         -- and any later step (relative to its value at step k).
@@ -84,12 +84,12 @@ private lemma round_advance_chain
     (h_lt : LatencyTriangle system time) :
     ∀ d r k,
       time k ≥ system.GST →
-      (∀ vid, isHonestValidator system vid = true →
+      (∀ vid, isHonestValidator system vid →
         ∃ bv, (belugaTrace system k).getValidator vid = some bv ∧
               bv.currentRound = r) →
       ∃ k', k ≤ k' ∧
         time k' ≤ time k + (d + 1) * system.Δ ∧
-        (∀ vid, isHonestValidator system vid = true →
+        (∀ vid, isHonestValidator system vid →
           ∃ bv, (belugaTrace system k').getValidator vid = some bv ∧
                 bv.currentRound = r + d + 1) := by
   intro d r k hk h_round
@@ -115,21 +115,21 @@ theorem lemma3_round_latency_delta
     ∀ r k_r,
       time k_r ≥ system.GST →
       -- Hypothesis: all honest validators are in round r at step k_r.
-      (∀ vid, isHonestValidator system vid = true →
+      (∀ vid, isHonestValidator system vid →
         ∃ bv, (belugaTrace system k_r).getValidator vid = some bv ∧
               bv.currentRound = r) →
       -- Hypothesis: every honest validator's reputation exceeds every
       -- malicious validator's reputation in their local view at step k_r.
       (∀ vid_h vid_m,
-        isHonestValidator system vid_h = true →
-        isByzantineValidator system vid_m = true →
-        ∀ vid_obs, isHonestValidator system vid_obs = true →
+        isHonestValidator system vid_h →
+        isByzantineValidator system vid_m →
+        ∀ vid_obs, isHonestValidator system vid_obs →
           (∃ bv, (belugaTrace system k_r).getValidator vid_obs = some bv ∧
             bv.reputation.lookup vid_h > bv.reputation.lookup vid_m)) →
       -- Conclusion: future rounds advance with latency Δ.
       ∀ r' ≥ r,
         ∃ k', time k' ≤ time k_r + (r' - r + 1) * system.Δ ∧
-          ∀ vid, isHonestValidator system vid = true →
+          ∀ vid, isHonestValidator system vid →
             ∃ bv, (belugaTrace system k').getValidator vid = some bv ∧
                   bv.currentRound = r' + 1 := by
   intros r k_r hk_r hr hr' r' hr'';
@@ -156,20 +156,20 @@ theorem lemma4_round_latency_or_blamed
     (h_lt : LatencyTriangle system time) :
     ∀ r k_r,
       time k_r ≥ system.GST →
-      (∀ vid, isHonestValidator system vid = true →
+      (∀ vid, isHonestValidator system vid →
         ∃ bv, (belugaTrace system k_r).getValidator vid = some bv ∧
               bv.currentRound = r) →
       ∀ r' > r,
         -- Either round-r' latency is ≤ 2Δ ...
         (∃ k', time k' ≤ time k_r + (r' - r) * system.Δ + 2 * system.Δ ∧
-          ∀ vid, isHonestValidator system vid = true →
+          ∀ vid, isHonestValidator system vid →
             ∃ bv, (belugaTrace system k').getValidator vid = some bv ∧
                   bv.currentRound = r' + 1)
         ∨
         -- ... or some malicious validator's reputation is decreased by R_L
         -- (the "blame" event), and round-r' latency is ≤ 3Δ.
-        (∃ vid_m, isByzantineValidator system vid_m = true ∧
-          ∃ vid_h k', isHonestValidator system vid_h = true ∧
+        (∃ vid_m, isByzantineValidator system vid_m ∧
+          ∃ vid_h k', isHonestValidator system vid_h ∧
             (∃ bv₀ bv', (belugaTrace system k_r).getValidator vid_h = some bv₀ ∧
                         (belugaTrace system k').getValidator vid_h = some bv' ∧
                         bv'.reputation.lookup vid_m + R_L ≤
@@ -181,7 +181,7 @@ theorem lemma4_round_latency_or_blamed
   -- Apply the LatencyTriangle hypothesis to obtain the existence of such a $k'$.
   obtain ⟨ k', hk₁, hk₂, hk₃ ⟩ := h r k_r h₁ h₂;
   -- Apply the LatencyTriangle hypothesis repeatedly to obtain the existence of such a $k'$.
-  have h_ind : ∀ m : ℕ, ∃ k'', k' ≤ k'' ∧ time k'' ≤ time k' + m * system.Δ ∧ (∀ vid, isHonestValidator system vid = true → ∃ bv, (belugaTrace system k'').getValidator vid = some bv ∧ bv.currentRound = r + 1 + m) := by
+  have h_ind : ∀ m : ℕ, ∃ k'', k' ≤ k'' ∧ time k'' ≤ time k' + m * system.Δ ∧ (∀ vid, isHonestValidator system vid → ∃ bv, (belugaTrace system k'').getValidator vid = some bv ∧ bv.currentRound = r + 1 + m) := by
     intro m;
     induction' m with m ih;
     · exact ⟨ k', le_rfl, by norm_num, hk₃ ⟩;

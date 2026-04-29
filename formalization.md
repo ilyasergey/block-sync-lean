@@ -33,7 +33,7 @@ Status: ✅ done · ◐ in progress · ☐ planned · ⊘ out of scope · ⏸ de
 | §4.3 — ImPoA + live/bulk classification | [`Beluga/Pull.lean`](BlockSynchroniser/Beluga/Pull.lean#L30) | ✅ — strong-link only. |
 | §4 — `BelugaState`, `BelugaValidator`, `ReputationTable` | [`Beluga/State.lean`](BlockSynchroniser/Beluga/State.lean#L97) | ✅ |
 | §4 — Protocol semantics: `HonestStep` (relational) + executable `step` + `belugaTrace` | [`Beluga/Protocol.lean`](BlockSynchroniser/Beluga/Protocol.lean#L186) | ✅ |
-| §4 — Executable demos | [`Beluga/Examples.lean`](BlockSynchroniser/Beluga/Examples.lean#L17) | ✅ |
+| §4 — Executable demos | [`Beluga/Examples.lean`](BlockSynchroniser/Beluga/Examples.lean#L18) | ✅ |
 | §4.3 — Random pull complexity bound (`O(1)`) | — | ⊘ probabilistic |
 | §4.4 — Availability pattern | [`Beluga/Patterns.lean :: availabilityPattern`](BlockSynchroniser/Beluga/Patterns.lean#L37) | ✅ — strong-link only. |
 | §4.4 — Certificate pattern | [`Beluga/Patterns.lean :: certificatePattern`](BlockSynchroniser/Beluga/Patterns.lean#L48) | ✅ |
@@ -50,15 +50,15 @@ fairness derivation, named liveness primitives) lives in
 
 | Paper | Code | Status |
 |---|---|---|
-| §5 hypothesis bundle (event-triggered post-GST liveness) | [`Beluga/Theorems.lean :: BelugaPartialSynchrony`](BlockSynchroniser/Beluga/Theorems.lean#L68) | ✅ |
-| §5 strengthened bundle (adds the `T_rd = 5Δ` timeout) | [`Beluga/Theorems.lean :: BelugaWithPullFairness`](BlockSynchroniser/Beluga/Theorems.lean#L98) | ✅ |
+| §5 hypothesis bundle (event-triggered post-GST liveness) | [`Beluga/Theorems.lean :: BelugaPartialSynchrony`](BlockSynchroniser/Beluga/Theorems.lean#L67) | ✅ |
+| §5 strengthened bundle (adds the `T_rd = 5Δ` timeout) | [`Beluga/Theorems.lean :: BelugaWithPullFairness`](BlockSynchroniser/Beluga/Theorems.lean#L97) | ✅ |
 | Pull mechanism (paper §4.3) explicit modelling | [`Beluga/Network.lean`](BlockSynchroniser/Beluga/Network.lean#L92) | ✅ |
-| §5 — **Lemma 1** — round-entry within `4Δ` post-GST | [`Beluga/Theorems.lean :: lemma1_honest_round_entry`](BlockSynchroniser/Beluga/Theorems.lean#L1506) | ✅ |
-| §5 — **Theorem 1** — Beluga ⊨ Block availability | [`Beluga/Theorems.lean :: network_theorem1_block_availability_withPull`](BlockSynchroniser/Beluga/Theorems.lean#L1856) | ✅ |
-| §5 — **Theorem 2** — Beluga ⊨ Causal availability | [`Beluga/Theorems.lean :: network_theorem2_causal_availability_withPull`](BlockSynchroniser/Beluga/Theorems.lean#L2099) | ✅ |
-| §5 — **Theorem 3** — Beluga ⊨ Round-Progression | [`Beluga/Theorems.lean :: network_theorem3_round_progression_withPull`](BlockSynchroniser/Beluga/Theorems.lean#L1923) | ✅ |
-| §5 — **Theorem 4** — Beluga ⊨ Round-Termination | [`Beluga/Theorems.lean :: network_theorem4_round_termination_proved`](BlockSynchroniser/Beluga/Theorems.lean#L1805) | ✅ |
-| §5 corollary — Beluga is a block synchronizer (T1∧T2∧T3∧T4) | [`Beluga/Theorems.lean :: beluga_isBlockSynchronizer`](BlockSynchroniser/Beluga/Theorems.lean#L2140) | ✅ |
+| §5 — **Lemma 1** — round-entry within `4Δ` post-GST | [`Beluga/Theorems.lean :: lemma1_honest_round_entry`](BlockSynchroniser/Beluga/Theorems.lean#L1505) | ✅ |
+| §5 — **Theorem 1** — Beluga ⊨ Block availability | [`Beluga/Theorems.lean :: network_theorem1_block_availability_withPull`](BlockSynchroniser/Beluga/Theorems.lean#L1855) | ✅ |
+| §5 — **Theorem 2** — Beluga ⊨ Causal availability | [`Beluga/Theorems.lean :: network_theorem2_causal_availability_withPull`](BlockSynchroniser/Beluga/Theorems.lean#L2097) | ✅ |
+| §5 — **Theorem 3** — Beluga ⊨ Round-Progression | [`Beluga/Theorems.lean :: network_theorem3_round_progression_withPull`](BlockSynchroniser/Beluga/Theorems.lean#L1922) | ✅ |
+| §5 — **Theorem 4** — Beluga ⊨ Round-Termination | [`Beluga/Theorems.lean :: network_theorem4_round_termination_proved`](BlockSynchroniser/Beluga/Theorems.lean#L1804) | ✅ |
+| §5 corollary — Beluga is a block synchronizer (T1∧T2∧T3∧T4) | [`Beluga/Theorems.lean :: beluga_isBlockSynchronizer`](BlockSynchroniser/Beluga/Theorems.lean#L2136) | ✅ |
 
 ### Appendix C — Performance bounds
 
@@ -74,8 +74,8 @@ fairness derivation, named liveness primitives) lives in
 
 | Paper | Code | Status |
 |---|---|---|
-| D.1.1 — Direct / indirect decision rules | [`Mysticeti/Consensus.lean :: directDecide` / `indirectDecideStep`](BlockSynchroniser/Mysticeti/Consensus.lean#L100) | ✅ |
-| D.1.1 — Skip pattern / certificate pattern | [`Mysticeti/Consensus.lean :: skipPattern` / `certificatePatternAt`](BlockSynchroniser/Mysticeti/Consensus.lean#L44) | ✅ |
+| D.1.1 — Direct / indirect decision rules | [`Mysticeti/Consensus.lean :: directDecide` / `indirectDecideStep`](BlockSynchroniser/Mysticeti/Consensus.lean#L115) | ✅ |
+| D.1.1 — Skip pattern / certificate pattern | [`Mysticeti/Consensus.lean :: skipPattern` / `certificatePatternAt`](BlockSynchroniser/Mysticeti/Consensus.lean#L45) | ✅ |
 | D.1.2 — Round-robin leader schedule | [`Mysticeti/Consensus.lean :: leaderOf` / `isLeaderBlock`](BlockSynchroniser/Mysticeti/Consensus.lean#L27) | ✅ |
 | **Lemma 7** — round-`r` honest leader's block is referenced by every honest round-`(r+1)` block | [`Mysticeti/Liveness.lean :: honest_ref_leader`](BlockSynchroniser/Mysticeti/Liveness.lean#L368) | ✅ |
 | **Lemma 8** — round-`r` honest leader's block becomes certified | [`Mysticeti/Liveness.lean :: honest_certify_leader`](BlockSynchroniser/Mysticeti/Liveness.lean#L557) | ✅ |
@@ -121,10 +121,10 @@ implies a paper concern.
   as an explicit hypothesis.
 
 - **§5 hypothesis bundles.**
-  [Lemma 1](BlockSynchroniser/Beluga/Theorems.lean#L1506) consumes
-  [`BelugaPartialSynchrony`](BlockSynchroniser/Beluga/Theorems.lean#L68);
+  [Lemma 1](BlockSynchroniser/Beluga/Theorems.lean#L1505) consumes
+  [`BelugaPartialSynchrony`](BlockSynchroniser/Beluga/Theorems.lean#L67);
   T1–T4 consume
-  [`BelugaWithPullFairness`](BlockSynchroniser/Beluga/Theorems.lean#L98)
+  [`BelugaWithPullFairness`](BlockSynchroniser/Beluga/Theorems.lean#L97)
   which extends it with the `T_rd = 5Δ` timeout. Each field of each
   bundle corresponds to a paper-stated or paper-implicit primitive.
 
@@ -153,6 +153,39 @@ implies a paper concern.
   validator's eventual acceptance from this and the §5 in-pool
   delivery + §4.2 accept-action liveness, without invoking the
   indirect-rule chain.
+
+- **Lemma 1 hypothesis form.** Paper L1 quantifies "if round `r`
+  is the **highest** round that honest validators are in at time
+  `t`". The "highest" upper-bound is not consumed by the proof
+  (validators already at rounds `> r` trivially satisfy the
+  conclusion `≥ r`); we therefore take the existential lower-bound
+  hypothesis ("an honest validator is at round `r` at step `k₀`")
+  which yields the same conclusion under a strictly weaker premise.
+
+- **Lemma 8 statement form.** Paper L8 ("all honest validators
+  create a certificate") — under the §D.1.1 definition of
+  certificate as a round-`(r+2)` block including the cert pattern
+  via strong links — composes with §D.1.2 parent selection. We
+  decompose it: `honest_certify_leader` proves the §4.4 cert
+  pattern at round `r+1` (`certified system state B_L`), and the
+  bundle's `cert_pattern_at_r2` field carries the §D.1.2-driven
+  step from cert pattern to `certificatePatternAtB` at round
+  `r+2` (the predicate `directDecide` reads).
+
+- **Lemma 11 hypothesis form.** Paper L11 hypothesises "B is
+  referenced by 2f+1 subsequent blocks". Out of any 2f+1 blocks,
+  by the Byzantine bound at most `f` are Byzantine, so at least
+  `f+1` come from distinct honest validators. We take the
+  honest-quorum form ("`f+1` honest validators reference B")
+  directly as input; the `2f+1`-to-`f+1` filtering is left to the
+  caller and not load-bearing for the proof.
+
+- **Indirect-decision rule.**
+  [`Mysticeti/Consensus.lean :: indirectDecideStep`](BlockSynchroniser/Mysticeti/Consensus.lean#L123)
+  formalises the one-step combinator the paper's §D.1.1 indirect
+  rule is built from. The recursive search for the first
+  subsequent decided/undecided leader block is not unrolled in
+  Lean — it is not consumed by the proofs of T6 or T7.
 
 - **Transaction order as a concrete function.** Paper §D.2 / §D.3
   treat the per-validator ordered transaction sequence abstractly.

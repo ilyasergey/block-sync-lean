@@ -62,14 +62,14 @@ private lemma traceInv_init (system : BlockSynchroniserSystem) :
 private lemma hasProposedFor_append (s : BelugaState) (vid : ValidatorId) (r : Round)
     (ops : List ValidatorOperation)
     (h : hasProposedFor s vid r = true) :
-    hasProposedFor { s with emittedOperations := s.emittedOperations ++ ops } vid r = true := by
+    hasProposedFor { s with emittedOperations := s.emittedOperations ++ ops } vid r := by
   simp [hasProposedFor] at h ⊢
   simp [h]
 
 private lemma allProposedFor_append (system : BlockSynchroniserSystem)
     (s : BelugaState) (r : Round) (ops : List ValidatorOperation)
     (h : allProposedFor system s r = true) :
-    allProposedFor system { s with emittedOperations := s.emittedOperations ++ ops } r = true := by
+    allProposedFor system { s with emittedOperations := s.emittedOperations ++ ops } r := by
   unfold allProposedFor at *
   grind +suggestions
 
@@ -77,7 +77,7 @@ private lemma allProposedFor_of_same_ops (system : BlockSynchroniserSystem)
     (s s' : BelugaState) (r : Round)
     (h_ops : s'.emittedOperations = s.emittedOperations)
     (h : allProposedFor system s r = true) :
-    allProposedFor system s' r = true := by
+    allProposedFor system s' r := by
   unfold allProposedFor at *
   unfold hasProposedFor at *
   grind

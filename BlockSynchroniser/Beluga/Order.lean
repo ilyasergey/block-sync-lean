@@ -106,7 +106,7 @@ theorem accepted_implies_in_belugaTransactionOrder
     · -- find? = none contradicts B ∈ blocks with B.d = B.d.
       exfalso
       have h_no_match : ∀ b ∈ (belugaTrace system k).blocks,
-          ¬ decide (b.d = B.d) = true := List.find?_eq_none.mp h_some
+          ¬ decide (b.d = B.d) := List.find?_eq_none.mp h_some
       have := h_no_match B h_in
       simp at this
     · -- find? = some B'. The predicate at B' holds, so B'.d = B.d. By

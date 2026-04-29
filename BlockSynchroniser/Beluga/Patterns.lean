@@ -78,8 +78,8 @@ def NoEquivocationInParents (system : BlockSynchroniserSystem) {S} [SystemState 
   ∀ B₁ B₂ parent₁ parent₂,
     B₁ ∈ SystemState.blocks state →
     B₂ ∈ SystemState.blocks state →
-    isHonestValidator system B₁.author = true →
-    isHonestValidator system B₂.author = true →
+    isHonestValidator system B₁.author →
+    isHonestValidator system B₂.author →
     parent₁ ∈ SystemState.blocks state →
     parent₂ ∈ SystemState.blocks state →
     parent₁.d ∈ B₁.parents →
@@ -172,7 +172,7 @@ theorem certified_unique
       · exact ⟨h_cert₁, strongReferencerAuthors_are_validators system state B₁ h_authors_valid⟩
     · exact ⟨ strongReferencerAuthors_nodup state B₂, h_cert₂, fun vid h => strongReferencerAuthors_are_validators system state B₂ h_authors_valid vid h ⟩;
     · exact hN;
-  obtain ⟨h, hh⟩ : ∃ h ∈ shared, isHonestValidator system h = true := by
+  obtain ⟨h, hh⟩ : ∃ h ∈ shared, isHonestValidator system h := by
     contrapose! h_byz_bound;
     have h_byz_list : List.toFinset (List.filter (fun p => p.2 = false) system.validators |>.map (·.1)) ⊇ List.toFinset shared := by
       intro x hx; specialize h_shared_mem x; specialize h_byz_bound x; simp_all +decide [ Finset.subset_iff ] ;

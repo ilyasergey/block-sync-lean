@@ -65,14 +65,14 @@ structure MysticetiBelugaSynchrony
   leader's block. -/
   leader_inclusion :
     ∀ (k : ℕ) (vid : ValidatorId) (B B_L : Block),
-      isHonestValidator system vid = true →
+      isHonestValidator system vid →
       time k ≥ system.GST →
       B ∈ (Beluga.Network.networkTraceWithPull system time k).base.blocks →
       B_L ∈ (Beluga.Network.networkTraceWithPull system time k).base.blocks →
       B.author = vid →
       isLeaderBlock system B_L →
       B_L.r + 1 = B.r →
-      hasAcceptedDigest (Beluga.Network.networkTraceWithPull system time k).base vid B_L.d = true →
+      hasAcceptedDigest (Beluga.Network.networkTraceWithPull system time k).base vid B_L.d →
       B_L.d ∈ B.parents
   /-- Paper §D.1.1 cert-pattern timing: a `certified` leader block
   in the trace satisfies `certificatePatternAtB` at round `r + 2`,
@@ -101,7 +101,7 @@ structure MysticetiBelugaSynchrony
   parent_blocks_in_pool :
     ∀ (k : ℕ) (B : Block) (d : BlockDigest),
       B ∈ (Beluga.Network.networkTraceWithPull system time k).base.blocks →
-      B.parents.contains d = true →
+      B.parents.contains d →
       ∃ B_d ∈ (Beluga.Network.networkTraceWithPull system time k).base.blocks,
         B_d.d = d
   /-- Paper §3 (honest validator behavior): an honest validator
@@ -111,7 +111,7 @@ structure MysticetiBelugaSynchrony
     ∀ (k : ℕ) (B B' : Block),
       B  ∈ (Beluga.Network.networkTraceWithPull system time k).base.blocks →
       B' ∈ (Beluga.Network.networkTraceWithPull system time k).base.blocks →
-      isHonestValidator system B.author = true →
+      isHonestValidator system B.author →
       B.author = B'.author →
       B.r = B'.r →
       B = B'
@@ -179,9 +179,9 @@ private lemma isCertificateBlockB_monotone
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
     (k₁ k₂ : ℕ) (h_le : k₁ ≤ k₂) (B B' : Block) :
     isCertificateBlockB system (Beluga.Network.networkTraceWithPull system time k₁).base B B'
-        = true →
+        →
     isCertificateBlockB system (Beluga.Network.networkTraceWithPull system time k₂).base B B'
-        = true := by
+        := by
   intro h₁
   unfold isCertificateBlockB at *
   set blocks₁ := (Beluga.Network.networkTraceWithPull system time k₁).base.blocks
@@ -225,9 +225,9 @@ private lemma certificatePatternAtB_monotone
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
     (k₁ k₂ : ℕ) (h_le : k₁ ≤ k₂) (B : Block) (atRound : Round) :
     certificatePatternAtB system (Beluga.Network.networkTraceWithPull system time k₁).base
-        B atRound = true →
+        B atRound →
     certificatePatternAtB system (Beluga.Network.networkTraceWithPull system time k₂).base
-        B atRound = true := by
+        B atRound := by
   intro h₁
   unfold certificatePatternAtB at *
   set blocks₁ := (Beluga.Network.networkTraceWithPull system time k₁).base.blocks
@@ -251,24 +251,24 @@ private lemma certificatePatternAtB_monotone
     obtain ⟨h_B'_in, h_B'_pred⟩ := h_B'_filter
     -- pred₁ B' = B'.r == atRound && isCertificateBlockB at k₁
     have h_round : B'.r == atRound := by
-      have : pred₁ B' = true := h_B'_pred
+      have : pred₁ B' := h_B'_pred
       simp [pred₁] at this
       exact decide_eq_true this.1
     have h_cert₁ : isCertificateBlockB system
-        (Beluga.Network.networkTraceWithPull system time k₁).base B B' = true := by
-      have : pred₁ B' = true := h_B'_pred
+        (Beluga.Network.networkTraceWithPull system time k₁).base B B' := by
+      have : pred₁ B' := h_B'_pred
       simp [pred₁] at this
       exact this.2
     -- Lift cert from k₁ to k₂.
     have h_cert₂ : isCertificateBlockB system
-        (Beluga.Network.networkTraceWithPull system time k₂).base B B' = true :=
+        (Beluga.Network.networkTraceWithPull system time k₂).base B B' :=
       isCertificateBlockB_monotone system time k₁ k₂ h_le B B' h_cert₁
     apply mem_eraseDups_of_mem
     rw [List.mem_map]
     refine ⟨B', ?_, h_B'_eq⟩
     rw [List.mem_filter]
     refine ⟨h_blocks_sub h_B'_in, ?_⟩
-    show pred₂ B' = true
+    show pred₂ B'
     simp [pred₂]
     exact ⟨by simpa using h_round, h_cert₂⟩
   have h_nodup₁ : ((blocks₁.filter pred₁).map (·.author)).eraseDups.Nodup :=
@@ -292,7 +292,7 @@ private lemma certificatePatternAtB_monotone
 private lemma isHonest_of_pair_mem
     (system : BlockSynchroniserSystem) (vid : ValidatorId)
     (h_mem : (vid, true) ∈ system.validators) :
-    isHonestValidator system vid = true := by
+    isHonestValidator system vid := by
   unfold isHonestValidator BlockSynchroniserSystem.isHonest
   have h_find : system.validators.find? (fun x => x.1 == vid) = some (vid, true) :=
     Beluga.Network.find?_of_mem_nodup _ vid true h_mem system.validatorsNodup
@@ -307,7 +307,7 @@ registered validator IDs, at most `f` entries are Byzantine. -/
 private lemma byz_bound_of_system_constraints
     (system : BlockSynchroniserSystem)
     (hN : system.n = 3 * system.f + 1)
-    (hHonest : (system.validators.filter (fun p => p.2 = true)).length
+    (hHonest : (system.validators.filter (fun p => p.2)).length
                 = 2 * system.f + 1) :
     ∀ authors : List ValidatorId,
       authors.Nodup →
@@ -342,11 +342,11 @@ theorem honest_round_entry
     (h_sync : MysticetiBelugaSynchrony system time)
     (r : Round) (k : ℕ)
     (h_gst : time k ≥ system.GST)
-    (h_witness : ∃ vid_w bv_w, isHonestValidator system vid_w = true ∧
+    (h_witness : ∃ vid_w bv_w, isHonestValidator system vid_w ∧
       (Beluga.Network.networkTraceWithPull system time k).base.getValidator vid_w = some bv_w ∧
       bv_w.currentRound = r) :
     ∃ k', k ≤ k' ∧ time k' ≤ time k + 4 * system.Δ ∧
-      ∀ vid, isHonestValidator system vid = true →
+      ∀ vid, isHonestValidator system vid →
         ∃ bv, (Beluga.Network.networkTraceWithPull system time k').base.getValidator vid = some bv ∧
               bv.currentRound ≥ r :=
   Beluga.Network.lemma1_honest_round_entry
@@ -366,10 +366,10 @@ theorem leader_propose
     {system : BlockSynchroniserSystem} {time : Nat → Nat}
     (h_sync : MysticetiBelugaSynchrony system time)
     (r : Round) (vid_leader : ValidatorId) (k : ℕ)
-    (h_honest : isHonestValidator system vid_leader = true)
+    (h_honest : isHonestValidator system vid_leader)
     (_h_leader : vid_leader = leaderOf system r)
     (h_gst : time k ≥ system.GST)
-    (h_witness : ∃ vid_w bv_w, isHonestValidator system vid_w = true ∧
+    (h_witness : ∃ vid_w bv_w, isHonestValidator system vid_w ∧
       (Beluga.Network.networkTraceWithPull system time k).base.getValidator vid_w = some bv_w ∧
       bv_w.currentRound = r) :
     ∃ k', k ≤ k' ∧ time k' ≤ time k + 5 * system.Δ ∧
@@ -401,7 +401,7 @@ theorem leader_propose
       le_trans h_gst (h_sync.timeMonotone k k₁ hk₁_lo)
     by_cases h_already :
         hasProposedFor (Beluga.Network.networkTraceWithPull system time k₁).base
-          vid_leader bv_lead₁.currentRound = true
+          vid_leader bv_lead₁.currentRound
     · -- Already proposed at step k₁: extract the block.
       rw [h_eq] at h_already
       obtain ⟨B, h_op⟩ :=
@@ -434,11 +434,11 @@ theorem honest_ref_leader
     {system : BlockSynchroniserSystem} {time : Nat → Nat}
     (h_sync : MysticetiBelugaSynchrony system time)
     (r : Round) (vid_leader vid_referencer : ValidatorId) (k : ℕ)
-    (h_lead_honest : isHonestValidator system vid_leader = true)
-    (h_ref_honest : isHonestValidator system vid_referencer = true)
+    (h_lead_honest : isHonestValidator system vid_leader)
+    (h_ref_honest : isHonestValidator system vid_referencer)
     (h_leader : vid_leader = leaderOf system r)
     (h_gst : time k ≥ system.GST)
-    (h_witness : ∃ vid_w bv_w, isHonestValidator system vid_w = true ∧
+    (h_witness : ∃ vid_w bv_w, isHonestValidator system vid_w ∧
       (Beluga.Network.networkTraceWithPull system time k).base.getValidator vid_w = some bv_w ∧
       bv_w.currentRound = r) :
     ∃ k', k ≤ k' ∧
@@ -464,7 +464,7 @@ theorem honest_ref_leader
     Nat.lt_of_lt_of_le (Nat.lt_succ_self (r + 1)) h_ref_round
   have h_proposed_r1 :
       hasProposedFor (Beluga.Network.networkTraceWithPull system time k₂).base
-        vid_referencer (r + 1) = true :=
+        vid_referencer (r + 1) :=
     Beluga.Network.network_proposed_for_lt_currentRoundWithPull
       system time k₂ vid_referencer bv_ref h_ref_get (r + 1) h_ref_gt
   -- Step 4: extract B_ref via the propose-op invariant.
@@ -520,10 +520,10 @@ private theorem honest_refs_for_validator_list
     (h_isLeader : isLeaderBlock system B_L)
     (h_post_gst_L : time k_L ≥ system.GST) :
     ∀ (vs : List (ValidatorId × Bool)),
-      (∀ p ∈ vs, p.2 = true → isHonestValidator system p.1 = true) →
+      (∀ p ∈ vs, p.2 → isHonestValidator system p.1) →
       ∃ k', k_L ≤ k' ∧
         B_L ∈ (Beluga.Network.networkTraceWithPull system time k').base.blocks ∧
-        ∀ p ∈ vs, p.2 = true →
+        ∀ p ∈ vs, p.2 →
           ∃ B ∈ (Beluga.Network.networkTraceWithPull system time k').base.blocks,
             B.author = p.1 ∧ B.r = r + 1 ∧ B_L.d ∈ B.parents := by
   intro vs
@@ -534,12 +534,12 @@ private theorem honest_refs_for_validator_list
     intro p h_mem; simp at h_mem
   | cons hd tl ih =>
     intro h_premise
-    have h_tl_premise : ∀ p ∈ tl, p.2 = true → isHonestValidator system p.1 = true :=
+    have h_tl_premise : ∀ p ∈ tl, p.2 → isHonestValidator system p.1 :=
       fun p h_mem h_b => h_premise p (List.mem_cons_of_mem _ h_mem) h_b
     obtain ⟨k_t, hk_t_lo, h_BL_in_t, h_t⟩ := ih h_tl_premise
-    by_cases h_hd_b : hd.2 = true
+    by_cases h_hd_b : hd.2
     · -- hd is honest; derive its round-(r+1) block referencing B_L.
-      have h_hd_honest : isHonestValidator system hd.1 = true :=
+      have h_hd_honest : isHonestValidator system hd.1 :=
         h_premise hd List.mem_cons_self h_hd_b
       have h_post_gst_t : time k_t ≥ system.GST :=
         le_trans h_post_gst_L (h_sync.timeMonotone k_L k_t hk_t_lo)
@@ -623,10 +623,10 @@ theorem honest_certify_leader
     {system : BlockSynchroniserSystem} {time : Nat → Nat}
     (h_sync : MysticetiBelugaSynchrony system time)
     (r : Round) (vid_leader : ValidatorId) (k : ℕ)
-    (h_honest : isHonestValidator system vid_leader = true)
+    (h_honest : isHonestValidator system vid_leader)
     (h_leader : vid_leader = leaderOf system r)
     (h_gst : time k ≥ system.GST)
-    (h_witness : ∃ vid_w bv_w, isHonestValidator system vid_w = true ∧
+    (h_witness : ∃ vid_w bv_w, isHonestValidator system vid_w ∧
       (Beluga.Network.networkTraceWithPull system time k).base.getValidator vid_w = some bv_w ∧
       bv_w.currentRound = r) :
     ∃ k', k ≤ k' ∧
@@ -642,7 +642,7 @@ theorem honest_certify_leader
     unfold isLeaderBlock
     rw [h_BL_author, h_leader, h_BL_round]
   -- Step 2: iterate over system.validators to gather honest references.
-  have h_premise : ∀ p ∈ system.validators, p.2 = true → isHonestValidator system p.1 = true := by
+  have h_premise : ∀ p ∈ system.validators, p.2 → isHonestValidator system p.1 := by
     intro p h_mem h_b
     have h_pair : (p.1, true) ∈ system.validators := by
       rcases p with ⟨a, b⟩
@@ -661,7 +661,7 @@ theorem honest_certify_leader
   set refAuthors :=
     ((state.blocks.filter (fun B' => decide (B_L.d ∈ B'.parents))).map (·.author)).eraseDups
   -- The (after-filter) list of honest validator IDs.
-  set honestIds := (system.validators.filter (fun p => decide (p.2 = true))).map Prod.fst
+  set honestIds := (system.validators.filter (fun p => decide (p.2))).map Prod.fst
   -- Show honestIds.toFinset ⊆ refAuthors.toFinset.
   have h_subset : honestIds.toFinset ⊆ refAuthors.toFinset := by
     intro vid h_vid_in
@@ -670,7 +670,7 @@ theorem honest_certify_leader
     obtain ⟨p, h_p_in_filter, h_p_eq⟩ := h_vid_in
     rw [List.mem_filter] at h_p_in_filter
     obtain ⟨h_p_in_v, h_p_b⟩ := h_p_in_filter
-    have h_vid_b : p.2 = true := by simpa using h_p_b
+    have h_vid_b : p.2 := by simpa using h_p_b
     obtain ⟨B_p, h_Bp_in, h_Bp_author, _h_Bp_r, h_Bp_parents⟩ :=
       h_refs p h_p_in_v h_vid_b
     -- vid = p.1 = B_p.author.
@@ -690,18 +690,18 @@ theorem honest_certify_leader
     -- (l.filter p).map f is a sublist of l.map f.
     have h_sub :
         List.Sublist
-          ((system.validators.filter (fun p => decide (p.2 = true))).map Prod.fst)
+          ((system.validators.filter (fun p => decide (p.2))).map Prod.fst)
           (system.validators.map Prod.fst) :=
       List.Sublist.map _ List.filter_sublist
     exact system.validatorsNodup.sublist h_sub
   have h_honest_card : honestIds.toFinset.card ≥ 2 * system.f + 1 := by
     rw [List.toFinset_card_of_nodup h_honest_nodup]
-    show ((system.validators.filter (fun p => decide (p.2 = true))).map Prod.fst).length
+    show ((system.validators.filter (fun p => decide (p.2))).map Prod.fst).length
             ≥ 2 * system.f + 1
     rw [List.length_map]
     have h_filter_eq :
-        (system.validators.filter (fun p => decide (p.2 = true))).length =
-        (system.validators.filter (fun p => p.2 = true)).length := by
+        (system.validators.filter (fun p => decide (p.2))).length =
+        (system.validators.filter (fun p => p.2)).length := by
       apply congrArg List.length
       apply List.filter_congr
       intro p _; simp
@@ -740,7 +740,7 @@ lemma consecutive_triple_exists (n f : Nat) (g : Nat → Bool)
     (hn : n = 3 * f + 1)
     (h_false_count : (Finset.range n |>.filter (fun i => g i = false)).card ≤ f)
     (h_wrap1 : g n = g 0) (h_wrap2 : g (n + 1) = g 1) :
-    ∃ i, i < n ∧ g i = true ∧ g (i + 1) = true ∧ g (i + 2) = true := by
+    ∃ i, i < n ∧ g i ∧ g (i + 1) ∧ g (i + 2) := by
   have h_sum_ge : ∑ i ∈ Finset.range n, (if g i = false then 1 else 0)
       + ∑ i ∈ Finset.range n, (if g (i + 1) = false then 1 else 0)
       + ∑ i ∈ Finset.range n, (if g (i + 2) = false then 1 else 0) ≤ 3 * f := by
@@ -783,7 +783,7 @@ consecutive-honest triple. -/
 theorem lemma9_round_robin_pigeonhole
     (system : BlockSynchroniserSystem) (startRound : Round)
     (hN : system.n = 3 * system.f + 1)
-    (hHonest : (system.validators.filter (fun p => p.2 = true)).length
+    (hHonest : (system.validators.filter (fun p => p.2)).length
                 = 2 * system.f + 1)
     -- Validator IDs are {0, ..., n-1}, matching the round-robin's
     -- `r % n` output. Without this, `leaderOf` could produce IDs that
@@ -820,10 +820,10 @@ theorem lemma9_round_robin_pigeonhole
             · grind
           exact le_trans (Finset.card_le_card h_false_count)
             (Finset.card_image_le.trans (List.toFinset_card_le _))
-        have h_false_count : (system.validators.filter (fun p => p.2 = true)).length
+        have h_false_count : (system.validators.filter (fun p => p.2)).length
             + (system.validators.filter (fun p => p.2 = false)).length = system.n := by
           have h_false_count : ∀ (l : List (ValidatorId × Bool)),
-              (l.filter (fun p => p.2 = true)).length
+              (l.filter (fun p => p.2)).length
               + (l.filter (fun p => p.2 = false)).length = l.length := by
             intro l; induction l <;> simp +decide [*]; grind
           rw [h_false_count, system.validatorCountCorrect]
@@ -868,7 +868,7 @@ private theorem direct_commit_for_honest_leader
     {system : BlockSynchroniserSystem} {time : Nat → Nat}
     (h_sync : MysticetiBelugaSynchrony system time)
     (r : Round) (k₀ : ℕ) (h_gst : time k₀ ≥ system.GST)
-    (h_honest_leader : isHonestValidator system (leaderOf system r) = true) :
+    (h_honest_leader : isHonestValidator system (leaderOf system r)) :
     ∃ k' ≥ k₀, ∃ B_L ∈ (Beluga.Network.networkTraceWithPull system time k').base.blocks,
       B_L.author = leaderOf system r ∧ B_L.r = r ∧
       directDecide system (Beluga.Network.networkTraceWithPull system time k').base B_L
@@ -894,7 +894,7 @@ private theorem direct_commit_for_honest_leader
   have h_isLeader : isLeaderBlock system B_L := by
     unfold isLeaderBlock; rw [h_BL_author, h_BL_round]
   -- Step 4: gather 2f+1 honest references via the iteration helper.
-  have h_premise : ∀ p ∈ system.validators, p.2 = true → isHonestValidator system p.1 = true := by
+  have h_premise : ∀ p ∈ system.validators, p.2 → isHonestValidator system p.1 := by
     intro p h_mem h_b
     have h_pair : (p.1, true) ∈ system.validators := by
       rcases p with ⟨a, b⟩
@@ -915,7 +915,7 @@ private theorem direct_commit_for_honest_leader
     unfold certified certificatePattern Beluga.strongReferencerAuthors
     set refAuthors :=
       ((state.blocks.filter (fun B' => decide (B_L.d ∈ B'.parents))).map (·.author)).eraseDups
-    set honestIds := (system.validators.filter (fun p => decide (p.2 = true))).map Prod.fst
+    set honestIds := (system.validators.filter (fun p => decide (p.2))).map Prod.fst
     have h_subset : honestIds.toFinset ⊆ refAuthors.toFinset := by
       intro vid h_vid_in
       rw [List.mem_toFinset] at h_vid_in ⊢
@@ -923,7 +923,7 @@ private theorem direct_commit_for_honest_leader
       obtain ⟨p, h_p_in_filter, h_p_eq⟩ := h_vid_in
       rw [List.mem_filter] at h_p_in_filter
       obtain ⟨h_p_in_v, h_p_b⟩ := h_p_in_filter
-      have h_vid_b : p.2 = true := by simpa using h_p_b
+      have h_vid_b : p.2 := by simpa using h_p_b
       obtain ⟨B_p, h_Bp_in, h_Bp_author, _h_Bp_r, h_Bp_parents⟩ :=
         h_refs p h_p_in_v h_vid_b
       have h_vid_eq : vid = B_p.author := by rw [← h_p_eq, ← h_Bp_author]
@@ -938,18 +938,18 @@ private theorem direct_commit_for_honest_leader
     have h_honest_nodup : honestIds.Nodup := by
       have h_sub :
           List.Sublist
-            ((system.validators.filter (fun p => decide (p.2 = true))).map Prod.fst)
+            ((system.validators.filter (fun p => decide (p.2))).map Prod.fst)
             (system.validators.map Prod.fst) :=
         List.Sublist.map _ List.filter_sublist
       exact system.validatorsNodup.sublist h_sub
     have h_honest_card : honestIds.toFinset.card ≥ 2 * system.f + 1 := by
       rw [List.toFinset_card_of_nodup h_honest_nodup]
-      show ((system.validators.filter (fun p => decide (p.2 = true))).map Prod.fst).length
+      show ((system.validators.filter (fun p => decide (p.2))).map Prod.fst).length
               ≥ 2 * system.f + 1
       rw [List.length_map]
       have h_filter_eq :
-          (system.validators.filter (fun p => decide (p.2 = true))).length =
-          (system.validators.filter (fun p => p.2 = true)).length := by
+          (system.validators.filter (fun p => decide (p.2))).length =
+          (system.validators.filter (fun p => p.2)).length := by
         apply congrArg List.length
         apply List.filter_congr
         intro p _; simp
@@ -987,7 +987,7 @@ theorem three_consec_commit
     {system : BlockSynchroniserSystem} {time : Nat → Nat}
     (h_sync : MysticetiBelugaSynchrony system time)
     (hN : system.n = 3 * system.f + 1)
-    (hHonest : (system.validators.filter (fun p => p.2 = true)).length = 2 * system.f + 1)
+    (hHonest : (system.validators.filter (fun p => p.2)).length = 2 * system.f + 1)
     (h_ids : ∀ i < system.n, ∃ pair ∈ system.validators, pair.1 = i)
     (startRound : Round) (k₀ : ℕ) (h_gst : time k₀ ≥ system.GST) :
     ∃ r₁ ≥ startRound, ∃ k' ≥ k₀,
@@ -1021,22 +1021,22 @@ theorem three_consec_commit
     Beluga.Network.network_blocks_monotone_traceWithPull system time k_b k_c hk_b_le_c B_b hB_b_in
   -- Lift cert-pattern from k_a to k_c.
   have hB_a_cert_a : certificatePatternAtB system
-      (Beluga.Network.networkTraceWithPull system time k_a).base B_a (B_a.r + 2) = true := by
+      (Beluga.Network.networkTraceWithPull system time k_a).base B_a (B_a.r + 2) := by
     have := hB_a_commit
     unfold directDecide at this
     by_cases h : certificatePatternAtB system
-        (Beluga.Network.networkTraceWithPull system time k_a).base B_a (B_a.r + 2) = true
+        (Beluga.Network.networkTraceWithPull system time k_a).base B_a (B_a.r + 2)
     · exact h
     · push_neg at h
       simp [Bool.not_eq_true] at h
       rw [h] at this
       split_ifs at this <;> simp_all
   have hB_b_cert_b : certificatePatternAtB system
-      (Beluga.Network.networkTraceWithPull system time k_b).base B_b (B_b.r + 2) = true := by
+      (Beluga.Network.networkTraceWithPull system time k_b).base B_b (B_b.r + 2) := by
     have := hB_b_commit
     unfold directDecide at this
     by_cases h : certificatePatternAtB system
-        (Beluga.Network.networkTraceWithPull system time k_b).base B_b (B_b.r + 2) = true
+        (Beluga.Network.networkTraceWithPull system time k_b).base B_b (B_b.r + 2)
     · exact h
     · push_neg at h
       simp [Bool.not_eq_true] at h
@@ -1044,11 +1044,11 @@ theorem three_consec_commit
       split_ifs at this <;> simp_all
   have hB_a_cert_c :
       certificatePatternAtB system (Beluga.Network.networkTraceWithPull system time k_c).base
-        B_a (B_a.r + 2) = true :=
+        B_a (B_a.r + 2) :=
     certificatePatternAtB_monotone system time k_a k_c hk_a_le_c B_a (B_a.r + 2) hB_a_cert_a
   have hB_b_cert_c :
       certificatePatternAtB system (Beluga.Network.networkTraceWithPull system time k_c).base
-        B_b (B_b.r + 2) = true :=
+        B_b (B_b.r + 2) :=
     certificatePatternAtB_monotone system time k_b k_c hk_b_le_c B_b (B_b.r + 2) hB_b_cert_b
   -- Now prove the universal claim.
   intro B_L hB_L_in hB_L_leader hB_L_round
@@ -1109,7 +1109,7 @@ theorem lemma10_eventual_commit
     {system : BlockSynchroniserSystem} {time : Nat → Nat}
     (h_sync : MysticetiBelugaSynchrony system time)
     (hN : system.n = 3 * system.f + 1)
-    (hHonest : (system.validators.filter (fun p => p.2 = true)).length = 2 * system.f + 1)
+    (hHonest : (system.validators.filter (fun p => p.2)).length = 2 * system.f + 1)
     (h_ids : ∀ i < system.n, ∃ pair ∈ system.validators, pair.1 = i)
     (startRound : Round) (k₀ : ℕ) (h_gst : time k₀ ≥ system.GST) :
     ∃ r₁ ≥ startRound, ∃ k' ≥ k₀,
@@ -1133,13 +1133,13 @@ theorem lemma11_referenced_accepted
     {system : BlockSynchroniserSystem} {time : Nat → Nat}
     (h_sync : MysticetiBelugaSynchrony system time)
     (vid : ValidatorId) (d : BlockDigest) (k₀ : ℕ)
-    (h_honest : isHonestValidator system vid = true)
+    (h_honest : isHonestValidator system vid)
     (h_gst : time k₀ ≥ system.GST)
     (h_available : ∃ honest_refs : List ValidatorId,
       honest_refs.length ≥ system.f + 1 ∧
-      ∀ v ∈ honest_refs, isHonestValidator system v = true ∧
+      ∀ v ∈ honest_refs, isHonestValidator system v ∧
         ∃ B' ∈ (Beluga.Network.networkTraceWithPull system time k₀).base.blocks,
-          B'.author = v ∧ B'.parents.contains d = true) :
+          B'.author = v ∧ B'.parents.contains d) :
     ∃ k' ≥ k₀, HasAccepted (Beluga.Network.networkTraceWithPull system time k').base vid d := by
   -- Step 1: extract any one honest referencer (the list has length ≥ f+1 ≥ 1).
   obtain ⟨honest_refs, h_count, h_props⟩ := h_available
@@ -1176,12 +1176,12 @@ at which `tx` appears in `vid_h`'s canonical transaction order. -/
 theorem theorem6_consensus_liveness
     {system : BlockSynchroniserSystem} {time : Nat → Nat}
     (h_sync : MysticetiBelugaSynchrony system time)
-    (vid_acc : ValidatorId) (_h_acc_honest : isHonestValidator system vid_acc = true)
+    (vid_acc : ValidatorId) (_h_acc_honest : isHonestValidator system vid_acc)
     (k : ℕ) (h_gst : time k ≥ system.GST)
     (B : Block) (h_B_in : B ∈ (Beluga.Network.networkTraceWithPull system time k).base.blocks)
     (_h_accepted : HasAccepted (Beluga.Network.networkTraceWithPull system time k).base vid_acc B.d)
     (tx : Transaction) (h_tx : tx ∈ B.payload)
-    (vid_h : ValidatorId) (h_vid_h_honest : isHonestValidator system vid_h = true) :
+    (vid_h : ValidatorId) (h_vid_h_honest : isHonestValidator system vid_h) :
     ∃ k', tx ∈ belugaTransactionOrderState
       (Beluga.Network.networkTraceWithPull system time k').base vid_h := by
   -- Step 1: by universal in-pool acceptance, vid_h eventually accepts B.d.
@@ -1214,7 +1214,7 @@ theorem theorem6_consensus_liveness
     unfold getBlockByDigest at h_some
     have h_no_match :
         ∀ b ∈ (Beluga.Network.networkTraceWithPull system time k').base.blocks,
-          ¬ decide (b.d = B.d) = true := List.find?_eq_none.mp h_some
+          ¬ decide (b.d = B.d) := List.find?_eq_none.mp h_some
     have := h_no_match B h_B_in'
     simp at this
   · -- find? = some B'. The predicate at B' holds, so B'.d = B.d.

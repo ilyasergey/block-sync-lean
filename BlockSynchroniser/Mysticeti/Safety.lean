@@ -57,7 +57,7 @@ private lemma exists_honest_in_shared
     (h_shared_valid : ∀ vid ∈ shared, ∃ pair ∈ system.validators, pair.1 = vid)
     (h_byz_bound : (system.validators.filter (fun p => p.2 = false)).length
       ≤ system.f) :
-    ∃ v ∈ shared, isHonestValidator system v = true := by
+    ∃ v ∈ shared, isHonestValidator system v := by
   contrapose! h_byz_bound;
   refine' lt_of_lt_of_le h_shared_len _;
   have h_byzantine_count : List.toFinset (List.map (fun p => p.1) (List.filter (fun p => p.2 = false) system.validators)) ⊇ List.toFinset shared := by
@@ -110,7 +110,7 @@ theorem lemma12_cert_persistence
     -- Honest validators produce at most one block per (author, round) pair.
     -- In a real protocol, this follows from digital signatures + honest behavior.
     (h_honest_unique : ∀ B₁ ∈ SystemState.blocks state, ∀ B₂ ∈ SystemState.blocks state,
-      isHonestValidator system B₁.author = true →
+      isHonestValidator system B₁.author →
       B₁.author = B₂.author → B₁.r = B₂.r → B₁ = B₂)
     (B : Block) (h_B : B ∈ SystemState.blocks state)
     (h_cert : ∃ certs : List Block,
@@ -144,7 +144,7 @@ theorem lemma12_cert_persistence
           · assumption;
           · grind +locals;
         · exact hN;
-      obtain ⟨v, hv⟩ : ∃ v ∈ shared, isHonestValidator system v = true := by
+      obtain ⟨v, hv⟩ : ∃ v ∈ shared, isHonestValidator system v := by
         apply exists_honest_in_shared;
         · assumption;
         · linarith;
@@ -192,9 +192,9 @@ theorem lemma13_no_commit
     (system : BlockSynchroniserSystem) {S} [SystemState S] (state : S)
     (view : ConsensusView)
     (B : Block) (h_direct_skip : directDecide system state B = Decision.ToSkip)
-    (h_view_direct : ∀ vid, isHonestValidator system vid = true →
+    (h_view_direct : ∀ vid, isHonestValidator system vid →
                        view vid B.d = directDecide system state B) :
-    ∀ vid, isHonestValidator system vid = true →
+    ∀ vid, isHonestValidator system vid →
       view vid B.d ≠ Decision.ToCommit := by
   -- By h_view_direct, every honest validator's view on B.d equals
   -- directDecide system state B = Decision.ToSkip (by h_direct_skip).
@@ -230,9 +230,9 @@ theorem lemma14_no_skip
     (system : BlockSynchroniserSystem) {S} [SystemState S] (state : S)
     (view : ConsensusView)
     (B : Block) (h_direct_commit : directDecide system state B = Decision.ToCommit)
-    (h_view_direct : ∀ vid, isHonestValidator system vid = true →
+    (h_view_direct : ∀ vid, isHonestValidator system vid →
                        view vid B.d = directDecide system state B) :
-    ∀ vid, isHonestValidator system vid = true →
+    ∀ vid, isHonestValidator system vid →
       view vid B.d ≠ Decision.ToSkip := by
   -- By h_view_direct, every honest validator's view on B.d equals
   -- directDecide system state B = Decision.ToCommit (by h_direct_commit).
@@ -336,14 +336,14 @@ a liveness consequence the paper invokes silently.
 theorem lemma16_consistent_status
     (system : BlockSynchroniserSystem) {S} [SystemState S] (state : S)
     (view : ConsensusView)
-    (h_view_direct : ∀ vid B, isHonestValidator system vid = true →
+    (h_view_direct : ∀ vid B, isHonestValidator system vid →
                        isLeaderBlock system B → B ∈ SystemState.blocks state →
                        directDecide system state B ≠ Decision.Undecided →
                        view vid B.d = directDecide system state B)
     -- Protocol invariant: every non-Undecided honest view on digest d
     -- traces back to a leader block B with B.d = d in the state whose
     -- directDecide is non-Undecided.
-    (h_view_traceback : ∀ vid d, isHonestValidator system vid = true →
+    (h_view_traceback : ∀ vid d, isHonestValidator system vid →
         view vid d ≠ Decision.Undecided →
         ∃ B, isLeaderBlock system B ∧ B ∈ SystemState.blocks state ∧
           directDecide system state B ≠ Decision.Undecided ∧ B.d = d) :
@@ -411,19 +411,19 @@ theorem theorem7_consensus_safety
       -- transaction ordering is derived consistently from the consensus
       -- view: if two honest validators have the same view, their orders
       -- are consistent prefixes of each other.
-      ∀ vid₁ vid₂, isHonestValidator system vid₁ = true →
-                   isHonestValidator system vid₂ = true →
+      ∀ vid₁ vid₂, isHonestValidator system vid₁ →
+                   isHonestValidator system vid₂ →
                    (∀ d, view vid₁ d = view vid₂ d) →
-                   (order vid₁).isPrefixOf (order vid₂) = true ∨
-                   (order vid₂).isPrefixOf (order vid₁) = true)
+                   (order vid₁).isPrefixOf (order vid₂) ∨
+                   (order vid₂).isPrefixOf (order vid₁))
     -- Protocol invariant (decision completeness): if one honest
     -- validator's view on digest d is Undecided, then so is every other
     -- honest validator's view (and vice versa). This upgrades
     -- ConsensusView.Consistent (no conflicting non-Undecided) to full
     -- view equality for honest validators.
     (h_decision_complete : ∀ vid₁ vid₂ d,
-        isHonestValidator system vid₁ = true →
-        isHonestValidator system vid₂ = true →
+        isHonestValidator system vid₁ →
+        isHonestValidator system vid₂ →
         (view vid₁ d = Decision.Undecided ↔ view vid₂ d = Decision.Undecided)) :
     order.Consistent system := by
   -- Paper argument: By Lemma 16, all honest validators assign identical

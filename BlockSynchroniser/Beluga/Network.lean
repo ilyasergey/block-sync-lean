@@ -529,8 +529,8 @@ recipients (Byzantine senders' messages may be delayed
 arbitrarily). -/
 def NetworkDelivery (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
   ∀ k vid_s vid_r B r,
-    isHonestValidator system vid_s = true →
-    isHonestValidator system vid_r = true →
+    isHonestValidator system vid_s →
+    isHonestValidator system vid_r →
     time k ≥ system.GST →
     ValidatorOperation.block_propose vid_s B r ∈
       (networkTrace system time k).base.emittedOperations →
@@ -545,8 +545,8 @@ Stated against `networkTraceWithPull`. -/
 /-- Push-channel `Δ`-bounded delivery on `networkTraceWithPull`. -/
 def NetworkDeliveryWithPull (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
   ∀ k vid_s vid_r B r,
-    isHonestValidator system vid_s = true →
-    isHonestValidator system vid_r = true →
+    isHonestValidator system vid_s →
+    isHonestValidator system vid_r →
     time k ≥ system.GST →
     ValidatorOperation.block_propose vid_s B r ∈
       (networkTraceWithPull system time k).base.emittedOperations →
@@ -565,7 +565,7 @@ quorum trigger (rule i) or the leader-sighting trigger (rule iii)
 fires earlier. The `5Δ` here is exactly the paper's `T_rd`. -/
 def TimeoutAdvanceWithPull (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
   ∀ k vid bv,
-    isHonestValidator system vid = true →
+    isHonestValidator system vid →
     time k ≥ system.GST →
     (networkTraceWithPull system time k).base.getValidator vid = some bv →
     ∃ k' bv', k ≤ k' ∧ time k' ≤ time k + 5 * system.Δ ∧
@@ -577,8 +577,8 @@ def BoundedRoundSpread_networkTraceWithPull
     (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
   ∀ k vid₁ vid₂ bv₁ bv₂,
     time k ≥ system.GST →
-    isHonestValidator system vid₁ = true →
-    isHonestValidator system vid₂ = true →
+    isHonestValidator system vid₁ →
+    isHonestValidator system vid₂ →
     (networkTraceWithPull system time k).base.getValidator vid₁ = some bv₁ →
     (networkTraceWithPull system time k).base.getValidator vid₂ = some bv₂ →
     bv₁.currentRound ≤ bv₂.currentRound + 1
@@ -608,8 +608,8 @@ is paper-faithful: it makes no advancement claim *without* a leader
 trigger. -/
 def CatchUpLiveness (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
   ∀ k vid bv vid_lead bv_lead,
-    isHonestValidator system vid = true →
-    isHonestValidator system vid_lead = true →
+    isHonestValidator system vid →
+    isHonestValidator system vid_lead →
     time k ≥ system.GST →
     (networkTraceWithPull system time k).base.getValidator vid = some bv →
     (networkTraceWithPull system time k).base.getValidator vid_lead = some bv_lead →
@@ -632,8 +632,8 @@ requester to an honest responder is delivered to the responder's
 delivery for the pull-request channel. -/
 def PullRequestDelivery (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
   ∀ k (req : PullRequest),
-    isHonestValidator system req.requester = true →
-    isHonestValidator system req.responder = true →
+    isHonestValidator system req.requester →
+    isHonestValidator system req.responder →
     time k ≥ system.GST →
     req ∈ (networkTraceWithPull system time k).pullRequestsInflight →
     ∃ k', k ≤ k' ∧ time k' ≤ time k + system.Δ ∧
@@ -645,7 +645,7 @@ its inbox, it processes the first request within `Δ`
 (`pullStepOne`'s respond branch fires). -/
 def PullResponseScheduling (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
   ∀ k (vid_resp : ValidatorId) (req : PullRequest),
-    isHonestValidator system vid_resp = true →
+    isHonestValidator system vid_resp →
     time k ≥ system.GST →
     req ∈ (networkTraceWithPull system time k).pullInbox vid_resp →
     ∃ k', k ≤ k' ∧ time k' ≤ time k + system.Δ ∧
@@ -653,16 +653,16 @@ def PullResponseScheduling (system : BlockSynchroniserSystem) (time : Nat → Na
 
 /-- **`AcceptScheduling`** — paper §4.2's per-action liveness for
 the accept action: post-GST, when an honest validator has an
-acceptable in-pool block (canAcceptBlock = true), the validator's
+acceptable in-pool block (canAcceptBlock), the validator's
 `doAccept` action fires within `Δ`. -/
 def AcceptScheduling (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
   ∀ k vid B,
-    isHonestValidator system vid = true →
+    isHonestValidator system vid →
     time k ≥ system.GST →
     B ∈ (networkTraceWithPull system time k).base.blocks →
-    (networkTraceWithPull system time k).canAcceptBlock system vid B = true →
+    (networkTraceWithPull system time k).canAcceptBlock system vid B →
     ∃ k', k ≤ k' ∧ time k' ≤ time k + system.Δ ∧
-      hasAcceptedDigest (networkTraceWithPull system time k').base vid B.d = true
+      hasAcceptedDigest (networkTraceWithPull system time k').base vid B.d
 
 /-- **`ProposeSchedulingWithPull`** — paper §4.2 per-action liveness for
 `block_propose`: post-GST, when an honest validator at round `r` has not
@@ -671,7 +671,7 @@ for the propose action; needed by Mysticeti §D.2 to bound the time
 between a leader entering its round and emitting its leader block. -/
 def ProposeSchedulingWithPull (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
   ∀ k vid bv,
-    isHonestValidator system vid = true →
+    isHonestValidator system vid →
     time k ≥ system.GST →
     (networkTraceWithPull system time k).base.getValidator vid = some bv →
     hasProposedFor (networkTraceWithPull system time k).base vid bv.currentRound = false →
@@ -686,12 +686,12 @@ Mirrors `AcceptScheduling` for the store action; needed by Mysticeti
 §D.2 to bound the time between block acceptance and store. -/
 def StoreSchedulingWithPull (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
   ∀ k vid d,
-    isHonestValidator system vid = true →
+    isHonestValidator system vid →
     time k ≥ system.GST →
-    hasAcceptedDigest (networkTraceWithPull system time k).base vid d = true →
+    hasAcceptedDigest (networkTraceWithPull system time k).base vid d →
     hasStoredDigest (networkTraceWithPull system time k).base vid d = false →
     ∃ k', k ≤ k' ∧ time k' ≤ time k + system.Δ ∧
-      hasStoredDigest (networkTraceWithPull system time k').base vid d = true
+      hasStoredDigest (networkTraceWithPull system time k').base vid d
 
 /-- **`NetworkInPoolDeliveryWithPull`** — the consolidated
 push+pull delivery primitive: post-GST, every in-pool block whose
@@ -715,7 +715,7 @@ branch — left as a future structural derivation. -/
 def NetworkInPoolDeliveryWithPull
     (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
   ∀ k vid B,
-    isHonestValidator system vid = true →
+    isHonestValidator system vid →
     time k ≥ system.GST →
     B ∈ (networkTraceWithPull system time k).base.blocks →
     hasAcceptedDigest (networkTraceWithPull system time k).base vid B.d = false →
@@ -756,7 +756,7 @@ def TimeoutFiresPast4Delta (system : BlockSynchroniserSystem) (time : Nat → Na
   ∀ k vid bv,
     (networkTrace system time k).base.getValidator vid = some bv →
     time k ≥ bv.roundEntryTime + 4 * system.Δ →
-    (networkTrace system time k).timeoutFired system bv = true
+    (networkTrace system time k).timeoutFired system bv
 
 /-! ## Foundation lemmas -/
 
@@ -1723,7 +1723,7 @@ theorem network_round_monotone_trace
     have h_succ_ids := networkTrace_validators_ids system time (k_mid + 1)
     have h_mid_ids := networkTrace_validators_ids system time k_mid
     have h_match : ∀ p ∈ (networkTrace system time (k_mid + 1)).base.validators,
-        (p.1 == vid) = true → p.1 = vid := fun _ _ h => by simpa using h
+        (p.1 == vid) → p.1 = vid := fun _ _ h => by simpa using h
     have h_vid_in_succ : vid ∈
         (networkTrace system time (k_mid + 1)).base.validators.map Prod.fst := by
       unfold BelugaState.getValidator at h₂
@@ -1754,10 +1754,10 @@ theorem network_round_monotone_trace
 /-- Honest validators are present at every step of `networkTrace`. -/
 theorem network_honest_validator_persistent_trace
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
-    (vid : ValidatorId) (h_vid_honest : isHonestValidator system vid = true)
+    (vid : ValidatorId) (h_vid_honest : isHonestValidator system vid)
     (k : Nat) :
     ∃ bv, (networkTrace system time k).base.getValidator vid = some bv := by
-  -- Step 1: vid is in system.validators (with isHonest = true).
+  -- Step 1: vid is in system.validators (with isHonest).
   have h_vid_in_system : vid ∈ system.validators.map Prod.fst := by
     unfold isHonestValidator BlockSynchroniserSystem.isHonest at h_vid_honest
     cases h_some : system.validators.find? (fun p => p.1 = vid) with
@@ -1780,7 +1780,7 @@ theorem network_honest_validator_persistent_trace
 /-- With-pull analog of `network_honest_validator_persistent_trace`. -/
 theorem network_honest_validator_persistent_traceWithPull
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
-    (vid : ValidatorId) (h_vid_honest : isHonestValidator system vid = true)
+    (vid : ValidatorId) (h_vid_honest : isHonestValidator system vid)
     (k : Nat) :
     ∃ bv, (networkTraceWithPull system time k).base.getValidator vid = some bv := by
   have h_vid_in_system : vid ∈ system.validators.map Prod.fst := by
@@ -1970,13 +1970,13 @@ private lemma networkStep_advance_inversion
     (h : s.base.getValidator vid = some bv)
     (h' : (networkStep system s newTime).base.getValidator vid = some bv')
     (h_advance : bv'.currentRound = bv.currentRound + 1) :
-    hasProposedFor s.base vid bv.currentRound = true ∧
+    hasProposedFor s.base vid bv.currentRound ∧
     (∀ B ∈ s.base.blocks,
-      hasAcceptedDigest s.base vid B.d = true →
-      hasStoredDigest s.base vid B.d = true) ∧
-    (allProposedFor system s.base bv.currentRound = true ∨
+      hasAcceptedDigest s.base vid B.d →
+      hasStoredDigest s.base vid B.d) ∧
+    (allProposedFor system s.base bv.currentRound ∨
      ({ s with currentTime := newTime } : NetworkState).deliverPending.timeoutFired
-        system bv = true) := by
+        system bv) := by
   have h_del_base :
       ({ s with currentTime := newTime } : NetworkState).deliverPending.base = s.base := by
     rw [NetworkState.deliverPending_preserves_base]
@@ -2020,7 +2020,7 @@ private lemma networkStep_advance_inversion
     case isFalse h_prop_pos =>
       have h_hpr_a : hasProposedFor
           ({ s with currentTime := newTime } : NetworkState).deliverPending.base
-          vid_a bv_a.currentRound = true := by
+          vid_a bv_a.currentRound := by
         cases h_b : hasProposedFor
             ({ s with currentTime := newTime } : NetworkState).deliverPending.base
             vid_a bv_a.currentRound with
@@ -2116,7 +2116,7 @@ private lemma networkStep_advance_implies_hasProposedFor
     (h : s.base.getValidator vid = some bv)
     (h' : (networkStep system s newTime).base.getValidator vid = some bv')
     (h_advance : bv'.currentRound = bv.currentRound + 1) :
-    hasProposedFor s.base vid bv.currentRound = true :=
+    hasProposedFor s.base vid bv.currentRound :=
   (networkStep_advance_inversion system s newTime vid bv bv' h_nodup h h' h_advance).1
 
 /-- Projection: if round advanced, every accepted block was already stored. -/
@@ -2128,7 +2128,7 @@ theorem networkStep_advance_implies_stored
     (h' : (networkStep system s newTime).base.getValidator vid = some bv')
     (h_advance : bv'.currentRound = bv.currentRound + 1) :
     ∀ B ∈ s.base.blocks,
-      hasAcceptedDigest s.base vid B.d = true → hasStoredDigest s.base vid B.d = true :=
+      hasAcceptedDigest s.base vid B.d → hasStoredDigest s.base vid B.d :=
   (networkStep_advance_inversion system s newTime vid bv bv' h_nodup h h' h_advance).2.1
 
 /-- Projection: if round advanced, the advance gate fired. -/
@@ -2139,9 +2139,9 @@ private lemma networkStep_advance_implies_gate
     (h : s.base.getValidator vid = some bv)
     (h' : (networkStep system s newTime).base.getValidator vid = some bv')
     (h_advance : bv'.currentRound = bv.currentRound + 1) :
-    allProposedFor system s.base bv.currentRound = true ∨
+    allProposedFor system s.base bv.currentRound ∨
     ({ s with currentTime := newTime } : NetworkState).deliverPending.timeoutFired
-        system bv = true :=
+        system bv :=
   (networkStep_advance_inversion system s newTime vid bv bv' h_nodup h h' h_advance).2.2
 
 /-! ## `acceptedBlockExists` for `networkTrace`
@@ -2313,8 +2313,8 @@ theorem network_hasProposedFor_monotone
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
     (vid : ValidatorId) (r : Round)
     (i j : Nat) (hij : i ≤ j)
-    (h : hasProposedFor (networkTrace system time i).base vid r = true) :
-    hasProposedFor (networkTrace system time j).base vid r = true := by
+    (h : hasProposedFor (networkTrace system time i).base vid r) :
+    hasProposedFor (networkTrace system time j).base vid r := by
   induction' hij with j _ ih
   · exact h
   · unfold hasProposedFor at ih ⊢
@@ -2330,7 +2330,7 @@ for every r' < R. -/
 theorem network_proposed_for_lt_currentRound
     (system : BlockSynchroniserSystem) (time : Nat → Nat) :
     ∀ k vid bv, (networkTrace system time k).base.getValidator vid = some bv →
-      ∀ r' < bv.currentRound, hasProposedFor (networkTrace system time k).base vid r' = true := by
+      ∀ r' < bv.currentRound, hasProposedFor (networkTrace system time k).base vid r' := by
   intro k
   induction k with
   | zero =>
@@ -2498,7 +2498,7 @@ theorem roundEntryTime_le_currentTime
     rw [currentTime_tracks_time]
     -- Inductive step: networkStep advances currentTime to time(k+1),
     -- runs deliverPending (preserves base.validators), then
-    -- networkTryActFor (preserves roundEntry-bound by Sorry 1, proved above).
+    -- networkTryActFor (preserves roundEntry-bound, proved above).
     -- The IH gives the invariant at trace k under currentTime = time k;
     -- monotonicity of `time` lifts the bound to time(k+1).
     show bv.roundEntryTime ≤ time (k + 1)
@@ -2583,7 +2583,7 @@ theorem timeout_fires_past_4delta
     (system : BlockSynchroniserSystem) (s : NetworkState)
     (bv : BelugaValidator)
     (h : s.currentTime ≥ bv.roundEntryTime + 4 * system.Δ) :
-    s.timeoutFired system bv = true := by
+    s.timeoutFired system bv := by
   unfold NetworkState.timeoutFired
   exact decide_eq_true h
 
@@ -2603,7 +2603,7 @@ now corresponds to a paper-stated primitive: §2 `Δ`-delivery and §4.2
 protocol-execution). -/
 def ActionScheduling (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
   ∀ k vid bv,
-    isHonestValidator system vid = true →
+    isHonestValidator system vid →
     time k ≥ system.GST →
     (networkTrace system time k).base.getValidator vid = some bv →
     -- The validator advances (its currentRound goes up) within `Δ`
@@ -2625,8 +2625,8 @@ def BoundedRoundSpread_networkTrace
     (system : BlockSynchroniserSystem) (time : Nat → Nat) : Prop :=
   ∀ k vid₁ vid₂ bv₁ bv₂,
     time k ≥ system.GST →
-    isHonestValidator system vid₁ = true →
-    isHonestValidator system vid₂ = true →
+    isHonestValidator system vid₁ →
+    isHonestValidator system vid₂ →
     (networkTrace system time k).base.getValidator vid₁ = some bv₁ →
     (networkTrace system time k).base.getValidator vid₂ = some bv₂ →
     bv₁.currentRound ≤ bv₂.currentRound + 1
@@ -2672,15 +2672,15 @@ theorem schedulerFairness_holds
     (_h_delivery : NetworkDelivery system time)
     (h_scheduling : ActionScheduling system time)
     (h_spread : BoundedRoundSpread_networkTrace system time)
-    (h_persistent : ∀ vid k, isHonestValidator system vid = true →
+    (h_persistent : ∀ vid k, isHonestValidator system vid →
       ∃ bv, (networkTrace system time k).base.getValidator vid = some bv)
     : ∀ k r,
         time k ≥ system.GST →
-        (∃ vid bv, isHonestValidator system vid = true ∧
+        (∃ vid bv, isHonestValidator system vid ∧
           (networkTrace system time k).base.getValidator vid = some bv ∧
           bv.currentRound = r) →
         ∃ k', k ≤ k' ∧ time k' ≤ time k + 3 * system.Δ ∧
-          ∀ vid, isHonestValidator system vid = true →
+          ∀ vid, isHonestValidator system vid →
             ∃ bv, (networkTrace system time k').base.getValidator vid = some bv ∧
                   bv.currentRound ≥ r + 1 := by
   intro k r h_post_gst ⟨vid_w, bv_w, h_w_honest, h_w_get, h_w_round⟩
@@ -2728,15 +2728,15 @@ theorem schedulerFairness_holds_withPull
     (_h_delivery : NetworkDeliveryWithPull system time)
     (h_scheduling : TimeoutAdvanceWithPull system time)
     (h_spread : BoundedRoundSpread_networkTraceWithPull system time)
-    (h_persistent : ∀ vid k, isHonestValidator system vid = true →
+    (h_persistent : ∀ vid k, isHonestValidator system vid →
       ∃ bv, (networkTraceWithPull system time k).base.getValidator vid = some bv)
     : ∀ k r,
         time k ≥ system.GST →
-        (∃ vid bv, isHonestValidator system vid = true ∧
+        (∃ vid bv, isHonestValidator system vid ∧
           (networkTraceWithPull system time k).base.getValidator vid = some bv ∧
           bv.currentRound = r) →
         ∃ k', k ≤ k' ∧ time k' ≤ time k + 10 * system.Δ ∧
-          ∀ vid, isHonestValidator system vid = true →
+          ∀ vid, isHonestValidator system vid →
             ∃ bv, (networkTraceWithPull system time k').base.getValidator vid = some bv ∧
                   bv.currentRound ≥ r + 1 := by
   intro k r h_post_gst ⟨vid_w, bv_w, h_w_honest, h_w_get, h_w_round⟩
@@ -2775,14 +2775,14 @@ theorem network_all_honest_eventually_at_round
     (h_delivery : NetworkDelivery system time)
     (h_scheduling : ActionScheduling system time)
     (h_spread : BoundedRoundSpread_networkTrace system time)
-    (vid_w : ValidatorId) (h_w : isHonestValidator system vid_w = true)
+    (vid_w : ValidatorId) (h_w : isHonestValidator system vid_w)
     (k₀ : Nat) (h_gst : time k₀ ≥ system.GST) :
     ∀ R, ∃ k, k₀ ≤ k ∧ time k ≥ system.GST ∧
-      ∀ vid, isHonestValidator system vid = true →
+      ∀ vid, isHonestValidator system vid →
         ∃ bv, (networkTrace system time k).base.getValidator vid = some bv ∧
               bv.currentRound ≥ R := by
   intro R
-  have h_persistent : ∀ vid k, isHonestValidator system vid = true →
+  have h_persistent : ∀ vid k, isHonestValidator system vid →
       ∃ bv, (networkTrace system time k).base.getValidator vid = some bv :=
     fun vid k h => network_honest_validator_persistent_trace system time vid h k
   induction R with
@@ -2810,14 +2810,14 @@ theorem network_all_honest_eventually_at_roundWithPull
     (h_delivery : NetworkDeliveryWithPull system time)
     (h_scheduling : TimeoutAdvanceWithPull system time)
     (h_spread : BoundedRoundSpread_networkTraceWithPull system time)
-    (vid_w : ValidatorId) (h_w : isHonestValidator system vid_w = true)
+    (vid_w : ValidatorId) (h_w : isHonestValidator system vid_w)
     (k₀ : Nat) (h_gst : time k₀ ≥ system.GST) :
     ∀ R, ∃ k, k₀ ≤ k ∧ time k ≥ system.GST ∧
-      ∀ vid, isHonestValidator system vid = true →
+      ∀ vid, isHonestValidator system vid →
         ∃ bv, (networkTraceWithPull system time k).base.getValidator vid = some bv ∧
               bv.currentRound ≥ R := by
   intro R
-  have h_persistent : ∀ vid k, isHonestValidator system vid = true →
+  have h_persistent : ∀ vid k, isHonestValidator system vid →
       ∃ bv, (networkTraceWithPull system time k).base.getValidator vid = some bv :=
     fun vid k h => network_honest_validator_persistent_traceWithPull system time vid h k
   induction R with
@@ -2896,8 +2896,8 @@ theorem network_hasProposedFor_monotoneWithPull
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
     (vid : ValidatorId) (r : Round)
     (i j : Nat) (hij : i ≤ j)
-    (h : hasProposedFor (networkTraceWithPull system time i).base vid r = true) :
-    hasProposedFor (networkTraceWithPull system time j).base vid r = true := by
+    (h : hasProposedFor (networkTraceWithPull system time i).base vid r) :
+    hasProposedFor (networkTraceWithPull system time j).base vid r := by
   induction' hij with j _ ih
   · exact h
   · unfold hasProposedFor at ih ⊢
@@ -3079,13 +3079,13 @@ private lemma networkStepWithPull_advance_inversion
     (h : s.base.getValidator vid = some bv)
     (h' : (networkStepWithPull system s newTime).base.getValidator vid = some bv')
     (h_advance : bv'.currentRound = bv.currentRound + 1) :
-    hasProposedFor s.base vid bv.currentRound = true ∧
+    hasProposedFor s.base vid bv.currentRound ∧
     (∀ B ∈ s.base.blocks,
-      hasAcceptedDigest s.base vid B.d = true →
-      hasStoredDigest s.base vid B.d = true) ∧
-    (allProposedFor system s.base bv.currentRound = true ∨
+      hasAcceptedDigest s.base vid B.d →
+      hasStoredDigest s.base vid B.d) ∧
+    (allProposedFor system s.base bv.currentRound ∨
      ({ s with currentTime := newTime } : NetworkState).deliverPending.timeoutFired
-        system bv = true) := by
+        system bv) := by
   have h_del_base :
       ({ s with currentTime := newTime } : NetworkState).deliverPending.base = s.base := by
     rw [NetworkState.deliverPending_preserves_base]
@@ -3144,7 +3144,7 @@ private lemma networkStepWithPull_advance_inversion
     case isFalse h_prop_pos =>
       have h_hpr_a : hasProposedFor
           (pullStep system (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending)).base
-          vid_a bv_a.currentRound = true := by
+          vid_a bv_a.currentRound := by
         cases h_b : hasProposedFor
             (pullStep system (({ s with currentTime := newTime } : NetworkState).deliverPending.deliverPullPending)).base
             vid_a bv_a.currentRound with
@@ -3216,8 +3216,8 @@ private lemma networkStepWithPull_advance_inversion
                 rcases h_gate with h_apf | h_tof
                 · left; rw [← h_pulled_base]; exact h_apf
                 · right
-                  -- h_tof : (pullStep ...).timeoutFired system bv_a = true
-                  -- Conclusion needs: deliverPending.timeoutFired system bv = true
+                  -- h_tof : (pullStep ...).timeoutFired system bv_a
+                  -- Conclusion needs: deliverPending.timeoutFired system bv
                   -- timeoutFired only depends on currentTime, both = newTime.
                   unfold NetworkState.timeoutFired at h_tof ⊢
                   rw [h_pulled_ct] at h_tof
@@ -3245,7 +3245,7 @@ private lemma networkStepWithPull_advance_implies_hasProposedFor
     (h : s.base.getValidator vid = some bv)
     (h' : (networkStepWithPull system s newTime).base.getValidator vid = some bv')
     (h_advance : bv'.currentRound = bv.currentRound + 1) :
-    hasProposedFor s.base vid bv.currentRound = true :=
+    hasProposedFor s.base vid bv.currentRound :=
   (networkStepWithPull_advance_inversion system s newTime vid bv bv' h_nodup h h' h_advance).1
 
 /-- Projection: if round advanced under with-pull, every accepted
@@ -3258,7 +3258,7 @@ theorem networkStepWithPull_advance_implies_stored
     (h' : (networkStepWithPull system s newTime).base.getValidator vid = some bv')
     (h_advance : bv'.currentRound = bv.currentRound + 1) :
     ∀ B ∈ s.base.blocks,
-      hasAcceptedDigest s.base vid B.d = true → hasStoredDigest s.base vid B.d = true :=
+      hasAcceptedDigest s.base vid B.d → hasStoredDigest s.base vid B.d :=
   (networkStepWithPull_advance_inversion system s newTime vid bv bv' h_nodup h h' h_advance).2.1
 
 /-- Projection: if round advanced under with-pull, the advance gate fired. -/
@@ -3269,9 +3269,9 @@ private lemma networkStepWithPull_advance_implies_gate
     (h : s.base.getValidator vid = some bv)
     (h' : (networkStepWithPull system s newTime).base.getValidator vid = some bv')
     (h_advance : bv'.currentRound = bv.currentRound + 1) :
-    allProposedFor system s.base bv.currentRound = true ∨
+    allProposedFor system s.base bv.currentRound ∨
     ({ s with currentTime := newTime } : NetworkState).deliverPending.timeoutFired
-        system bv = true :=
+        system bv :=
   (networkStepWithPull_advance_inversion system s newTime vid bv bv' h_nodup h h' h_advance).2.2
 
 /-! ## Trace-level helpers for `networkTraceWithPull` -/
@@ -3341,7 +3341,7 @@ validator at round R has proposed for every r' < R. -/
 theorem network_proposed_for_lt_currentRoundWithPull
     (system : BlockSynchroniserSystem) (time : Nat → Nat) :
     ∀ k vid bv, (networkTraceWithPull system time k).base.getValidator vid = some bv →
-      ∀ r' < bv.currentRound, hasProposedFor (networkTraceWithPull system time k).base vid r' = true := by
+      ∀ r' < bv.currentRound, hasProposedFor (networkTraceWithPull system time k).base vid r' := by
   intro k
   induction k with
   | zero =>
@@ -3579,7 +3579,7 @@ theorem network_eventually_accepts_received_withPull
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
     (h_accept : AcceptScheduling system time)
     (vid_r : ValidatorId) (B : Block) (r : Round)
-    (h_r : isHonestValidator system vid_r = true)
+    (h_r : isHonestValidator system vid_r)
     (k : Nat) (h_post_gst : time k ≥ system.GST)
     (h_in_inbox : ValidatorOperation.block_propose B.author B r ∈
                     (networkTraceWithPull system time k).inbox vid_r)
@@ -3588,16 +3588,16 @@ theorem network_eventually_accepts_received_withPull
                         = false)
     (h_r_eq : B.r = r) :
     ∃ k', k ≤ k' ∧ time k' ≤ time k + system.Δ ∧
-      hasAcceptedDigest (networkTraceWithPull system time k').base vid_r B.d = true := by
+      hasAcceptedDigest (networkTraceWithPull system time k').base vid_r B.d := by
   -- canAcceptBlock returns true: !accepted && (received || ImPoA).
   -- We have !accepted (from h_not_accepted) and received (from h_in_inbox).
-  have h_received : (networkTraceWithPull system time k).hasReceivedPropose vid_r B r = true := by
+  have h_received : (networkTraceWithPull system time k).hasReceivedPropose vid_r B r := by
     unfold NetworkState.hasReceivedPropose
     rw [List.any_eq_true]
     refine ⟨_, h_in_inbox, ?_⟩
     simp +decide
   have h_can_accept :
-      (networkTraceWithPull system time k).canAcceptBlock system vid_r B = true := by
+      (networkTraceWithPull system time k).canAcceptBlock system vid_r B := by
     unfold NetworkState.canAcceptBlock
     rw [Bool.and_eq_true]
     refine ⟨?_, ?_⟩
@@ -3693,13 +3693,13 @@ theorem network_in_pool_eventually_accepted_withPull
     (h_in_pool_delivery : NetworkInPoolDeliveryWithPull system time)
     (h_accept : AcceptScheduling system time)
     (k : Nat) (vid : ValidatorId) (B : Block)
-    (h_vid_honest : isHonestValidator system vid = true)
+    (h_vid_honest : isHonestValidator system vid)
     (h_post_gst : time k ≥ system.GST)
     (h_in_pool : B ∈ (networkTraceWithPull system time k).base.blocks) :
     ∃ k', k ≤ k' ∧
-      hasAcceptedDigest (networkTraceWithPull system time k').base vid B.d = true := by
+      hasAcceptedDigest (networkTraceWithPull system time k').base vid B.d := by
   by_cases h_already :
-      hasAcceptedDigest (networkTraceWithPull system time k).base vid B.d = true
+      hasAcceptedDigest (networkTraceWithPull system time k).base vid B.d
   · refine ⟨k, le_rfl, h_already⟩
   · have h_not_accepted :
         hasAcceptedDigest (networkTraceWithPull system time k).base vid B.d = false := by
@@ -3713,7 +3713,7 @@ theorem network_in_pool_eventually_accepted_withPull
     have h_post_gst_kd : time k_d ≥ system.GST :=
       le_trans h_post_gst (h_mono _ _ hk_d_le)
     by_cases h_acc_kd :
-        hasAcceptedDigest (networkTraceWithPull system time k_d).base vid B.d = true
+        hasAcceptedDigest (networkTraceWithPull system time k_d).base vid B.d
     · refine ⟨k_d, hk_d_le, h_acc_kd⟩
     · have h_not_acc_kd :
           hasAcceptedDigest (networkTraceWithPull system time k_d).base vid B.d = false := by
@@ -3727,7 +3727,7 @@ theorem network_in_pool_eventually_accepted_withPull
 
 /-- Inversion of `hasProposedFor`: extract the block from the propose op. -/
 theorem hasProposedFor_implies_propose_op (s : BelugaState)
-    (vid : ValidatorId) (r : Round) (h : hasProposedFor s vid r = true) :
+    (vid : ValidatorId) (r : Round) (h : hasProposedFor s vid r) :
     ∃ B, ValidatorOperation.block_propose vid B r ∈ s.emittedOperations := by
   unfold hasProposedFor at h
   rw [List.any_eq_true] at h
@@ -4180,10 +4180,10 @@ theorem network_each_honest_block_eventually_accepted_withPull
     (h_spread : BoundedRoundSpread_networkTraceWithPull system time)
     (h_accept : AcceptScheduling system time)
     (r : Round) (vid : ValidatorId) (vid_p : ValidatorId)
-    (h_vid_honest : isHonestValidator system vid = true)
-    (h_vid_p_honest : isHonestValidator system vid_p = true) :
+    (h_vid_honest : isHonestValidator system vid)
+    (h_vid_p_honest : isHonestValidator system vid_p) :
     ∃ k, hasAcceptedDigest (networkTraceWithPull system time k).base vid
-           (digest system r vid_p) = true := by
+           (digest system r vid_p) := by
   -- Step 1: find a post-GST step.
   obtain ⟨k_gst, h_k_gst⟩ : ∃ k, time k ≥ system.GST := h_time_unbounded system.GST
   -- Step 2: bring all honest to currentRound ≥ r + 1.
@@ -4193,7 +4193,7 @@ theorem network_each_honest_block_eventually_accepted_withPull
   obtain ⟨bv_p, h_bv_p, h_bv_p_round⟩ := h_all_at_succ vid_p h_vid_p_honest
   -- Step 3: vid_p has proposed for r at step k₁.
   have h_lt : r < bv_p.currentRound := h_bv_p_round
-  have h_proposed : hasProposedFor (networkTraceWithPull system time k₁).base vid_p r = true :=
+  have h_proposed : hasProposedFor (networkTraceWithPull system time k₁).base vid_p r :=
     network_proposed_for_lt_currentRoundWithPull system time k₁ vid_p bv_p h_bv_p r h_lt
   -- Step 4: extract the block.
   obtain ⟨B, h_op⟩ :=
@@ -4211,7 +4211,7 @@ theorem network_each_honest_block_eventually_accepted_withPull
     network_blocks_monotone_traceWithPull system time k₁ k₂ h_k₂_le B h_B_in_pool
   -- Step 8: case-split on whether vid has already accepted B.d at k₂.
   by_cases h_already :
-      hasAcceptedDigest (networkTraceWithPull system time k₂).base vid B.d = true
+      hasAcceptedDigest (networkTraceWithPull system time k₂).base vid B.d
   · -- Already accepted. We have B.d = digest system r vid_p, so done.
     refine ⟨k₂, ?_⟩; rw [h_B_d] at h_already; exact h_already
   · -- Not accepted. Apply AcceptScheduling-derived liveness.
@@ -4236,7 +4236,7 @@ theorem network_each_honest_block_eventually_accepted_withPull
 in `emittedOperations`). -/
 theorem hasAcceptedDigest_iff_HasAccepted (s : BelugaState)
     (vid : ValidatorId) (d : BlockDigest) :
-    hasAcceptedDigest s vid d = true ↔ HasAccepted s vid d := by
+    hasAcceptedDigest s vid d ↔ HasAccepted s vid d := by
   unfold hasAcceptedDigest HasAccepted Emitted
   rw [List.any_eq_true]
   constructor
@@ -4256,8 +4256,8 @@ theorem network_hasAcceptedDigest_monotone_withPull
     (system : BlockSynchroniserSystem) (time : Nat → Nat)
     (vid : ValidatorId) (d : BlockDigest)
     (k₁ k₂ : Nat) (h_le : k₁ ≤ k₂)
-    (h : hasAcceptedDigest (networkTraceWithPull system time k₁).base vid d = true) :
-    hasAcceptedDigest (networkTraceWithPull system time k₂).base vid d = true := by
+    (h : hasAcceptedDigest (networkTraceWithPull system time k₁).base vid d) :
+    hasAcceptedDigest (networkTraceWithPull system time k₂).base vid d := by
   rw [hasAcceptedDigest_iff_HasAccepted] at h ⊢
   exact network_HasAccepted_monotone_withPull system time vid d k₁ k₂ h_le h
 
@@ -4274,11 +4274,11 @@ theorem all_honest_in_list_eventually_accepted
     (h_scheduling : TimeoutAdvanceWithPull system time)
     (h_spread : BoundedRoundSpread_networkTraceWithPull system time)
     (h_accept : AcceptScheduling system time)
-    (r : Round) (vid : ValidatorId) (h_vid_honest : isHonestValidator system vid = true) :
-    ∀ l : List ValidatorId, (∀ p ∈ l, isHonestValidator system p = true) →
+    (r : Round) (vid : ValidatorId) (h_vid_honest : isHonestValidator system vid) :
+    ∀ l : List ValidatorId, (∀ p ∈ l, isHonestValidator system p) →
       ∃ k, ∀ vid_p ∈ l,
         hasAcceptedDigest (networkTraceWithPull system time k).base vid
-          (digest system r vid_p) = true := by
+          (digest system r vid_p) := by
   intro l
   induction l with
   | nil => intro _; exact ⟨0, fun _ h => by simp at h⟩

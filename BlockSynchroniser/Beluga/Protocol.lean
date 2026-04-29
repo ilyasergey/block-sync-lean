@@ -52,7 +52,7 @@ Conditions:
 def HonestPropose
     (system : BlockSynchroniserSystem) (s s' : BelugaState)
     (vid : ValidatorId) (B : Block) (r : Round) : Prop :=
-  isHonestValidator system vid = true ∧
+  isHonestValidator system vid ∧
   (∃ bv ∈ s.validators, bv.1 = vid ∧ bv.2.currentRound = r) ∧
   B.author = vid ∧ B.r = r ∧
   s'.blocks = B :: s.blocks ∧
@@ -86,7 +86,7 @@ Conditions (per-step, paper-faithful):
 def HonestAccept
     (system : BlockSynchroniserSystem) (s s' : BelugaState)
     (vid : ValidatorId) (d : BlockDigest) : Prop :=
-  isHonestValidator system vid = true ∧
+  isHonestValidator system vid ∧
   (∃ B ∈ s.blocks, B.d = d ∧ parentsAccepted s vid B) ∧
   ¬ HasAccepted s vid d ∧
   s'.blocks = s.blocks ∧
@@ -107,7 +107,7 @@ Conditions (per-step, paper-faithful):
 def HonestStore
     (system : BlockSynchroniserSystem) (s s' : BelugaState)
     (vid : ValidatorId) (B : Block) : Prop :=
-  isHonestValidator system vid = true ∧
+  isHonestValidator system vid ∧
   HasAccepted s vid B.d ∧
   (∀ B' : Block, Reaches s B B' → HasAccepted s vid B'.d) ∧
   s'.blocks = s.blocks ∧
@@ -131,7 +131,7 @@ relation here covers only rule (i).
 def HonestAdvance
     (system : BlockSynchroniserSystem) (s s' : BelugaState)
     (vid : ValidatorId) (r : Round) (R_L : Nat) : Prop :=
-  isHonestValidator system vid = true ∧
+  isHonestValidator system vid ∧
   (∃ bv ∈ s.validators, bv.1 = vid ∧ bv.2.currentRound = r) ∧
   (∃ bv ∈ s.validators, bv.1 = vid ∧
     canAdvanceByQuorum system s bv.2.reputation vid R_L r) ∧
@@ -171,7 +171,7 @@ Byzantine step — those flow through `HonestStep`'s four cases.
 def ByzantineStep (system : BlockSynchroniserSystem) (s s' : BelugaState) : Prop :=
   ∃ newOps : List ValidatorOperation,
     s'.emittedOperations = s.emittedOperations ++ newOps ∧
-    ∀ op ∈ newOps, isByzantineValidator system (operationAuthor op) = true
+    ∀ op ∈ newOps, isByzantineValidator system (operationAuthor op)
 
 /--
 **`HonestStep`** (paper §4 protocol semantics).
@@ -400,7 +400,7 @@ private lemma hasAcceptedDigest_false_imp (s : BelugaState) (vid : ValidatorId)
   grind
 
 private lemma hasAcceptedDigest_true_imp (s : BelugaState) (vid : ValidatorId)
-    (d : BlockDigest) (h : hasAcceptedDigest s vid d = true) :
+    (d : BlockDigest) (h : hasAcceptedDigest s vid d) :
     HasAccepted s vid d := by
   contrapose! h
   unfold hasAcceptedDigest
@@ -779,7 +779,7 @@ private lemma acceptInv_of_doPropose (system : BlockSynchroniserSystem)
         rw [hcan] at hd
         obtain ⟨hr, hv⟩ := digest_injective system B'.r r B'.author vid_p hbnd h_vid_p_bound hd
         have hprop := hbi.hasPropose B' hB'
-        have : hasProposedFor s vid_p r = true := by
+        have : hasProposedFor s vid_p r := by
           unfold hasProposedFor
           rw [List.any_eq_true]
           exact ⟨_, hprop, by subst hr; subst hv; simp⟩
@@ -796,7 +796,7 @@ private lemma acceptInv_of_doAccept (system : BlockSynchroniserSystem)
     (hids : ValidIds system) (hbi : BlockInv system s)
     (vid : ValidatorId) (hai : AcceptInv s vid)
     (hB_mem : B ∈ s.blocks)
-    (hB_parents : B.parents.all (fun pd => hasAcceptedDigest s vid_a pd) = true) :
+    (hB_parents : B.parents.all (fun pd => hasAcceptedDigest s vid_a pd)) :
     AcceptInv (doAccept s vid_a B) vid := by
   constructor
   · intro X hX hacc pd hpd
@@ -861,7 +861,7 @@ private lemma acceptInv_step (system : BlockSynchroniserSystem)
     convert acceptInv_of_doPropose system s vid_act bv.currentRound hids hbi vid hai hp (by omega) using 1
     exact hact.symm
   · -- Not propose
-    have hp' : hasProposedFor s vid_act bv.currentRound = true := by
+    have hp' : hasProposedFor s vid_act bv.currentRound := by
       cases h : hasProposedFor s vid_act bv.currentRound <;> simp_all
     simp only [hp'] at hact
     cases hfindAcc : s.blocks.find? (fun B =>
@@ -873,7 +873,7 @@ private lemma acceptInv_step (system : BlockSynchroniserSystem)
           hasAcceptedDigest s vid_act B.d && !hasStoredDigest s vid_act B.d)
       · -- No store candidate either: advance or nothing
         simp [hfindStore] at hact
-        by_cases hadv : allProposedFor system s bv.currentRound = true
+        by_cases hadv : allProposedFor system s bv.currentRound
         · simp [hadv] at hact
           convert acceptInv_of_doAdvance s vid_act vid hai using 1
           exact hact.symm
@@ -930,7 +930,7 @@ If `isHonestValidator` is `false`, then `isByzantineValidator` is `true`
 private lemma not_honest_imp_byzantine (system : BlockSynchroniserSystem)
     (vid : ValidatorId) (h : isHonestValidator system vid = false)
     (hreg : ∃ p ∈ system.validators, (p : ValidatorId × Bool).1 = vid) :
-    isByzantineValidator system vid = true := by
+    isByzantineValidator system vid := by
   unfold isHonestValidator at h;
   unfold isByzantineValidator;
   unfold BlockSynchroniserSystem.isHonest at h;
@@ -983,7 +983,7 @@ private lemma honestStep_of_accept
         !hasAcceptedDigest s vid B'.d &&
         B'.parents.all (fun pd => hasAcceptedDigest s vid pd)) = some B) :
     HonestStep system s (doAccept s vid B) := by
-  by_cases h : isHonestValidator system vid = true
+  by_cases h : isHonestValidator system vid
   · refine Or.inr <| Or.inl ?_
     refine ⟨vid, B.d, ⟨h, ?_, ?_, ?_⟩⟩ <;>
       simp_all +decide [List.find?_eq_some_iff_append]
@@ -1036,7 +1036,7 @@ private lemma honestStep_of_store
         hasAcceptedDigest s vid B'.d && !hasStoredDigest s vid B'.d) = some B)
     (hids : ValidIds system) (hTrace : ∃ k, s = belugaTrace system k) :
     HonestStep system s (doStore s vid B) := by
-  by_cases h : isHonestValidator system vid = true
+  by_cases h : isHonestValidator system vid
   · refine Or.inr <| Or.inr <| Or.inl ?_
     refine ⟨vid, B, h, ?_, ?_, ?_, ?_⟩ <;> simp_all +decide [doStore]
     · grind +suggestions
