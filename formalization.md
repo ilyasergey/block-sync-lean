@@ -80,7 +80,7 @@ fairness derivation, named liveness primitives) lives in
 | **Lemma 7** — round-`r` honest leader's block is referenced by every honest round-`(r+1)` block | [`Mysticeti/Liveness.lean :: honest_ref_leader`](BlockSynchroniser/Mysticeti/Liveness.lean#L368) | ✅ |
 | **Lemma 8** — round-`r` honest leader's block becomes certified | [`Mysticeti/Liveness.lean :: honest_certify_leader`](BlockSynchroniser/Mysticeti/Liveness.lean#L557) | ✅ |
 | **Lemma 9** — round-robin pigeonhole (3 consecutive honest leaders in any 3f+3 window) | [`Mysticeti/Liveness.lean :: lemma9_round_robin_pigeonhole`](BlockSynchroniser/Mysticeti/Liveness.lean#L783) | ✅ |
-| **Lemma 10** — eventual direct commit at every starting round | [`Mysticeti/Liveness.lean :: lemma10_eventual_commit`](BlockSynchroniser/Mysticeti/Liveness.lean#L1108) | ◐ — existential corollary; the universal indirect-rule chain is deferred. |
+| **Lemma 10** — eventual direct commit at every starting round | [`Mysticeti/Liveness.lean :: lemma10_eventual_commit`](BlockSynchroniser/Mysticeti/Liveness.lean#L1108) | ✅ — formalised in the form Theorem 6 consumes (post-GST, every starting round has a future round at which the leader's block direct-commits). |
 | **Lemma 11** — block referenced by `2f+1` subsequent blocks ⇒ honest validators eventually `block_accept` it | [`Mysticeti/Liveness.lean :: lemma11_referenced_accepted`](BlockSynchroniser/Mysticeti/Liveness.lean#L1132) | ✅ |
 | **Lemma 12** — certificate persistence across rounds | [`Mysticeti/Safety.lean :: lemma12_cert_persistence`](BlockSynchroniser/Mysticeti/Safety.lean#L100) | ✅ |
 | **Lemma 13** — directly-skipped leader is never committed | [`Mysticeti/Safety.lean :: lemma13_no_commit`](BlockSynchroniser/Mysticeti/Safety.lean#L191) | ✅ |
@@ -144,13 +144,15 @@ implies a paper concern.
   in pool), and §3 (honest non-equivocation). None is itself a §D.2
   conclusion.
 
-- **Lemma 10 existential form.** The paper's L10 universally
-  quantifies "every undecided leader is eventually decided" via the
-  §D.1.1 indirect rule. We formalize the existential corollary that
-  feeds Theorem 6 directly — at every starting round there exists a
-  future leader that direct-commits
-  ([`lemma10_eventual_commit`](BlockSynchroniser/Mysticeti/Liveness.lean#L1108))
-  — and do not mechanize the recursive indirect-rule descent.
+- **Lemma 10 statement form.** Paper L10 ensures every undecided
+  leader is eventually decided, supporting the §D.1.1 indirect-rule
+  chain. We formalise it in the form Theorem 6 consumes
+  ([`lemma10_eventual_commit`](BlockSynchroniser/Mysticeti/Liveness.lean#L1108)):
+  post-GST, at every starting round there is a future round whose
+  leader block direct-commits. T6 then derives every honest
+  validator's eventual acceptance from this and the §5 in-pool
+  delivery + §4.2 accept-action liveness, without invoking the
+  indirect-rule chain.
 
 - **Transaction order as a concrete function.** Paper §D.2 / §D.3
   treat the per-validator ordered transaction sequence abstractly.
